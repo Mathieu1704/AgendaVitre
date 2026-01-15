@@ -1,17 +1,20 @@
 import React, { useState } from "react";
-import { View, ScrollView, Alert, Pressable } from "react-native";
-import { Appbar, TextInput, Button, Text } from "react-native-paper";
+import { View, ScrollView, Text } from "react-native";
 import { useRouter } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../src/lib/api";
-import { useColorScheme } from "react-native";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { UserPlus, Check, ChevronLeft } from "lucide-react-native";
+
+import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
+import { Input } from "../../../src/ui/components/Input";
+import { Button } from "../../../src/ui/components/Button";
+import { toast } from "../../../src/ui/toast";
+import { useTheme } from "../../../src/ui/components/ThemeToggle";
 
 export default function AddClientScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
+  const { isDark } = useTheme();
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
@@ -25,20 +28,17 @@ export default function AddClientScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
-      Alert.alert("Succès", "Client créé avec succès !");
+      toast.success("Succès", "Client créé avec succès !");
       router.back();
     },
     onError: (error: any) => {
-      Alert.alert(
-        "Erreur",
-        error.response?.data?.detail || "Impossible de créer le client"
-      );
+      toast.error("Erreur", error.response?.data?.detail || "Erreur inconnue");
     },
   });
 
   const handleSubmit = () => {
     if (!name || !address) {
-      Alert.alert("Erreur", "Le nom et l'adresse sont obligatoires.");
+      toast.error("Erreur", "Le nom et l'adresse sont obligatoires.");
       return;
     }
 
@@ -52,205 +52,97 @@ export default function AddClientScreen() {
   };
 
   return (
-    <View className={`flex-1 ${isDark ? "bg-dark-900" : "bg-gray-50"}`}>
-      {/* Header */}
-      <Appbar.Header
-        style={{ backgroundColor: isDark ? "#1E293B" : "#FFFFFF" }}
-      >
-        <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content
-          title="Nouveau Client"
-          titleStyle={{ fontWeight: "bold" }}
-        />
-      </Appbar.Header>
+    <View className="flex-1 bg-background dark:bg-slate-950">
+      {/* Header Simple */}
+      <View className="px-4 pt-4 pb-2 flex-row items-center">
+        <Button variant="ghost" size="icon" onPress={() => router.back()}>
+          <ChevronLeft size={24} color={isDark ? "white" : "black"} />
+        </Button>
+        <Text className="text-xl font-bold text-foreground dark:text-white ml-2">
+          Nouveau Client
+        </Text>
+      </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 16 }}
-      >
-        {/* Hero Card */}
-        <View
-          className={`mb-6 p-6 rounded-2xl ${
-            isDark ? "bg-dark-800" : "bg-white"
-          } shadow-lg items-center`}
-        >
-          <View className="bg-primary-500 w-20 h-20 rounded-full items-center justify-center mb-4">
-            <FontAwesome name="user-plus" size={32} color="#FFFFFF" />
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+        {/* Hero */}
+        <View className="items-center mb-8">
+          <View className="bg-primary/10 w-20 h-20 rounded-full items-center justify-center mb-4">
+            <UserPlus size={32} color="#3B82F6" />
           </View>
-          <Text
-            className={`text-lg font-bold ${
-              isDark ? "text-white" : "text-gray-900"
-            }`}
-          >
-            Ajouter un nouveau client
-          </Text>
-          <Text
-            className={`mt-2 text-center ${
-              isDark ? "text-dark-400" : "text-gray-500"
-            }`}
-          >
-            Renseignez les informations du client
+          <Text className="text-center text-muted-foreground dark:text-slate-400 max-w-xs">
+            Remplissez les informations ci-dessous pour créer une fiche client.
           </Text>
         </View>
 
-        {/* Formulaire */}
-        <View
-          className={`p-6 rounded-2xl ${
-            isDark ? "bg-dark-800" : "bg-white"
-          } shadow-md`}
-        >
-          {/* Champs obligatoires */}
-          <View className="mb-6">
-            <Text
-              className={`text-xs font-semibold ${
-                isDark ? "text-dark-400" : "text-gray-500"
-              } mb-3 uppercase tracking-wide`}
-            >
-              Informations obligatoires
+        <Card>
+          <CardHeader>
+            <Text className="text-sm font-bold uppercase text-muted-foreground dark:text-slate-500 tracking-wider">
+              Informations Principales
             </Text>
-
-            <TextInput
-              label="Nom du client / Entreprise"
+          </CardHeader>
+          <CardContent className="gap-4">
+            <Input
+              label="Nom / Entreprise *"
+              placeholder="Ex: Jean Dupont"
               value={name}
               onChangeText={setName}
-              mode="outlined"
-              left={<TextInput.Icon icon="account" />}
-              className="mb-4"
-              outlineColor={isDark ? "#475569" : "#E2E8F0"}
-              activeOutlineColor="#3B82F6"
-              style={{ backgroundColor: isDark ? "#1E293B" : "#FFFFFF" }}
-              theme={{
-                colors: {
-                  onSurfaceVariant: isDark ? "#94A3B8" : "#64748B",
-                  onSurface: isDark ? "#E2E8F0" : "#1F2937",
-                },
-              }}
             />
-
-            <TextInput
-              label="Adresse complète"
+            <Input
+              label="Adresse complète *"
+              placeholder="10 Rue de la Paix, Paris"
               value={address}
               onChangeText={setAddress}
-              mode="outlined"
               multiline
-              numberOfLines={3}
-              left={<TextInput.Icon icon="map-marker" />}
-              outlineColor={isDark ? "#475569" : "#E2E8F0"}
-              activeOutlineColor="#3B82F6"
-              style={{ backgroundColor: isDark ? "#1E293B" : "#FFFFFF" }}
-              theme={{
-                colors: {
-                  onSurfaceVariant: isDark ? "#94A3B8" : "#64748B",
-                  onSurface: isDark ? "#E2E8F0" : "#1F2937",
-                },
-              }}
+              numberOfLines={2}
+              className="h-20 py-2"
             />
-          </View>
+          </CardContent>
+        </Card>
 
-          {/* Champs optionnels */}
-          <View
-            className={`pt-6 border-t ${
-              isDark ? "border-dark-700" : "border-gray-100"
-            }`}
-          >
-            <Text
-              className={`text-xs font-semibold ${
-                isDark ? "text-dark-400" : "text-gray-500"
-              } mb-3 uppercase tracking-wide`}
-            >
-              Coordonnées (optionnel)
+        <Card className="mt-4">
+          <CardHeader>
+            <Text className="text-sm font-bold uppercase text-muted-foreground dark:text-slate-500 tracking-wider">
+              Coordonnées & Notes
             </Text>
-
-            <TextInput
+          </CardHeader>
+          <CardContent className="gap-4">
+            <Input
               label="Téléphone"
+              placeholder="06 12 34 56 78"
               value={phone}
               onChangeText={setPhone}
-              mode="outlined"
               keyboardType="phone-pad"
-              left={<TextInput.Icon icon="phone" />}
-              className="mb-4"
-              outlineColor={isDark ? "#475569" : "#E2E8F0"}
-              activeOutlineColor="#3B82F6"
-              style={{ backgroundColor: isDark ? "#1E293B" : "#FFFFFF" }}
-              theme={{
-                colors: {
-                  onSurfaceVariant: isDark ? "#94A3B8" : "#64748B",
-                  onSurface: isDark ? "#E2E8F0" : "#1F2937",
-                },
-              }}
             />
-
-            <TextInput
+            <Input
               label="Email"
+              placeholder="client@email.com"
               value={email}
               onChangeText={setEmail}
-              mode="outlined"
               keyboardType="email-address"
               autoCapitalize="none"
-              left={<TextInput.Icon icon="email" />}
-              className="mb-4"
-              outlineColor={isDark ? "#475569" : "#E2E8F0"}
-              activeOutlineColor="#3B82F6"
-              style={{ backgroundColor: isDark ? "#1E293B" : "#FFFFFF" }}
-              theme={{
-                colors: {
-                  onSurfaceVariant: isDark ? "#94A3B8" : "#64748B",
-                  onSurface: isDark ? "#E2E8F0" : "#1F2937",
-                },
-              }}
             />
-
-            <TextInput
+            <Input
               label="Notes internes"
+              placeholder="Code porte, préférences..."
               value={notes}
               onChangeText={setNotes}
-              mode="outlined"
               multiline
               numberOfLines={3}
-              left={<TextInput.Icon icon="note-text" />}
-              outlineColor={isDark ? "#475569" : "#E2E8F0"}
-              activeOutlineColor="#3B82F6"
-              style={{ backgroundColor: isDark ? "#1E293B" : "#FFFFFF" }}
-              theme={{
-                colors: {
-                  onSurfaceVariant: isDark ? "#94A3B8" : "#64748B",
-                  onSurface: isDark ? "#E2E8F0" : "#1F2937",
-                },
-              }}
+              className="h-24 py-2"
             />
-          </View>
-        </View>
+          </CardContent>
+        </Card>
 
-        {/* Action Button */}
-        <Pressable
+        <Button
           onPress={handleSubmit}
-          disabled={mutation.isPending}
-          className="mt-6 bg-primary-500 rounded-2xl p-5 shadow-lg active:scale-98 items-center justify-center"
+          loading={mutation.isPending}
+          className="mt-8"
         >
-          {mutation.isPending ? (
-            <View className="flex-row items-center">
-              <Text className="text-white text-lg font-bold mr-3">
-                Création en cours...
-              </Text>
-            </View>
-          ) : (
-            <View className="flex-row items-center">
-              <FontAwesome name="check" size={20} color="#FFFFFF" />
-              <Text className="ml-3 text-white text-lg font-bold">
-                Enregistrer le Client
-              </Text>
-            </View>
-          )}
-        </Pressable>
-
-        {/* Helper Text */}
-        <Text
-          className={`mt-4 text-center text-xs ${
-            isDark ? "text-dark-400" : "text-gray-500"
-          }`}
-        >
-          Les champs avec * sont obligatoires
-        </Text>
+          <Check size={20} color="white" />
+          <Text className="ml-2 text-white font-bold text-lg">
+            Enregistrer le client
+          </Text>
+        </Button>
       </ScrollView>
     </View>
   );

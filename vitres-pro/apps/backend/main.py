@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import interventions, clients
 
-app = FastAPI(title="VitresPro API")
+app = FastAPI(title="LVM Agenda API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,4 +22,4 @@ app.include_router(interventions.router, prefix="/api/interventions", tags=["int
 
 @app.get("/")
 def read_root():
-    return {"status": "ok", "message": "VitresPro API Running"}
+    return {"status": "ok", "message": "LVM Agenda API Running"}

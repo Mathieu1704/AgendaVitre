@@ -1,32 +1,64 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  // ✅ Tailwind v3 : darkMode via classe
+  darkMode: "class",
+
   content: [
     "./app/**/*.{js,jsx,ts,tsx}",
-    "./components/**/*.{js,jsx,ts,tsx}",
     "./src/**/*.{js,jsx,ts,tsx}",
+    "./components/**/*.{js,jsx,ts,tsx}",
   ],
-  // 🚨 J'ai supprimé la ligne "presets" qui faisait planter la v2
+
   theme: {
     extend: {
       colors: {
+        // ✅ Couleurs STATIQUES qui fonctionnent avec dark:
+
+        // Mode Clair (défaut)
+        background: "#FFFFFF",
+        foreground: "#09090B",
+
+        card: {
+          DEFAULT: "#FFFFFF",
+          foreground: "#09090B",
+        },
+
+        popover: {
+          DEFAULT: "#FFFFFF",
+          foreground: "#09090B",
+        },
+
         primary: {
-          50: "#EFF6FF",
-          100: "#DBEAFE",
-          200: "#BFDBFE",
-          300: "#93C5FD",
-          400: "#60A5FA",
-          500: "#3B82F6", // Ton Bleu principal
-          600: "#2563EB",
-          700: "#1D4ED8",
-          800: "#1E40AF",
-          900: "#1E3A8A",
+          DEFAULT: "#3B82F6",
+          foreground: "#FFFFFF",
         },
+
         secondary: {
-          // J'ajoute le secondaire pour être sûr (Gris Nuit)
-          500: "#1E293B",
-          900: "#0F172A",
+          DEFAULT: "#F4F4F5",
+          foreground: "#18181B",
         },
-        dark: {
+
+        muted: {
+          DEFAULT: "#F4F4F5",
+          foreground: "#71717A",
+        },
+
+        accent: {
+          DEFAULT: "#F4F4F5",
+          foreground: "#18181B",
+        },
+
+        destructive: {
+          DEFAULT: "#EF4444",
+          foreground: "#FAFAFA",
+        },
+
+        border: "#E4E4E7",
+        input: "#E4E4E7",
+        ring: "#3B82F6",
+
+        // ✅ Couleurs Slate pour dark mode
+        slate: {
           50: "#F8FAFC",
           100: "#F1F5F9",
           200: "#E2E8F0",
@@ -37,12 +69,24 @@ module.exports = {
           700: "#334155",
           800: "#1E293B",
           900: "#0F172A",
+          950: "#020617",
+        },
+
+        // ✅ Couleurs Status
+        status: {
+          planned: "#3B82F6",
+          progress: "#F97316",
+          done: "#22C55E",
         },
       },
-      fontFamily: {
-        sans: ["System"],
+
+      borderRadius: {
+        lg: "0.5rem",
+        xl: "0.75rem",
+        "2xl": "1rem",
       },
     },
   },
+
   plugins: [],
 };

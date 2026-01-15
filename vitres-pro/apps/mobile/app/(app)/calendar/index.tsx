@@ -1,838 +1,635 @@
-// apps/mobile/app/(app)/calendar/index.tsx
-import React, { useCallback, useMemo, useState } from "react";
-import { View, Pressable, ScrollView, useWindowDimensions } from "react-native";
-import { Calendar, DateData } from "react-native-calendars";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import {
-  ActivityIndicator,
-  Appbar,
-  Button,
-  Divider,
-  FAB,
-  Menu,
-  Modal,
-  Portal,
+  View,
+  Pressable,
+  ScrollView,
   Text,
-} from "react-native-paper";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { useColorScheme } from "react-native";
-import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "expo-router";
-
-import { api } from "../../../src/lib/api";
-import { supabase } from "../../../src/lib/supabase";
-
-// ✅ important: configure LocaleConfig FR une seule fois
-import "../../../src/lib/calendarLocale";
-
+  ActivityIndicator,
+  useWindowDimensions,
+  Platform,
+} from "react-native";
 import {
-  addDays,
-  addMonths,
-  datesRange,
-  endOfMonth,
-  parseISODate,
-  startOfDay,
-  startOfMonth,
-  startOfWeek,
+  Calendar as RNCalendar,
+  DateData,
+  LocaleConfig,
+} from "react-native-calendars";
+import { useRouter } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Clock,
+  MapPin,
+  CalendarCheck,
+} from "lucide-react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import { useLocalSearchParams } from "expo-router";
+
+// Imports internes
+import { api } from "../../../src/lib/api";
+import {
   toISODate,
+  parseISODate,
+  addMonths,
+  addDays,
+  startOfWeek,
+  startOfDay,
+  datesRange,
+  startOfMonth,
+  endOfMonth,
 } from "../../../src/lib/date";
+import { Card } from "../../../src/ui/components/Card";
+import { StatusBadge } from "../../../src/ui/components/StatusBadge";
+import { Avatar } from "../../../src/ui/components/Avatar";
+import { useTheme } from "../../../src/ui/components/ThemeToggle";
 
-type Intervention = {
-  id: string;
-  title: string;
-  start_time: string;
-  end_time?: string;
-  status: "planned" | "in_progress" | "done" | string;
-  client?: { name: string; address: string };
+// --- CONFIGURATION LOCALE ---
+LocaleConfig.locales["fr"] = {
+  monthNames: [
+    "Janvier",
+    "Février",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Août",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Décembre",
+  ],
+  monthNamesShort: [
+    "Janv.",
+    "Févr.",
+    "Mars",
+    "Avr.",
+    "Mai",
+    "Juin",
+    "Juil.",
+    "Août",
+    "Sept.",
+    "Oct.",
+    "Nov.",
+    "Déc.",
+  ],
+  dayNames: [
+    "Dimanche",
+    "Lundi",
+    "Mardi",
+    "Mercredi",
+    "Jeudi",
+    "Vendredi",
+    "Samedi",
+  ],
+  dayNamesShort: ["Dim.", "Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam."],
+  today: "Aujourd'hui",
 };
+LocaleConfig.defaultLocale = "fr";
 
-type ViewMode = "day" | "week" | "month" | "year" | "schedule" | "4days";
-
-const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
-  { key: "day", label: "Jour" },
-  { key: "4days", label: "4 jours" },
-  { key: "week", label: "Semaine" },
-  { key: "month", label: "Mois" },
-  { key: "year", label: "Année" },
-  { key: "schedule", label: "Planning" },
-];
-
-function normalizeCursorForView(mode: ViewMode, d: Date) {
-  const x = startOfDay(d);
-  if (mode === "week") return startOfWeek(x, 1);
-  if (mode === "month" || mode === "schedule") return startOfMonth(x);
-  if (mode === "year") return new Date(x.getFullYear(), 0, 1, 0, 0, 0, 0);
-  return x; // day / 4days
-}
-
-function statusLabel(status: string) {
-  if (status === "planned") return "Planifié";
-  if (status === "in_progress") return "En cours";
-  if (status === "done") return "Terminé";
-  return status;
-}
-
-function statusColor(status: string) {
-  if (status === "done") return "#16A34A";
-  if (status === "in_progress") return "#EA580C";
-  return "#2563EB";
-}
+type ViewMode = "day" | "week" | "month" | "year";
 
 export default function CalendarScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
+  const params = useLocalSearchParams();
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 768;
-  const isCompact = width < 420;
+  const { isDark } = useTheme();
 
+  // Breakpoint pour Desktop
+  const isDesktop = width >= 1024;
+
+  // --- ÉTATS ---
   const [viewMode, setViewMode] = useState<ViewMode>("month");
+  const [cursorDate, setCursorDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState(toISODate(new Date()));
 
-  const today = useMemo(() => startOfDay(new Date()), []);
-  const [cursorDate, setCursorDate] = useState<Date>(() =>
-    normalizeCursorForView("month", today)
-  );
+  useEffect(() => {
+    if (params.date) {
+      const dateStr =
+        typeof params.date === "string" ? params.date : params.date[0];
+      // On extrait juste la partie YYYY-MM-DD
+      const isoDate = dateStr.split("T")[0];
 
-  const [selectedDateISO, setSelectedDateISO] = useState<string>(
-    toISODate(today)
-  );
-  const [viewMenuVisible, setViewMenuVisible] = useState(false);
+      setSelectedDate(isoDate);
+      setCursorDate(new Date(isoDate));
+      // Optionnel : Forcer la vue jour pour voir le détail direct
+      // setViewMode('day');
+    }
+  }, [params.date]);
 
-  // Overlay interventions (comme Google Calendar)
-  const [dayOverlayVisible, setDayOverlayVisible] = useState(false);
-
-  const { data, isLoading, error, refetch } = useQuery({
+  // --- DATA ---
+  const { data: interventions, isLoading } = useQuery({
     queryKey: ["interventions"],
     queryFn: async () => {
       const res = await api.get("/api/interventions/");
-      return (Array.isArray(res.data) ? res.data : []) as Intervention[];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
-  const interventions = data ?? [];
+  // --- HELPERS ---
+  const dayKeyFromDateTime = useCallback((isoDateTime: string) => {
+    return isoDateTime.split("T")[0];
+  }, []);
 
   const itemsByDate = useMemo(() => {
-    const map: Record<string, Intervention[]> = {};
+    const map: Record<string, any[]> = {};
+    if (!interventions) return map;
+
     for (const it of interventions) {
-      if (!it?.id || !it?.start_time) continue;
-      const k = it.start_time.split("T")[0];
-      if (!k) continue;
+      if (!it?.start_time) continue;
+      const k = dayKeyFromDateTime(it.start_time);
       (map[k] ||= []).push(it);
     }
+    // Tri par heure
     for (const k of Object.keys(map)) {
-      map[k].sort(
-        (a, b) =>
-          new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-      );
+      map[k].sort((a, b) => a.start_time.localeCompare(b.start_time));
     }
     return map;
-  }, [interventions]);
+  }, [interventions, dayKeyFromDateTime]);
 
-  const markedDates = useMemo(() => {
-    const marks: Record<string, any> = {};
-    for (const k of Object.keys(itemsByDate)) {
-      marks[k] = { marked: true, dotColor: "#3B82F6" };
-    }
-    marks[selectedDateISO] = {
-      ...(marks[selectedDateISO] || {}),
-      selected: true,
-      selectedColor: "#3B82F6",
-    };
-    return marks;
-  }, [itemsByDate, selectedDateISO]);
-
-  const calendarTheme = useMemo(
-    () => ({
-      backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
-      calendarBackground: isDark ? "#1E293B" : "#FFFFFF",
-      textSectionTitleColor: isDark ? "#94A3B8" : "#64748B",
-      selectedDayBackgroundColor: "#3B82F6",
-      selectedDayTextColor: "#FFFFFF",
-      todayTextColor: "#3B82F6",
-      dayTextColor: isDark ? "#E2E8F0" : "#1F2937",
-      textDisabledColor: isDark ? "#475569" : "#D1D5DB",
-      dotColor: "#3B82F6",
-      selectedDotColor: "#FFFFFF",
-      monthTextColor: isDark ? "#FFFFFF" : "#111827",
-      textMonthFontWeight: "bold" as const,
-      textDayFontSize: 16,
-      textMonthFontSize: 18,
-    }),
-    [isDark]
-  );
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.replace("/(auth)/login");
-  };
-
-  const setMode = (m: ViewMode) => {
-    setViewMode(m);
-    setCursorDate((prev) => normalizeCursorForView(m, prev));
-    setViewMenuVisible(false);
-  };
-
-  const goToday = () => {
-    setSelectedDateISO(toISODate(today));
-    setCursorDate(normalizeCursorForView(viewMode, today));
-  };
-
-  const goPrev = () => {
+  // --- NAVIGATION ---
+  const handlePrev = () => {
     setCursorDate((d) => {
       if (viewMode === "day") return addDays(d, -1);
-      if (viewMode === "4days") return addDays(d, -4);
       if (viewMode === "week") return addDays(d, -7);
-      if (viewMode === "month" || viewMode === "schedule")
-        return addMonths(d, -1);
       if (viewMode === "year") return new Date(d.getFullYear() - 1, 0, 1);
-      return d;
+      return addMonths(d, -1);
     });
   };
 
-  const goNext = () => {
+  const handleNext = () => {
     setCursorDate((d) => {
-      if (viewMode === "day") return addDays(d, +1);
-      if (viewMode === "4days") return addDays(d, +4);
-      if (viewMode === "week") return addDays(d, +7);
-      if (viewMode === "month" || viewMode === "schedule")
-        return addMonths(d, +1);
+      if (viewMode === "day") return addDays(d, 1);
+      if (viewMode === "week") return addDays(d, 7);
       if (viewMode === "year") return new Date(d.getFullYear() + 1, 0, 1);
-      return d;
+      return addMonths(d, 1);
     });
   };
 
-  const rangeTitle = useMemo(() => {
-    const frLong = (d: Date, opt: Intl.DateTimeFormatOptions) =>
-      d.toLocaleDateString("fr-FR", opt);
+  const handleToday = () => {
+    const now = new Date();
+    setCursorDate(now);
+    setSelectedDate(toISODate(now));
+  };
 
-    if (viewMode === "year") return String(cursorDate.getFullYear());
-
-    if (viewMode === "month" || viewMode === "schedule") {
-      return frLong(cursorDate, { month: "long", year: "numeric" });
-    }
-
-    if (viewMode === "week") {
-      const start = startOfWeek(cursorDate, 1);
-      const end = addDays(start, 6);
-      const sameMonth = start.getMonth() === end.getMonth();
-      const startStr = frLong(start, { day: "numeric" });
-      const endStr = frLong(
-        end,
-        sameMonth
-          ? { day: "numeric", month: "long", year: "numeric" }
-          : { day: "numeric", month: "long" }
-      );
-      const monthYear = frLong(end, { year: "numeric" });
-      return `${startStr} – ${endStr} ${sameMonth ? "" : monthYear}`.trim();
-    }
-
-    if (viewMode === "4days") {
-      const start = cursorDate;
-      const end = addDays(start, 3);
-      const startStr = frLong(start, { day: "numeric", month: "short" });
-      const endStr = frLong(end, {
+  // Titre dynamique
+  const headerTitle = useMemo(() => {
+    const d = cursorDate;
+    if (viewMode === "year") return d.getFullYear().toString();
+    if (viewMode === "day")
+      return d.toLocaleDateString("fr-FR", {
+        weekday: "long",
         day: "numeric",
-        month: "short",
-        year: "numeric",
+        month: "long",
       });
-      return `${startStr} – ${endStr}`;
+    if (viewMode === "week") {
+      const start = startOfWeek(d, 1);
+      const end = addDays(start, 6);
+      if (start.getMonth() === end.getMonth()) {
+        return `${start.getDate()} - ${end.getDate()} ${start.toLocaleDateString(
+          "fr-FR",
+          { month: "long" }
+        )}`;
+      }
+      return `${start.getDate()} ${start.toLocaleDateString("fr-FR", {
+        month: "short",
+      })} - ${end.getDate()} ${end.toLocaleDateString("fr-FR", {
+        month: "short",
+      })}`;
     }
-
-    // day
-    return frLong(cursorDate, {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
+    return d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
   }, [cursorDate, viewMode]);
 
-  const openDayOverlay = useCallback(
-    (iso: string) => {
-      setSelectedDateISO(iso);
-      setDayOverlayVisible(true);
-    },
-    [setSelectedDateISO]
+  // --- COMPOSANT CARTE INTERVENTION ---
+  const InterventionCard = ({
+    item,
+    compact = false,
+  }: {
+    item: any;
+    compact?: boolean;
+  }) => (
+    <Pressable
+      onPress={() => router.push(`/(app)/calendar/${item.id}` as any)}
+      className={`bg-card dark:bg-slate-900 border border-border dark:border-slate-800 rounded-xl p-3 shadow-sm active:scale-[0.98] mb-2 ${
+        compact ? "p-2" : ""
+      }`}
+    >
+      <View className="flex-row justify-between items-start mb-1">
+        <Text className="text-xs font-bold text-primary dark:text-blue-400">
+          {new Date(item.start_time).toLocaleTimeString("fr-FR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </Text>
+        {!compact && <StatusBadge status={item.status} />}
+      </View>
+
+      <Text
+        className={`font-bold text-foreground dark:text-white ${
+          compact ? "text-xs" : "text-sm mb-1"
+        }`}
+        numberOfLines={2}
+      >
+        {item.title}
+      </Text>
+
+      {!compact && (
+        <View className="flex-row items-center mt-1">
+          <Text
+            className="text-xs text-muted-foreground dark:text-slate-400"
+            numberOfLines={1}
+          >
+            {item.client?.name || "Client"}
+          </Text>
+        </View>
+      )}
+    </Pressable>
   );
 
-  const closeDayOverlay = () => setDayOverlayVisible(false);
+  // --- VUE : MOIS (Classique) ---
+  const RenderMonth = () => {
+    const calendarTheme = useMemo(() => {
+      const textColor = isDark ? "#F8FAFC" : "#09090B";
+      const textMuted = isDark ? "#94A3B8" : "#71717A";
+      return {
+        calendarBackground: "transparent",
+        textSectionTitleColor: textMuted,
+        selectedDayBackgroundColor: "#3B82F6",
+        selectedDayTextColor: "#ffffff",
+        todayTextColor: "#3B82F6",
+        dayTextColor: textColor,
+        textDisabledColor: isDark ? "#1E293B" : "#E4E4E7",
+        dotColor: "#3B82F6",
+        selectedDotColor: "#ffffff",
+        arrowColor: textColor,
+        monthTextColor: textColor,
+        indicatorColor: "#3B82F6",
+        textDayFontWeight: "500" as const,
+        textMonthFontWeight: "bold" as const,
+        textDayHeaderFontWeight: "600" as const,
+        textDayFontSize: 16,
+      };
+    }, [isDark]);
 
-  const selectedInterventions = itemsByDate[selectedDateISO] || [];
+    const markedDates = useMemo(() => {
+      const marks: any = {};
+      const today = toISODate(new Date());
+      interventions?.forEach((item: any) => {
+        if (item.start_time) {
+          const dateKey = item.start_time.split("T")[0];
+          if (dateKey !== selectedDate)
+            marks[dateKey] = { marked: true, dotColor: "#3B82F6" };
+        }
+      });
+      marks[selectedDate] = {
+        selected: true,
+        selectedColor: "#3B82F6",
+        selectedTextColor: "#ffffff",
+      };
+      if (today !== selectedDate)
+        marks[today] = { ...(marks[today] || {}), textColor: "#3B82F6" };
+      return marks;
+    }, [interventions, selectedDate]);
 
-  const InterventionRow = ({ item }: { item: Intervention }) => {
-    const time = new Date(item.start_time).toLocaleTimeString("fr-FR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const dayList = itemsByDate[selectedDate] || [];
 
     return (
-      <Pressable
-        onPress={() => {
-          closeDayOverlay();
-          router.push(`/(app)/calendar/${item.id}` as any);
-        }}
-        style={{
-          borderRadius: 16,
-          padding: 14,
-          marginBottom: 10,
-          backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
-          borderWidth: 1,
-          borderColor: isDark ? "#334155" : "#E2E8F0",
-        }}
-      >
-        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <FontAwesome name="clock-o" size={16} color="#3B82F6" />
-            <Text style={{ marginLeft: 8, fontWeight: "800", fontSize: 16 }}>
-              {time}
-            </Text>
-          </View>
-
-          <View
-            style={{
-              paddingHorizontal: 10,
-              paddingVertical: 4,
-              borderRadius: 999,
-              backgroundColor: `${statusColor(item.status)}20`,
+      <View>
+        <Card className="overflow-hidden border border-border dark:border-slate-800 bg-card dark:bg-slate-900 shadow-sm mx-4">
+          <RNCalendar
+            key={`${isDark ? "d" : "l"}-${toISODate(cursorDate)}`}
+            current={toISODate(cursorDate)}
+            onDayPress={(day: DateData) => {
+              setSelectedDate(day.dateString);
+              setCursorDate(new Date(day.dateString));
             }}
-          >
-            <Text
-              style={{
-                color: statusColor(item.status),
-                fontWeight: "700",
-                fontSize: 12,
-              }}
-            >
-              {statusLabel(item.status)}
-            </Text>
-          </View>
-        </View>
+            markedDates={markedDates}
+            firstDay={1}
+            hideArrows={true}
+            enableSwipeMonths={true}
+            disableMonthChange={true}
+            theme={calendarTheme}
+          />
+        </Card>
 
-        <Text style={{ marginTop: 8, fontSize: 16, fontWeight: "700" }}>
-          {item.title}
-        </Text>
-
-        <Text style={{ marginTop: 4, opacity: 0.75 }}>
-          {item.client?.name ?? "Client inconnu"}
-          {item.client?.address ? ` · ${item.client.address}` : ""}
-        </Text>
-      </Pressable>
-    );
-  };
-
-  // ---- RENDERS DES VUES ----
-
-  const renderMonth = () => (
-    <View style={{ flex: 1, padding: 16 }}>
-      <View
-        style={{
-          flex: 1,
-          width: "100%",
-          maxWidth: 1200,
-          alignSelf: "center",
-          borderRadius: 20,
-          overflow: "hidden",
-          backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
-          borderWidth: 1,
-          borderColor: isDark ? "#334155" : "#E2E8F0",
-        }}
-      >
-        <Calendar
-          current={toISODate(cursorDate)}
-          firstDay={1}
-          onDayPress={(day: DateData) => openDayOverlay(day.dateString)}
-          onMonthChange={(m) => setCursorDate(new Date(m.year, m.month - 1, 1))}
-          enableSwipeMonths
-          hideArrows
-          markedDates={markedDates}
-          theme={calendarTheme}
-        />
-      </View>
-    </View>
-  );
-
-  const renderDay = () => {
-    const iso = selectedDateISO;
-    const list = itemsByDate[iso] || [];
-    return (
-      <View style={{ flex: 1, padding: 16 }}>
-        <View
-          style={{
-            flex: 1,
-            width: "100%",
-            maxWidth: 900,
-            alignSelf: "center",
-            borderRadius: 20,
-            overflow: "hidden",
-            backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
-            borderWidth: 1,
-            borderColor: isDark ? "#334155" : "#E2E8F0",
-          }}
-        >
-          <View style={{ padding: 16 }}>
-            <Text style={{ fontSize: 18, fontWeight: "800" }}>
-              {new Date(iso).toLocaleDateString("fr-FR", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-              })}
-            </Text>
-
-            <Pressable
-              onPress={() => openDayOverlay(iso)}
-              style={{ marginTop: 10 }}
-            >
-              <Text style={{ color: "#3B82F6", fontWeight: "700" }}>
-                Ouvrir les interventions (overlay)
-              </Text>
-            </Pressable>
-
-            <Divider style={{ marginVertical: 14 }} />
-
-            {list.length === 0 ? (
-              <Text style={{ opacity: 0.7 }}>
-                Aucune intervention ce jour-là.
-              </Text>
-            ) : (
-              list.map((it) => <InterventionRow key={it.id} item={it} />)
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  const renderColumns = (count: number) => {
-    const start =
-      viewMode === "week" ? startOfWeek(cursorDate, 1) : startOfDay(cursorDate);
-
-    const days = datesRange(start, count);
-
-    return (
-      <View style={{ flex: 1, padding: 16 }}>
-        <View
-          style={{
-            flex: 1,
-            width: "100%",
-            maxWidth: 1200,
-            alignSelf: "center",
-            borderRadius: 20,
-            overflow: "hidden",
-            backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
-            borderWidth: 1,
-            borderColor: isDark ? "#334155" : "#E2E8F0",
-          }}
-        >
-          {/* ✅ scroll horizontal interne => jamais “coupé” */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ padding: 12 }}
-          >
-            {days.map((d) => {
-              const iso = toISODate(d);
-              const list = itemsByDate[iso] || [];
-              const dayName = d.toLocaleDateString("fr-FR", {
-                weekday: "short",
-              });
-              const dayNum = d.toLocaleDateString("fr-FR", { day: "numeric" });
-
-              return (
-                <View
-                  key={iso}
-                  style={{
-                    width: Math.max(130, isDesktop ? 160 : 140),
-                    marginRight: 12,
-                    borderRadius: 16,
-                    padding: 12,
-                    backgroundColor:
-                      iso === selectedDateISO
-                        ? isDark
-                          ? "#0B1220"
-                          : "#EFF6FF"
-                        : isDark
-                        ? "#0F172A"
-                        : "#F8FAFC",
-                    borderWidth: 1,
-                    borderColor:
-                      iso === selectedDateISO
-                        ? "#3B82F6"
-                        : isDark
-                        ? "#334155"
-                        : "#E2E8F0",
-                  }}
-                >
-                  <Pressable
-                    onPress={() => openDayOverlay(iso)}
-                    style={{ marginBottom: 10 }}
-                  >
-                    <Text style={{ fontWeight: "800" }}>
-                      {dayName} {dayNum}
-                    </Text>
-                    <Text style={{ opacity: 0.65, marginTop: 2, fontSize: 12 }}>
-                      {list.length} intervention{list.length > 1 ? "s" : ""}
-                    </Text>
-                  </Pressable>
-
-                  {list.length === 0 ? (
-                    <Text style={{ opacity: 0.6, fontSize: 12 }}>—</Text>
-                  ) : (
-                    list.slice(0, 4).map((it) => {
-                      const t = new Date(it.start_time).toLocaleTimeString(
-                        "fr-FR",
-                        {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }
-                      );
-                      return (
-                        <Pressable
-                          key={it.id}
-                          onPress={() => {
-                            closeDayOverlay();
-                            router.push(`/(app)/calendar/${it.id}` as any);
-                          }}
-                          style={{
-                            padding: 10,
-                            borderRadius: 14,
-                            marginBottom: 8,
-                            backgroundColor: isDark ? "#111827" : "#FFFFFF",
-                            borderWidth: 1,
-                            borderColor: isDark ? "#334155" : "#E2E8F0",
-                          }}
-                        >
-                          <Text style={{ fontWeight: "800", fontSize: 12 }}>
-                            {t}
-                          </Text>
-                          <Text
-                            numberOfLines={2}
-                            style={{ marginTop: 2, fontWeight: "700" }}
-                          >
-                            {it.title}
-                          </Text>
-                          <Text
-                            style={{ marginTop: 2, fontSize: 11, opacity: 0.7 }}
-                            numberOfLines={1}
-                          >
-                            {it.client?.name ?? "Client"}
-                          </Text>
-                        </Pressable>
-                      );
-                    })
-                  )}
-
-                  {list.length > 4 && (
-                    <Text style={{ opacity: 0.7, fontSize: 12 }}>
-                      +{list.length - 4} autres…
-                    </Text>
-                  )}
-                </View>
-              );
+        <View className="px-4 py-6 pb-24">
+          <Text className="text-lg font-bold text-foreground dark:text-white mb-4">
+            {new Date(selectedDate).toLocaleDateString("fr-FR", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
             })}
-          </ScrollView>
-        </View>
-      </View>
-    );
-  };
-
-  const renderYear = () => {
-    const year = cursorDate.getFullYear();
-    const months = Array.from({ length: 12 }, (_, m) => new Date(year, m, 1));
-
-    const cols = width >= 1200 ? 4 : width >= 900 ? 3 : 2;
-    const cardW = Math.floor(
-      (Math.min(width, 1200) - 16 * 2 - (cols - 1) * 12) / cols
-    );
-
-    return (
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <View
-          style={{
-            width: "100%",
-            maxWidth: 1200,
-            alignSelf: "center",
-            flexDirection: "row",
-            flexWrap: "wrap",
-            gap: 12,
-          }}
-        >
-          {months.map((m) => (
-            <View
-              key={m.getMonth()}
-              style={{
-                width: cardW,
-                borderRadius: 18,
-                overflow: "hidden",
-                backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
-                borderWidth: 1,
-                borderColor: isDark ? "#334155" : "#E2E8F0",
-              }}
-            >
-              <View style={{ padding: 12 }}>
-                <Text style={{ fontWeight: "800" }}>
-                  {m.toLocaleDateString("fr-FR", { month: "long" })}
-                </Text>
-              </View>
-
-              <Calendar
-                current={toISODate(m)}
-                firstDay={1}
-                hideArrows
-                disableMonthChange
-                hideExtraDays
-                onDayPress={(day) => openDayOverlay(day.dateString)}
-                markedDates={markedDates}
-                theme={{
-                  ...calendarTheme,
-                  textDayFontSize: 12,
-                  textMonthFontSize: 12,
-                }}
-              />
-            </View>
-          ))}
-        </View>
-      </ScrollView>
-    );
-  };
-
-  const renderSchedule = () => {
-    const monthStart = startOfMonth(cursorDate);
-    const monthEnd = endOfMonth(cursorDate);
-
-    const inMonth = interventions.filter((it) => {
-      const k = it.start_time.split("T")[0];
-      const d = parseISODate(k);
-      return d >= monthStart && d <= monthEnd;
-    });
-
-    const grouped = new Map<string, Intervention[]>();
-    for (const it of inMonth) {
-      const k = it.start_time.split("T")[0];
-      (grouped.get(k) ?? grouped.set(k, []).get(k)!)?.push(it);
-    }
-
-    const keys = Array.from(grouped.keys()).sort();
-    return (
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
-        <View style={{ width: "100%", maxWidth: 900, alignSelf: "center" }}>
-          {keys.length === 0 ? (
-            <Text style={{ opacity: 0.7 }}>
-              Aucune intervention ce mois-ci.
+          </Text>
+          {dayList.length === 0 ? (
+            <Text className="text-muted-foreground dark:text-slate-500 text-center py-8">
+              Rien de prévu.
             </Text>
           ) : (
-            keys.map((k) => {
-              const list = (grouped.get(k) || []).sort(
-                (a, b) =>
-                  new Date(a.start_time).getTime() -
-                  new Date(b.start_time).getTime()
-              );
-
-              return (
-                <View key={k} style={{ marginBottom: 18 }}>
-                  <Pressable onPress={() => openDayOverlay(k)}>
-                    <Text style={{ fontSize: 16, fontWeight: "900" }}>
-                      {new Date(k).toLocaleDateString("fr-FR", {
-                        weekday: "long",
-                        day: "numeric",
-                        month: "long",
-                      })}
-                    </Text>
-                  </Pressable>
-                  <View style={{ marginTop: 10 }}>
-                    {list.map((it) => (
-                      <InterventionRow key={it.id} item={it} />
-                    ))}
-                  </View>
-                </View>
-              );
-            })
+            dayList.map((item) => (
+              <InterventionCard key={item.id} item={item} />
+            ))
           )}
         </View>
+      </View>
+    );
+  };
+
+  // --- VUE : SEMAINE (Colonnes responsive) ---
+  const RenderWeek = () => {
+    const start = startOfWeek(cursorDate, 1);
+    const weekDays = datesRange(start, 7);
+
+    const WeekContent = () => (
+      <>
+        {weekDays.map((date) => {
+          const iso = toISODate(date);
+          const list = itemsByDate[iso] || [];
+          const isToday = iso === toISODate(new Date());
+
+          return (
+            <View
+              key={iso}
+              className={`${isDesktop ? "flex-1 mx-1" : "w-[140px] mr-3"}`}
+            >
+              <View
+                className={`p-3 rounded-t-xl border-t border-x border-border dark:border-slate-800 ${
+                  isToday ? "bg-primary/10" : "bg-card dark:bg-slate-900"
+                }`}
+              >
+                <Text
+                  className={`font-bold text-center ${
+                    isToday ? "text-primary" : "text-foreground dark:text-white"
+                  }`}
+                >
+                  {date.toLocaleDateString("fr-FR", {
+                    weekday: "short",
+                    day: "numeric",
+                  })}
+                </Text>
+              </View>
+              <View className="bg-muted/30 dark:bg-slate-900/50 min-h-[400px] border-b border-x border-border dark:border-slate-800 rounded-b-xl p-2">
+                {list.map((item) => (
+                  <InterventionCard key={item.id} item={item} compact />
+                ))}
+                {list.length === 0 && (
+                  <Text className="text-xs text-muted-foreground text-center mt-4">
+                    -
+                  </Text>
+                )}
+              </View>
+            </View>
+          );
+        })}
+      </>
+    );
+
+    if (isDesktop) {
+      return (
+        <View className="flex-row px-4 w-full">
+          <WeekContent />
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16 }}
+      >
+        <WeekContent />
       </ScrollView>
     );
   };
 
-  const renderBody = () => {
-    if (viewMode === "month") return renderMonth();
-    if (viewMode === "day") return renderDay();
-    if (viewMode === "week") return renderColumns(7);
-    if (viewMode === "4days") return renderColumns(4);
-    if (viewMode === "year") return renderYear();
-    return renderSchedule();
+  // --- VUE : JOUR ---
+  const RenderDay = () => {
+    const iso = toISODate(cursorDate);
+    const list = itemsByDate[iso] || [];
+
+    return (
+      <View className="px-4 w-full">
+        {list.length === 0 ? (
+          <View className="items-center justify-center py-20 bg-muted/20 dark:bg-slate-900/30 rounded-2xl border border-dashed border-border dark:border-slate-800">
+            <Clock size={48} color="#94A3B8" />
+            <Text className="text-muted-foreground mt-4">
+              Aucune intervention ce jour.
+            </Text>
+          </View>
+        ) : (
+          list.map((item) => <InterventionCard key={item.id} item={item} />)
+        )}
+      </View>
+    );
   };
 
-  // ---- UI états ----
-  if (isLoading) {
-    return (
-      <View className="flex-1 justify-center items-center bg-white dark:bg-dark-900">
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text style={{ marginTop: 12, opacity: 0.7 }}>
-          Chargement du planning…
-        </Text>
-      </View>
+  // --- VUE : ANNÉE (Grille de 12 calendriers) ---
+  const RenderYear = () => {
+    const year = cursorDate.getFullYear();
+    const months = Array.from({ length: 12 }, (_, i) => new Date(year, i, 1));
+
+    // Calcul responsive de la grille
+    const padding = 32; // 16px gauche + 16px droite
+    const gap = 12;
+
+    // Breakpoints
+    let cols = 1;
+    if (width >= 1280) cols = 4; // Grand écran
+    else if (width >= 1024) cols = 3; // Desktop normal
+    else if (width >= 768) cols = 2; // Tablette
+    // Mobile : 1 col pour bien voir les dates (comme screenshot iOS)
+
+    const itemWidth = (width - padding - gap * (cols - 1)) / cols;
+
+    // Markers pour l'année (juste les points)
+    const yearMarkers = useMemo(() => {
+      const marks: any = {};
+      interventions?.forEach((item: any) => {
+        if (item.start_time) {
+          const dateKey = item.start_time.split("T")[0];
+          marks[dateKey] = { marked: true, dotColor: "#3B82F6" };
+        }
+      });
+      return marks;
+    }, [interventions]);
+
+    // Thème minimaliste pour les mini-calendriers
+    const miniTheme = useMemo(
+      () => ({
+        calendarBackground: "transparent",
+        textSectionTitleColor: isDark ? "#64748B" : "#A1A1AA",
+        dayTextColor: isDark ? "#F8FAFC" : "#09090B",
+        todayTextColor: "#3B82F6",
+        textDisabledColor: isDark ? "#1E293B" : "#F4F4F5",
+        dotColor: "#3B82F6",
+        selectedDotColor: "#3B82F6",
+        monthTextColor: "transparent", // On cache le titre natif pour mettre le nôtre
+        textDayFontSize: 10,
+        textDayHeaderFontSize: 10,
+        textDayFontWeight: "400" as const,
+        textDayHeaderFontWeight: "bold" as const,
+        "stylesheet.calendar.main": {
+          container: { padding: 0, backgroundColor: "transparent" },
+          monthView: { marginVertical: 0 },
+        },
+        "stylesheet.day.basic": {
+          base: {
+            width: 24,
+            height: 24,
+            alignItems: "center",
+            justifyContent: "center",
+          },
+          text: {
+            marginTop: 0,
+            fontSize: 10,
+            color: isDark ? "#F8FAFC" : "#09090B",
+          },
+        },
+      }),
+      [isDark]
     );
-  }
 
-  if (error) {
     return (
-      <View className="flex-1 justify-center items-center bg-white dark:bg-dark-900 px-6">
-        <FontAwesome name="exclamation-circle" size={64} color="#EF4444" />
-        <Text style={{ fontSize: 20, fontWeight: "900", marginTop: 12 }}>
-          Erreur de chargement
-        </Text>
-        <Text style={{ opacity: 0.7, marginTop: 6, textAlign: "center" }}>
-          Impossible de récupérer les interventions
-        </Text>
-        <Button
-          mode="contained"
-          onPress={() => refetch()}
-          style={{ marginTop: 16 }}
-        >
-          Réessayer
-        </Button>
-      </View>
-    );
-  }
-
-  // ---- RENDER PRINCIPAL ----
-  return (
-    <View style={{ flex: 1, backgroundColor: isDark ? "#0F172A" : "#F3F4F6" }}>
-      {/* ✅ Header “Google Calendar” : flèches + Today + titre + vue + logout */}
-      <Appbar.Header
-        style={{ backgroundColor: isDark ? "#1E293B" : "#FFFFFF" }}
-      >
-        <Appbar.Action icon="chevron-left" onPress={goPrev} />
-        <Appbar.Action icon="chevron-right" onPress={goNext} />
-
-        {isCompact ? (
-          <Appbar.Action icon="calendar-today" onPress={goToday} />
-        ) : (
-          <Button
-            mode="outlined"
-            onPress={goToday}
-            style={{ marginRight: 8 }}
-            compact
-          >
-            Aujourd’hui
-          </Button>
-        )}
-
-        <Appbar.Content title={rangeTitle} />
-
-        <Menu
-          visible={viewMenuVisible}
-          onDismiss={() => setViewMenuVisible(false)}
-          anchor={
-            <Button
-              mode="text"
-              onPress={() => setViewMenuVisible(true)}
-              compact
+      <View className="flex-row flex-wrap px-4 gap-3 pb-24 justify-start">
+        {months.map((m) => {
+          const monthISO = toISODate(m);
+          return (
+            <Pressable
+              key={monthISO}
+              style={{ width: itemWidth }}
+              onPress={() => {
+                setCursorDate(m);
+                setViewMode("month");
+              }}
+              className="mb-2"
             >
-              {VIEW_OPTIONS.find((v) => v.key === viewMode)?.label ?? "Vue"} ▾
-            </Button>
-          }
-        >
-          {VIEW_OPTIONS.map((opt) => (
-            <Menu.Item
-              key={opt.key}
-              onPress={() => setMode(opt.key)}
-              title={opt.label}
-              leadingIcon={opt.key === viewMode ? "check" : undefined}
-            />
-          ))}
-        </Menu>
-
-        <Appbar.Action icon="logout" onPress={handleLogout} />
-      </Appbar.Header>
-
-      {/* ✅ Corps plein écran (plus de scroll obligatoire) */}
-      <View style={{ flex: 1 }}>{renderBody()}</View>
-
-      {/* ✅ FAB Add */}
-      <FAB
-        icon="plus"
-        onPress={() => router.push("/(app)/calendar/add")}
-        style={{
-          position: "absolute",
-          right: 20,
-          bottom: 20,
-          backgroundColor: "#3B82F6",
-          borderRadius: 16,
-        }}
-        customSize={64}
-      />
-
-      {/* ✅ Overlay interventions (clic jour => pop par dessus, sans scroll page) */}
-      <Portal>
-        <Modal
-          visible={dayOverlayVisible}
-          onDismiss={closeDayOverlay}
-          style={{
-            justifyContent: isDesktop ? "center" : "flex-end",
-            padding: 12,
-          }}
-          contentContainerStyle={{
-            backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
-            borderRadius: 20,
-            padding: 16,
-            width: isDesktop ? 560 : "100%",
-            alignSelf: "center",
-            maxHeight: isDesktop ? "80%" : "70%",
-            borderWidth: 1,
-            borderColor: isDark ? "#334155" : "#E2E8F0",
-          }}
-        >
-          <View
-            style={{ flexDirection: "row", justifyContent: "space-between" }}
-          >
-            <View style={{ flex: 1, paddingRight: 10 }}>
-              <Text style={{ fontSize: 18, fontWeight: "900" }}>
-                {new Date(selectedDateISO).toLocaleDateString("fr-FR", {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
+              <Text className="text-sm font-bold text-primary dark:text-blue-400 mb-2 pl-1 capitalize">
+                {m.toLocaleDateString("fr-FR", { month: "long" })}
               </Text>
-              <Text style={{ opacity: 0.7, marginTop: 4 }}>
-                {selectedInterventions.length} intervention
-                {selectedInterventions.length > 1 ? "s" : ""}
-              </Text>
-            </View>
 
-            <Pressable onPress={closeDayOverlay} style={{ padding: 8 }}>
-              <FontAwesome
-                name="close"
-                size={18}
-                color={isDark ? "#E2E8F0" : "#111827"}
-              />
-            </Pressable>
-          </View>
-
-          <Divider style={{ marginVertical: 12 }} />
-
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {selectedInterventions.length === 0 ? (
-              <View style={{ paddingVertical: 10 }}>
-                <Text style={{ opacity: 0.75 }}>Aucune intervention.</Text>
-                <Button
-                  mode="contained"
-                  style={{ marginTop: 12 }}
-                  onPress={() => {
-                    closeDayOverlay();
-                    router.push("/(app)/calendar/add");
-                  }}
-                >
-                  Ajouter une intervention
-                </Button>
+              <View
+                pointerEvents="none"
+                className="bg-card dark:bg-slate-900 border border-border dark:border-slate-800 rounded-xl p-2 shadow-sm"
+              >
+                <RNCalendar
+                  key={`year-${monthISO}-${isDark ? "d" : "l"}`}
+                  current={monthISO}
+                  hideArrows={true}
+                  hideExtraDays={true}
+                  disableMonthChange={true}
+                  firstDay={1}
+                  markedDates={yearMarkers}
+                  theme={miniTheme}
+                  renderHeader={() => null} // Hack pour cacher le header
+                />
               </View>
-            ) : (
-              selectedInterventions.map((it) => (
-                <InterventionRow key={it.id} item={it} />
-              ))
-            )}
-          </ScrollView>
-        </Modal>
-      </Portal>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  };
+
+  return (
+    <View className="flex-1 bg-background dark:bg-slate-950">
+      {/* === HEADER PRINCIPAL === */}
+      <View className="px-6 pt-6 pb-2 bg-background dark:bg-slate-950 z-10">
+        {/* Titre + Btn Aujourd'hui */}
+        <View className="flex-row justify-between items-center mb-4">
+          <Text className="text-3xl font-bold text-foreground dark:text-slate-50">
+            Planning
+          </Text>
+          <Pressable
+            onPress={handleToday}
+            className="flex-row items-center bg-primary/10 px-3 py-2 rounded-full active:opacity-60"
+          >
+            <CalendarCheck size={16} color="#3B82F6" />
+            <Text className="ml-2 text-primary font-bold text-xs uppercase">
+              Aujourd'hui
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Slider (View Selector) */}
+        <View className="flex-row bg-muted dark:bg-slate-800 p-1 rounded-xl mb-4">
+          {[
+            { id: "day", label: "Jour" },
+            { id: "week", label: "Semaine" },
+            { id: "month", label: "Mois" },
+            { id: "year", label: "Année" },
+          ].map((mode) => (
+            <Pressable
+              key={mode.id}
+              onPress={() => setViewMode(mode.id as ViewMode)}
+              className={`flex-1 py-1.5 items-center rounded-lg ${
+                viewMode === mode.id
+                  ? "bg-background dark:bg-slate-600 shadow-sm"
+                  : "bg-transparent"
+              }`}
+            >
+              <Text
+                className={`text-xs font-semibold ${
+                  viewMode === mode.id
+                    ? "text-foreground dark:text-white"
+                    : "text-muted-foreground dark:text-slate-400"
+                }`}
+              >
+                {mode.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Barre de Navigation (Flèches + Titre) */}
+        <View className="flex-row items-center justify-between bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-3 rounded-xl shadow-sm mb-4">
+          <Pressable
+            onPress={handlePrev}
+            className="p-2 rounded-full hover:bg-muted dark:hover:bg-slate-800 active:opacity-50 active:bg-muted/50"
+          >
+            <ChevronLeft
+              size={24}
+              className="text-foreground dark:text-white"
+              color={isDark ? "#FFF" : "#09090B"}
+            />
+          </Pressable>
+
+          <Text className="text-lg font-bold text-foreground dark:text-white capitalize">
+            {headerTitle}
+          </Text>
+
+          <Pressable
+            onPress={handleNext}
+            className="p-2 rounded-full hover:bg-muted dark:hover:bg-slate-800 active:opacity-50 active:bg-muted/50"
+          >
+            <ChevronRight
+              size={24}
+              className="text-foreground dark:text-white"
+              color={isDark ? "#FFF" : "#09090B"}
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      {/* === CONTENU === */}
+      <ScrollView
+        className="flex-1"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
+        {viewMode === "month" && <RenderMonth />}
+        {viewMode === "week" && <RenderWeek />}
+        {viewMode === "day" && <RenderDay />}
+        {viewMode === "year" && <RenderYear />}
+      </ScrollView>
+
+      {/* FAB */}
+      <Pressable
+        onPress={() => router.push("/(app)/calendar/add")}
+        className="absolute bottom-6 right-6 h-14 w-14 bg-primary rounded-2xl items-center justify-center shadow-lg shadow-primary/30 active:scale-90 transition-transform"
+      >
+        <Plus size={28} color="white" />
+      </Pressable>
     </View>
   );
 }

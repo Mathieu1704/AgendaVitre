@@ -1,0 +1,16 @@
+{
+  "name": "vitres-pro",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently -n \"SUPA,BACK,MOBI\" -c \"green,blue,magenta\" \"npx supabase start\" \"cd apps/backend && source venv/bin/activate && uvicorn main:app --reload --port 8000\" \"cd apps/mobile && npx expo start\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

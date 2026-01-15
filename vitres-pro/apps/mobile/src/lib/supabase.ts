@@ -16,22 +16,22 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-// 2. Adapter pour Web SÉCURISÉ (Vérifie si localStorage existe)
-// Cela empêche le crash lors du rendu serveur
+// 2. Adapter pour Web SÉCURISÉ (Vérifie si window existe)
+// La modification est ici : on vérifie "typeof window" pour éviter le crash côté serveur
 const ExpoWebStorage = {
   getItem: (key: string) => {
-    if (typeof localStorage === "undefined") {
-      return null;
+    if (typeof window !== "undefined" && window.localStorage) {
+      return localStorage.getItem(key);
     }
-    return localStorage.getItem(key);
+    return null;
   },
   setItem: (key: string, value: string) => {
-    if (typeof localStorage !== "undefined") {
+    if (typeof window !== "undefined" && window.localStorage) {
       localStorage.setItem(key, value);
     }
   },
   removeItem: (key: string) => {
-    if (typeof localStorage !== "undefined") {
+    if (typeof window !== "undefined" && window.localStorage) {
       localStorage.removeItem(key);
     }
   },
@@ -46,7 +46,6 @@ if (!url || !key) {
 
 export const supabase = createClient(url, key, {
   auth: {
-    // Ici, on utilise notre wrapper ExpoWebStorage au lieu de localStorage direct
     storage: Platform.OS === "web" ? ExpoWebStorage : ExpoSecureStoreAdapter,
     autoRefreshToken: true,
     persistSession: true,

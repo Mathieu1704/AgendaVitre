@@ -2,26 +2,44 @@ import React from "react";
 import {
   View,
   ScrollView,
-  Alert,
   Pressable,
+  ActivityIndicator,
+  Text,
   useWindowDimensions,
 } from "react-native";
-import { Appbar, Text, Button, ActivityIndicator } from "react-native-paper";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  ChevronLeft,
+  MapPin,
+  Clock,
+  Calendar,
+  CheckCircle2,
+  PlayCircle,
+  AlertCircle,
+  User,
+} from "lucide-react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
+
+// Imports internes
 import { api } from "../../../src/lib/api";
-import { useColorScheme } from "react-native";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { toast } from "../../../src/ui/toast";
+import { Button } from "../../../src/ui/components/Button";
+import { Card, CardContent } from "../../../src/ui/components/Card";
+import { StatusBadge } from "../../../src/ui/components/StatusBadge";
+import { Avatar } from "../../../src/ui/components/Avatar";
+import { useTheme } from "../../../src/ui/components/ThemeToggle";
 
 export default function InterventionDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
+  const { isDark } = useTheme();
   const { width } = useWindowDimensions();
+
   const isDesktop = width >= 768;
 
+  // --- DATA ---
   const { data: intervention, isLoading } = useQuery({
     queryKey: ["intervention", id],
     queryFn: async () => {
@@ -30,6 +48,20 @@ export default function InterventionDetailScreen() {
     },
   });
 
+  // --- NAVIGATION RETOUR INTELLIGENTE ---
+  const handleBack = () => {
+    if (intervention?.start_time) {
+      // On retourne au planning MAIS en forçant la date de l'intervention
+      router.push({
+        pathname: "/(app)/calendar",
+        params: { date: intervention.start_time },
+      });
+    } else {
+      router.back();
+    }
+  };
+
+  // --- MUTATION STATUS ---
   const statusMutation = useMutation({
     mutationFn: async (newStatus: string) => {
       const now = new Date().toISOString();
@@ -43,339 +75,264 @@ export default function InterventionDetailScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["intervention", id] });
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
-      Alert.alert("Succès", "Statut mis à jour !");
+      toast.success("Statut mis à jour", "L'intervention a été modifiée.");
     },
     onError: () => {
-      Alert.alert("Erreur", "Impossible de mettre à jour le statut.");
+      toast.error("Erreur", "Impossible de mettre à jour le statut.");
     },
   });
 
+  // --- LOADING ---
   if (isLoading) {
     return (
-      <View className="flex-1 justify-center items-center bg-white dark:bg-dark-900">
+      <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950">
         <ActivityIndicator size="large" color="#3B82F6" />
-        <Text className="mt-4 text-gray-500 dark:text-dark-400">
-          Chargement...
-        </Text>
       </View>
     );
   }
 
+  // --- NOT FOUND ---
   if (!intervention) {
     return (
-      <View className="flex-1 justify-center items-center bg-white dark:bg-dark-900">
-        <FontAwesome name="exclamation-circle" size={64} color="#EF4444" />
-        <Text className="text-xl font-bold text-gray-900 dark:text-white mt-4">
+      <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950 px-6">
+        <View className="bg-destructive/10 p-4 rounded-full mb-4">
+          <AlertCircle size={48} color="#EF4444" />
+        </View>
+        <Text className="text-xl font-bold text-foreground dark:text-white mt-4 text-center">
           Intervention introuvable
         </Text>
-        <Button mode="contained" onPress={() => router.back()} className="mt-6">
+        <Button
+          variant="outline"
+          onPress={() => router.back()}
+          className="mt-6"
+        >
           Retour
         </Button>
       </View>
     );
   }
 
-  const getStatusConfig = (status: string) => {
-    const configs = {
-      planned: {
-        bg: "bg-blue-500",
-        icon: "clock-o",
-        label: "Planifié",
-        lightBg: isDark ? "bg-blue-900/30" : "bg-blue-50",
-      },
-      in_progress: {
-        bg: "bg-orange-500",
-        icon: "play-circle",
-        label: "En cours",
-        lightBg: isDark ? "bg-orange-900/30" : "bg-orange-50",
-      },
-      done: {
-        bg: "bg-green-500",
-        icon: "check-circle",
-        label: "Terminé",
-        lightBg: isDark ? "bg-green-900/30" : "bg-green-50",
-      },
-    };
-    return configs[status as keyof typeof configs] || configs.planned;
-  };
-
-  const statusConfig = getStatusConfig(intervention.status);
   const startTime = new Date(intervention.start_time);
 
   return (
-    <View className={`flex-1 ${isDark ? "bg-dark-900" : "bg-gray-50"}`}>
-      {/* Header */}
-      <Appbar.Header
-        style={{ backgroundColor: isDark ? "#1E293B" : "#FFFFFF" }}
-      >
-        <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title="" />
-      </Appbar.Header>
-
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero Section avec Statut */}
-        <View className={`${statusConfig.bg} pt-8 pb-16 px-6`}>
-          <View className="flex-row items-center mb-3">
-            <View className="bg-white/20 p-2 rounded-full">
-              <FontAwesome
-                name={statusConfig.icon as any}
-                size={24}
-                color="#FFFFFF"
-              />
-            </View>
-            <Text className="ml-3 text-white text-sm font-semibold uppercase tracking-wider">
-              {statusConfig.label}
-            </Text>
-          </View>
-
-          <Text className="text-white text-3xl font-bold mb-2">
-            {intervention.title}
-          </Text>
-
-          <View className="flex-row items-center mt-2">
-            <FontAwesome name="calendar" size={16} color="#FFFFFF" />
-            <Text className="ml-2 text-white/90 text-base">
-              {startTime.toLocaleDateString("fr-FR", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-            </Text>
-          </View>
-        </View>
-
-        {/* Carte principale */}
-        <View
-          className={`mx-4 -mt-10 rounded-2xl ${
-            isDark ? "bg-dark-800" : "bg-white"
-          } shadow-xl overflow-hidden`}
+    <View className="flex-1 bg-background dark:bg-slate-950">
+      {/* --- HEADER --- */}
+      <View className="flex-row items-center p-4 pt-12 pb-4 border-b border-border dark:border-slate-800 bg-background dark:bg-slate-950 z-10">
+        <Pressable
+          onPress={handleBack}
+          className="p-2 rounded-full hover:bg-muted dark:hover:bg-slate-800 active:bg-muted"
         >
-          {/* Horaire */}
-          <View
-            className={`p-6 border-b ${
-              isDark ? "border-dark-700" : "border-gray-100"
-            }`}
-          >
-            <Text
-              className={`text-sm font-semibold ${
-                isDark ? "text-dark-400" : "text-gray-500"
-              } mb-2 uppercase tracking-wide`}
-            >
-              Horaire prévu
+          <ChevronLeft
+            size={24}
+            className="text-foreground dark:text-white"
+            color={isDark ? "#FFF" : "#09090B"}
+          />
+        </Pressable>
+        <Text className="ml-2 text-lg font-bold text-foreground dark:text-white">
+          Détails
+        </Text>
+        <View className="flex-1" />
+        <StatusBadge status={intervention.status} />
+      </View>
+
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+        {/* --- TITRE --- */}
+        <View className="px-6 pt-6 pb-2">
+          <Animated.View entering={FadeInDown.delay(100).springify()}>
+            <Text className="text-3xl font-extrabold text-foreground dark:text-white mb-2 leading-tight">
+              {intervention.title}
             </Text>
-            <View className="flex-row items-center">
-              <View className={`${statusConfig.lightBg} p-3 rounded-xl`}>
-                <FontAwesome name="clock-o" size={24} color="#3B82F6" />
-              </View>
-              <Text
-                className={`ml-4 text-2xl font-bold ${
-                  isDark ? "text-white" : "text-gray-900"
-                }`}
-              >
-                {startTime.toLocaleTimeString("fr-FR", {
-                  hour: "2-digit",
-                  minute: "2-digit",
+
+            <View className="flex-row items-center gap-2 mb-6">
+              <Calendar size={16} color={isDark ? "#94A3B8" : "#64748B"} />
+              <Text className="text-base font-medium text-muted-foreground">
+                {startTime.toLocaleDateString("fr-FR", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
                 })}
               </Text>
             </View>
-          </View>
-
-          {/* Informations Client */}
-          <View
-            className={`p-6 border-b ${
-              isDark ? "border-dark-700" : "border-gray-100"
-            }`}
-          >
-            <Text
-              className={`text-sm font-semibold ${
-                isDark ? "text-dark-400" : "text-gray-500"
-              } mb-4 uppercase tracking-wide`}
-            >
-              Informations client
-            </Text>
-
-            <View className="space-y-4">
-              {/* Nom */}
-              <View className="flex-row items-start">
-                <View
-                  className={`${
-                    isDark ? "bg-dark-700" : "bg-gray-100"
-                  } p-3 rounded-xl`}
-                >
-                  <FontAwesome
-                    name="user"
-                    size={20}
-                    color={isDark ? "#94A3B8" : "#64748B"}
-                  />
-                </View>
-                <View className="ml-4 flex-1">
-                  <Text
-                    className={`text-xs ${
-                      isDark ? "text-dark-400" : "text-gray-500"
-                    } mb-1`}
-                  >
-                    Nom du client
-                  </Text>
-                  <Text
-                    className={`text-base font-semibold ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    {intervention.client?.name || "Client inconnu"}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Adresse */}
-              {intervention.client?.address && (
-                <View className="flex-row items-start mt-4">
-                  <View
-                    className={`${
-                      isDark ? "bg-dark-700" : "bg-gray-100"
-                    } p-3 rounded-xl`}
-                  >
-                    <FontAwesome
-                      name="map-marker"
-                      size={20}
-                      color={isDark ? "#94A3B8" : "#64748B"}
-                    />
-                  </View>
-                  <View className="ml-4 flex-1">
-                    <Text
-                      className={`text-xs ${
-                        isDark ? "text-dark-400" : "text-gray-500"
-                      } mb-1`}
-                    >
-                      Adresse
-                    </Text>
-                    <Text
-                      className={`text-base ${
-                        isDark ? "text-dark-300" : "text-gray-700"
-                      }`}
-                    >
-                      {intervention.client.address}
-                    </Text>
-                  </View>
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* Temps réel (si commencé/terminé) */}
-          {(intervention.real_start_time || intervention.real_end_time) && (
-            <View className="p-6">
-              <Text
-                className={`text-sm font-semibold ${
-                  isDark ? "text-dark-400" : "text-gray-500"
-                } mb-4 uppercase tracking-wide`}
-              >
-                Suivi en temps réel
-              </Text>
-
-              {intervention.real_start_time && (
-                <View className="flex-row items-center mb-3">
-                  <FontAwesome name="play-circle" size={18} color="#22C55E" />
-                  <Text
-                    className={`ml-3 ${
-                      isDark ? "text-dark-300" : "text-gray-700"
-                    }`}
-                  >
-                    Démarré à{" "}
-                    {new Date(intervention.real_start_time).toLocaleTimeString(
-                      "fr-FR"
-                    )}
-                  </Text>
-                </View>
-              )}
-
-              {intervention.real_end_time && (
-                <View className="flex-row items-center">
-                  <FontAwesome name="check-circle" size={18} color="#16A34A" />
-                  <Text
-                    className={`ml-3 ${
-                      isDark ? "text-dark-300" : "text-gray-700"
-                    }`}
-                  >
-                    Terminé à{" "}
-                    {new Date(intervention.real_end_time).toLocaleTimeString(
-                      "fr-FR"
-                    )}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
+          </Animated.View>
         </View>
 
-        {/* Actions Buttons */}
-        <View className="px-4 py-8">
-          {intervention.status === "planned" && (
-            <Pressable
-              onPress={() => statusMutation.mutate("in_progress")}
-              disabled={statusMutation.isPending}
-              className="bg-orange-500 rounded-2xl p-5 shadow-lg active:scale-98 flex-row items-center justify-center"
-            >
-              {statusMutation.isPending ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <FontAwesome name="play" size={20} color="#FFFFFF" />
-                  <Text className="ml-3 text-white text-lg font-bold">
-                    Démarrer l'intervention
+        {/* --- BLOCS D'INFORMATIONS --- */}
+        <View
+          className={`px-4 pb-32 gap-4 ${
+            isDesktop ? "flex-row flex-wrap" : ""
+          }`}
+        >
+          {/* 1. HORAIRE (Centré et équilibré) */}
+          <Animated.View
+            entering={FadeInDown.delay(200)}
+            className={isDesktop ? "w-[48%]" : "w-full"}
+          >
+            <Card className="min-h-[110px] justify-center">
+              <CardContent className="p-5 flex-row items-center justify-between">
+                <View>
+                  <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
+                    Horaire prévu
                   </Text>
-                </>
-              )}
-            </Pressable>
-          )}
-
-          {intervention.status === "in_progress" && (
-            <Pressable
-              onPress={() => statusMutation.mutate("done")}
-              disabled={statusMutation.isPending}
-              className="bg-green-500 rounded-2xl p-5 shadow-lg active:scale-98 flex-row items-center justify-center"
-            >
-              {statusMutation.isPending ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <FontAwesome name="check" size={20} color="#FFFFFF" />
-                  <Text className="ml-3 text-white text-lg font-bold">
-                    Terminer l'intervention
+                  <Text className="text-3xl font-bold text-foreground dark:text-white">
+                    {startTime.toLocaleTimeString("fr-FR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </Text>
-                </>
-              )}
-            </Pressable>
-          )}
+                </View>
+                <View className="bg-blue-500/10 p-3 rounded-full">
+                  <Clock size={28} color="#3B82F6" />
+                </View>
+              </CardContent>
+            </Card>
+          </Animated.View>
 
-          {intervention.status === "done" && (
-            <View
-              className={`${
-                isDark ? "bg-green-900/30" : "bg-green-50"
-              } rounded-2xl p-6 items-center`}
-            >
-              <View className="bg-green-500 p-4 rounded-full mb-4">
-                <FontAwesome name="check" size={32} color="#FFFFFF" />
-              </View>
-              <Text className="text-green-600 dark:text-green-400 text-xl font-bold">
-                Intervention Terminée
-              </Text>
-              {intervention.real_end_time && (
-                <Text
-                  className={`mt-2 ${
-                    isDark ? "text-dark-400" : "text-gray-600"
-                  }`}
-                >
-                  Clôturée à{" "}
-                  {new Date(intervention.real_end_time).toLocaleTimeString(
-                    "fr-FR"
-                  )}
-                </Text>
-              )}
-            </View>
+          {/* 2. CLIENT (Centré) */}
+          <Animated.View
+            entering={FadeInDown.delay(300)}
+            className={isDesktop ? "w-[48%]" : "w-full"}
+          >
+            <Card className="min-h-[110px] justify-center">
+              <CardContent className="p-5">
+                <View className="flex-row items-center">
+                  <Avatar name={intervention.client?.name || "?"} size="md" />
+                  <View className="ml-4 flex-1">
+                    <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
+                      Client
+                    </Text>
+                    <Text className="text-lg font-bold text-foreground dark:text-white mb-0.5">
+                      {intervention.client?.name || "Client Inconnu"}
+                    </Text>
+
+                    {intervention.client?.address && (
+                      <View className="flex-row items-center mt-1">
+                        <MapPin size={12} color="#64748B" />
+                        <Text
+                          className="ml-1 text-xs text-muted-foreground dark:text-slate-400"
+                          numberOfLines={1}
+                        >
+                          {intervention.client.address}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </CardContent>
+            </Card>
+          </Animated.View>
+
+          {/* 3. SUIVI TEMPS RÉEL (Si dispo) */}
+          {(intervention.real_start_time || intervention.real_end_time) && (
+            <Animated.View entering={FadeInDown.delay(400)} className="w-full">
+              <Card className="border-l-4 border-l-primary bg-primary/5 border-y-0 border-r-0">
+                <CardContent className="p-5">
+                  <Text className="text-xs font-bold text-primary uppercase tracking-wider mb-3">
+                    Suivi en direct
+                  </Text>
+
+                  <View className="flex-row gap-6">
+                    {intervention.real_start_time && (
+                      <View>
+                        <Text className="text-xs text-muted-foreground mb-1">
+                          Démarré à
+                        </Text>
+                        <View className="flex-row items-center">
+                          <PlayCircle
+                            size={14}
+                            color="#22C55E"
+                            className="mr-1.5"
+                          />
+                          <Text className="font-bold text-foreground dark:text-white">
+                            {new Date(
+                              intervention.real_start_time
+                            ).toLocaleTimeString("fr-FR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    {intervention.real_end_time && (
+                      <View>
+                        <Text className="text-xs text-muted-foreground mb-1">
+                          Terminé à
+                        </Text>
+                        <View className="flex-row items-center">
+                          <CheckCircle2
+                            size={14}
+                            color="#22C55E"
+                            className="mr-1.5"
+                          />
+                          <Text className="font-bold text-foreground dark:text-white">
+                            {new Date(
+                              intervention.real_end_time
+                            ).toLocaleTimeString("fr-FR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </CardContent>
+              </Card>
+            </Animated.View>
           )}
         </View>
       </ScrollView>
+
+      {/* --- FOOTER ACTIONS (Fixe en bas) --- */}
+      <View className="absolute bottom-0 left-0 right-0 p-4 bg-background dark:bg-slate-950 border-t border-border dark:border-slate-800">
+        {intervention.status === "planned" && (
+          <Button
+            onPress={() => statusMutation.mutate("in_progress")}
+            disabled={statusMutation.isPending}
+            className="w-full h-14 bg-orange-500 hover:bg-orange-600 rounded-xl"
+          >
+            {statusMutation.isPending ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <View className="flex-row items-center">
+                <PlayCircle size={20} color="white" strokeWidth={2.5} />
+                <Text className="text-white font-bold text-lg ml-2">
+                  Démarrer l'intervention
+                </Text>
+              </View>
+            )}
+          </Button>
+        )}
+
+        {intervention.status === "in_progress" && (
+          <Button
+            onPress={() => statusMutation.mutate("done")}
+            disabled={statusMutation.isPending}
+            className="w-full h-14 bg-green-500 hover:bg-green-600 rounded-xl"
+          >
+            {statusMutation.isPending ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <View className="flex-row items-center">
+                <CheckCircle2 size={20} color="white" strokeWidth={2.5} />
+                <Text className="text-white font-bold text-lg ml-2">
+                  Terminer l'intervention
+                </Text>
+              </View>
+            )}
+          </Button>
+        )}
+
+        {intervention.status === "done" && (
+          <View className="w-full h-14 bg-green-500 rounded-xl items-center justify-center flex-row shadow-lg shadow-green-500/20">
+            <CheckCircle2 size={24} color="white" strokeWidth={3} />
+            <Text className="ml-2 text-white text-lg font-extrabold tracking-wide">
+              INTERVENTION CLÔTURÉE
+            </Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 }

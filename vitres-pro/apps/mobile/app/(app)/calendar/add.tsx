@@ -1,18 +1,20 @@
-import React, { useState } from "react";
-import { View, StyleSheet, ScrollView, Alert, Platform } from "react-native";
-import {
-  Appbar,
-  TextInput,
-  Button,
-  Menu,
-  Divider,
-  Text,
-  List,
-  Surface,
-} from "react-native-paper";
+// apps/mobile/app/(app)/calendar/add.tsx
+import React, { useMemo, useState } from "react";
+import { View, ScrollView, Text } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../src/lib/api";
+
+import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
+import { Input } from "../../../src/ui/components/Input";
+import { Button } from "../../../src/ui/components/Button";
+import { Select } from "../../../src/ui/components/Select";
+import { toast } from "../../../src/ui/toast";
+
+import {
+  parseLocalDateTimeString,
+  toLocalDateTimeString,
+} from "../../../src/lib/date";
 
 type Client = { id: string; name: string; address: string };
 
@@ -20,25 +22,21 @@ export default function AddInterventionScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  // États du formulaire
   const [title, setTitle] = useState("Lavage Vitres");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [price, setPrice] = useState("");
 
-  // Gestion Dates (Simple strings pour commencer pour éviter les bugs Web)
-  // Format par défaut : Demain à 09:00
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(9, 0, 0, 0);
-  const [startDateStr, setStartDateStr] = useState(
-    tomorrow.toISOString().slice(0, 16).replace("T", " ")
-  );
-  const [durationHours, setDurationHours] = useState("2"); // Durée en heures
+  // ✅ Default: demain 09:00 au format "YYYY-MM-DDTHH:MM" (stable web + app)
+  const defaultStart = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0);
+    return toLocalDateTimeString(d).replace(" ", "T");
+  }, []);
 
-  // Gestion du Menu déroulant Clients
-  const [showClientMenu, setShowClientMenu] = useState(false);
+  const [startDateStr, setStartDateStr] = useState(defaultStart);
+  const [durationHours, setDurationHours] = useState("2");
 
-  // 1. Charger les clients pour la liste déroulante
   const { data: clients } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -47,40 +45,56 @@ export default function AddInterventionScreen() {
     },
   });
 
-  // 2. Mutation pour créer l'intervention
+  const clientItems = useMemo(
+    () =>
+      (clients ?? []).map((c) => ({
+        id: c.id,
+        label: c.name,
+      })),
+    [clients]
+  );
+
   const mutation = useMutation({
-    mutationFn: async (data: any) => {
-      return await api.post("/api/interventions/", data);
+    mutationFn: async (payload: any) => {
+      return await api.post("/api/interventions/", payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
-      Alert.alert("Succès", "Intervention planifiée !");
+      toast.success("Intervention planifiée", "C’est enregistré ✅");
       router.back();
     },
     onError: (err: any) => {
-      Alert.alert("Erreur", err.response?.data?.detail || "Erreur inconnue");
+      toast.error("Erreur", err.response?.data?.detail || "Erreur inconnue");
     },
   });
 
   const handleSubmit = () => {
     if (!selectedClient) {
-      Alert.alert("Manquant", "Veuillez sélectionner un client.");
+      toast.error("Manquant", "Sélectionne un client.");
       return;
     }
 
-    // Conversion des dates (String "YYYY-MM-DD HH:MM" -> Date Object)
-    const start = new Date(startDateStr);
-    const end = new Date(
-      start.getTime() + parseInt(durationHours) * 60 * 60 * 1000
-    );
+    // parseLocalDateTimeString accepte "YYYY-MM-DD HH:MM" ou "YYYY-MM-DDTHH:MM"
+    const start = parseLocalDateTimeString(startDateStr);
+    if (!start || Number.isNaN(start.getTime())) {
+      toast.error("Date invalide", "Utilise le format YYYY-MM-DDTHH:MM");
+      return;
+    }
 
-    // Payload pour FastAPI
+    const dur = Math.max(0, Number(durationHours || 0));
+    if (!Number.isFinite(dur) || dur <= 0) {
+      toast.error("Durée invalide", "Mets un nombre d’heures > 0.");
+      return;
+    }
+
+    const end = new Date(start.getTime() + dur * 60 * 60 * 1000);
+
     const payload = {
       title,
       client_id: selectedClient.id,
       start_time: start.toISOString(),
       end_time: end.toISOString(),
-      price_estimated: parseFloat(price) || 0,
+      price_estimated: Number(price) || 0,
       status: "planned",
     };
 
@@ -88,113 +102,102 @@ export default function AddInterventionScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Appbar.Header>
-        <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title="Planifier Intervention" />
-      </Appbar.Header>
+    <View className="flex-1 bg-bg dark:bg-bg-dark">
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
+        <Card className="max-w-2xl w-full self-center">
+          <CardHeader>
+            <Text className="text-2xl font-extrabold text-fg dark:text-fg-dark">
+              Planifier une intervention
+            </Text>
+            <Text className="mt-2 opacity-70 text-fg dark:text-fg-dark">
+              Choisis un client, une date, une durée et valide.
+            </Text>
+          </CardHeader>
 
-      <ScrollView contentContainerStyle={styles.form}>
-        {/* 1. SÉLECTEUR DE CLIENT */}
-        <Text variant="titleMedium" style={styles.label}>
-          Client
-        </Text>
-        <Menu
-          visible={showClientMenu}
-          onDismiss={() => setShowClientMenu(false)}
-          anchor={
-            <Button
-              mode="outlined"
-              onPress={() => setShowClientMenu(true)}
-              style={styles.input}
-              contentStyle={{ justifyContent: "flex-start" }}
-              icon="account"
-            >
-              {selectedClient
-                ? selectedClient.name
-                : "Sélectionner un client..."}
-            </Button>
-          }
-        >
-          {clients?.map((client) => (
-            <Menu.Item
-              key={client.id}
-              onPress={() => {
-                setSelectedClient(client);
-                setShowClientMenu(false);
+          <CardContent>
+            <Text className="text-xs font-bold uppercase opacity-60 mb-2 text-fg dark:text-fg-dark">
+              Client
+            </Text>
+
+            <Select
+              title="Choisir un client"
+              placeholder="Sélectionner un client…"
+              value={
+                selectedClient
+                  ? { id: selectedClient.id, label: selectedClient.name }
+                  : null
+              }
+              items={clientItems}
+              onChange={(v) => {
+                const c = (clients ?? []).find((x) => x.id === v.id);
+                if (c) setSelectedClient(c);
               }}
-              title={client.name}
-              leadingIcon="account"
             />
-          ))}
-          {(!clients || clients.length === 0) && (
-            <Menu.Item title="Aucun client trouvé" disabled />
-          )}
-        </Menu>
 
-        {/* 2. INFOS GÉNÉRALES */}
-        <TextInput
-          label="Titre de l'intervention"
-          value={title}
-          onChangeText={setTitle}
-          style={styles.input}
-        />
+            {selectedClient?.address ? (
+              <Text className="mt-2 text-xs opacity-70 text-fg dark:text-fg-dark">
+                Adresse : {selectedClient.address}
+              </Text>
+            ) : null}
 
-        <View style={styles.row}>
-          <TextInput
-            label="Début (YYYY-MM-DD HH:MM)"
-            value={startDateStr}
-            onChangeText={setStartDateStr}
-            style={[styles.input, { flex: 2, marginRight: 10 }]}
-          />
-          <TextInput
-            label="Durée (Heures)"
-            value={durationHours}
-            onChangeText={setDurationHours}
-            keyboardType="numeric"
-            style={[styles.input, { flex: 1 }]}
-          />
-        </View>
+            <View className="mt-6">
+              <Text className="text-xs font-bold uppercase opacity-60 mb-2 text-fg dark:text-fg-dark">
+                Détails
+              </Text>
 
-        <TextInput
-          label="Prix Estimé (€)"
-          value={price}
-          onChangeText={setPrice}
-          keyboardType="numeric"
-          style={styles.input}
-          right={<TextInput.Affix text="€" />}
-        />
+              <Input
+                placeholder="Titre"
+                value={title}
+                onChangeText={setTitle}
+                className="mb-3"
+              />
 
-        <Button
-          mode="contained"
-          onPress={handleSubmit}
-          loading={mutation.isPending}
-          style={styles.button}
-        >
-          Valider le Planning
-        </Button>
+              <View className="flex-row gap-3">
+                <View style={{ flex: 2 }}>
+                  <Input
+                    placeholder="Début (YYYY-MM-DDTHH:MM)"
+                    value={startDateStr}
+                    onChangeText={setStartDateStr}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    placeholder="Durée (h)"
+                    value={durationHours}
+                    onChangeText={setDurationHours}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
 
-        {selectedClient && (
-          <Text style={styles.helper}>
-            L'intervention sera liée à : {selectedClient.address}
-          </Text>
-        )}
+              <Input
+                placeholder="Prix estimé (€)"
+                value={price}
+                onChangeText={setPrice}
+                keyboardType="numeric"
+                className="mt-3"
+              />
+            </View>
+
+            <View className="mt-6 flex-row gap-3">
+              <Button
+                variant="outline"
+                onPress={() => router.back()}
+                className="flex-1"
+              >
+                Annuler
+              </Button>
+              <Button
+                onPress={handleSubmit}
+                disabled={mutation.isPending}
+                className={mutation.isPending ? "opacity-70 flex-1" : "flex-1"}
+              >
+                {mutation.isPending ? "Création…" : "Valider"}
+              </Button>
+            </View>
+          </CardContent>
+        </Card>
       </ScrollView>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "white" },
-  form: { padding: 20 },
-  input: { marginBottom: 15, backgroundColor: "white" },
-  button: { marginTop: 20, paddingVertical: 6 },
-  label: { marginBottom: 5, color: "#666" },
-  row: { flexDirection: "row", justifyContent: "space-between" },
-  helper: {
-    marginTop: 20,
-    textAlign: "center",
-    color: "gray",
-    fontStyle: "italic",
-  },
-});
