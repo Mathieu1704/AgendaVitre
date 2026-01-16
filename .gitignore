@@ -67,3 +67,6 @@ supabase/.temp/
 # DUMPS / OUTPUTS (tes fichiers dump_*.txt)
 ####################################
 dump_*.txt
+.pdf/
+.png/
+.jpg/
