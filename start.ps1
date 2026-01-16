@@ -1,4 +1,4 @@
-Write-Host "🚀 Lancement de VitresPro..." -ForegroundColor Green
+Write-Host "🚀 Lancement de LVM Agenda..." -ForegroundColor Green
 
 # 1. Lancer Supabase (On attend qu'il soit prêt)
 Write-Host "1. Démarrage de Supabase..." -ForegroundColor Cyan
