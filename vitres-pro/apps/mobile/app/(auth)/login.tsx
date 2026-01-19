@@ -276,6 +276,8 @@ export default function LoginScreen() {
               secureTextEntry={!showPassword}
               value={password}
               onChangeText={validatePassword}
+              returnKeyType="go"
+              onSubmitEditing={handleSubmit}
             />
             <Pressable
               onPress={() => setShowPassword(!showPassword)}
