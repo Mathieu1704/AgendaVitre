@@ -3,9 +3,33 @@ from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
 
-# -------------------------
-# CLIENT
-# -------------------------
+# --- EMPLOYEE ---
+class EmployeeBase(BaseModel):
+    email: str
+    full_name: Optional[str] = None
+    role: str = "employee"
+    color: str = "#3B82F6"
+    weekly_hours: float = 38.0
+    daily_capacity: float = 7.6
+
+class EmployeeOut(EmployeeBase):
+    id: UUID
+    class Config:
+        from_attributes = True
+
+# --- ABSENCE ---
+class AbsenceCreate(BaseModel):
+    employee_id: UUID
+    start_date: datetime
+    end_date: datetime
+    reason: Optional[str] = "Congé"
+
+class AbsenceOut(AbsenceCreate):
+    id: UUID
+    class Config:
+        from_attributes = True
+
+# --- CLIENT ---
 class ClientBase(BaseModel):
     name: str
     address: str
@@ -19,14 +43,10 @@ class ClientCreate(ClientBase):
 class ClientOutLite(ClientBase):
     id: UUID
     created_at: datetime
-
     class Config:
         from_attributes = True
 
-
-# -------------------------
-# INTERVENTION
-# -------------------------
+# --- INTERVENTION ---
 class InterventionBase(BaseModel):
     title: str
     description: Optional[str] = None
@@ -35,28 +55,38 @@ class InterventionBase(BaseModel):
     status: str = "planned"
     price_estimated: Optional[float] = None
     client_id: UUID
-    employee_id: Optional[UUID] = None
+    # On remplace employee_id par une liste d'IDs
+    employee_ids: List[UUID] = [] 
 
 class InterventionCreate(InterventionBase):
     pass
 
-class InterventionOutLite(InterventionBase):
+class InterventionOutLite(BaseModel):
     id: UUID
+    title: str
+    start_time: datetime
+    end_time: datetime
+    status: str
+    class Config:
+        from_attributes = True
+
+class InterventionOut(BaseModel):
+    id: UUID
+    title: str
+    description: Optional[str]
+    start_time: datetime
+    end_time: datetime
+    status: str
+    price_estimated: Optional[float]
+    client: Optional[ClientOutLite] = None
+    # On renvoie la liste complète des employés assignés
+    employees: List[EmployeeOut] = []
 
     class Config:
         from_attributes = True
 
-class InterventionOut(InterventionOutLite):
-    # On inclut le client, mais en version Lite pour éviter le cycle
-    client: Optional[ClientOutLite] = None
-
-
-# -------------------------
-# CLIENT COMPLET (avec historique)
-# -------------------------
+# --- CLIENT COMPLET ---
 class ClientOut(ClientOutLite):
-    # Historique d'interventions, mais en Lite pour éviter le cycle
     interventions: List[InterventionOutLite] = []
-
     class Config:
         from_attributes = True

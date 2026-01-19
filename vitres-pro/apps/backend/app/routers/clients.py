@@ -20,7 +20,10 @@ def create_client(
     return new_client
 
 @router.get("", response_model=List[ClientOut])
-def read_clients(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def read_clients(
+    db: Session = Depends(get_db), 
+    # current_user = Depends(get_current_user)
+):
     return db.query(Client).all()
 
 @router.get("/{client_id}", response_model=ClientOut)
