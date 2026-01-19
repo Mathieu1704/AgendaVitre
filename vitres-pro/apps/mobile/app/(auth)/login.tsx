@@ -14,61 +14,99 @@ import {
 import { useRouter } from "expo-router";
 import { supabase } from "../../src/lib/supabase";
 import { toast } from "../../src/ui/toast";
-import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
-import { Eye, EyeOff, CheckCircle2 } from "lucide-react-native";
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  SlideInRight,
+  SlideOutLeft,
+} from "react-native-reanimated";
+import {
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  AlertCircle,
+  Mail,
+} from "lucide-react-native";
 
 export default function LoginScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 1024; // Breakpoint lg
+  const isDesktop = width >= 1024;
 
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // États pour la validation visuelle
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [signupDone, setSignupDone] = useState(false);
 
-  const isValidEmail = (v: string) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  // --- LOGIQUE DE VALIDATION ---
+  const validateEmail = (val: string) => {
+    setEmail(val);
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (val.length > 0 && !regex.test(val)) {
+      setEmailError("Format d'email invalide");
+    } else {
+      setEmailError("");
+    }
+  };
 
-  const isStrongPassword = (v: string) => {
-    const s = v.trim();
-    return s.length >= 8 && /[A-Z]/.test(s) && /[0-9]/.test(s);
+  const validatePassword = (val: string) => {
+    setPassword(val);
+    if (!isLogin) {
+      // On ne valide la complexité qu'à l'inscription
+      if (val.length > 0 && val.length < 8) {
+        setPasswordError("8 caractères minimum");
+      } else {
+        setPasswordError("");
+      }
+    } else {
+      setPasswordError("");
+    }
   };
 
   const getRedirectTo = () => {
-    // Web: renvoie vers /callback de ton domaine courant
     if (typeof window !== "undefined" && window.location?.origin) {
       return `${window.location.origin}/callback`;
     }
-    // Mobile fallback (on gérera deep link plus tard)
     return "lvmagenda://callback";
   };
 
   const switchMode = () => {
+    // Animation propre : on reset les erreurs
     setIsLogin((v) => !v);
     setSignupDone(false);
     setPassword("");
+    setEmailError("");
+    setPasswordError("");
     setShowPassword(false);
-    // optionnel: setEmail("");
   };
 
-  // Logique d'authentification identique à Auth.tsx
   const handleSubmit = async () => {
-    if (!email || !password) return toast.error("Erreur", "Champs requis");
+    // Check final avant envoi
+    if (!email || !password)
+      return toast.error("Erreur", "Tous les champs sont requis");
 
-    //  validations
-    if (!isValidEmail(email)) {
-      return toast.error("Erreur", "Email invalide");
-    }
-
-    // mot de passe robuste seulement en signup
-    if (!isLogin && !isStrongPassword(password)) {
+    // Bloquer si erreurs présentes
+    if (emailError || passwordError)
       return toast.error(
-        "Mot de passe trop faible",
-        "Min 8 caractères, 1 majuscule, 1 chiffre",
+        "Attention",
+        "Corrigez les erreurs avant de continuer",
       );
+
+    // Validation stricte inscription
+    if (!isLogin) {
+      if (password.length < 8)
+        return toast.error(
+          "Mot de passe",
+          "Il doit faire au moins 8 caractères",
+        );
     }
 
     setLoading(true);
@@ -81,10 +119,8 @@ export default function LoginScreen() {
 
         if (error) {
           toast.error(
-            "Erreur",
-            error.message.toLowerCase().includes("invalid")
-              ? "Identifiants incorrects"
-              : error.message,
+            "Erreur de connexion",
+            "Email ou mot de passe incorrect.",
           );
         } else {
           toast.success("Connexion réussie !");
@@ -101,10 +137,13 @@ export default function LoginScreen() {
         });
 
         if (error) {
-          toast.error("Erreur", error.message);
+          toast.error("Erreur Inscription", error.message);
         } else {
+          // ✅ C'est ici qu'on déclenche l'écran de succès
           setSignupDone(true);
-          toast.success("Compte créé !", "Vérifiez vos emails.");
+          // On vide le formulaire pour éviter la confusion
+          setEmail("");
+          setPassword("");
         }
       }
     } finally {
@@ -112,123 +151,177 @@ export default function LoginScreen() {
     }
   };
 
-  // Composant Formulaire (Réutilisable Mobile/Desktop)
+  // --- ECRAN DE SUCCES (Feedback clair) ---
+  if (signupDone && !isLogin) {
+    return (
+      <View className="flex-1 bg-background items-center justify-center p-8">
+        <Animated.View
+          entering={FadeIn.duration(500)}
+          className="bg-card w-full max-w-sm p-8 rounded-2xl border border-border items-center gap-6 shadow-sm"
+        >
+          <View className="bg-green-100 dark:bg-green-900/30 p-6 rounded-full">
+            <Mail size={48} color="#22C55E" />
+          </View>
+
+          <View className="items-center">
+            <Text className="text-2xl font-bold text-foreground text-center mb-2">
+              Vérifiez vos emails !
+            </Text>
+            <Text className="text-muted-foreground text-center leading-relaxed">
+              Un lien de confirmation a été envoyé à votre adresse. Cliquez
+              dessus pour activer votre compte.
+            </Text>
+          </View>
+
+          <Pressable
+            onPress={() => {
+              setIsLogin(true);
+              setSignupDone(false);
+            }}
+            className="w-full h-12 bg-primary rounded-xl items-center justify-center mt-2 active:opacity-90"
+          >
+            <Text className="text-white font-bold text-base">
+              Retour à la connexion
+            </Text>
+          </Pressable>
+        </Animated.View>
+      </View>
+    );
+  }
+
+  // --- FORMULAIRE PRINCIPAL ---
   const AuthForm = () => (
-    <View className="w-full max-w-[400px] gap-8">
-      <Animated.View
-        key={isLogin ? "login" : "signup"}
-        entering={FadeInUp.duration(250)}
-        exiting={FadeInDown.duration(200)}
-        className="gap-8"
-      >
-        <Text className="text-3xl font-bold text-foreground text-center lg:text-left">
-          {isLogin ? "Bon retour !" : "Créer un compte"}
-        </Text>
-        <Text className="mt-2 text-muted-foreground text-center lg:text-left text-base">
-          {isLogin
-            ? "Connectez-vous pour accéder à votre espace"
-            : "Inscrivez-vous pour commencer"}
-        </Text>
-      </Animated.View>
-
-      <Animated.View
-        entering={FadeInUp.delay(200).duration(500)}
-        className="gap-4"
-      >
-        {!isLogin && signupDone ? (
-          <Animated.View entering={FadeInUp.duration(250)} className="gap-3">
-            <Text className="text-base text-foreground font-semibold">
-              Vérifiez vos emails
+    <Animated.View
+      layout={LinearTransition.springify()} // ✅ Fluidifie le changement de hauteur du conteneur
+      className="w-full max-w-[400px]"
+    >
+      {/* HEADER AVEC TRANSITION PROPRE */}
+      <View className="mb-8 min-h-[80px]">
+        {isLogin ? (
+          <Animated.View
+            entering={FadeIn.delay(100)}
+            exiting={FadeOut.duration(50)}
+            key="login-text"
+          >
+            <Text className="text-3xl font-bold text-foreground text-center lg:text-left">
+              Bon retour !
             </Text>
-            <Text className="text-sm text-muted-foreground">
-              Un lien de confirmation vous a été envoyé. Cliquez dessus pour
-              activer votre compte, puis revenez vous connecter.
+            <Text className="mt-2 text-muted-foreground text-center lg:text-left text-base">
+              Connectez-vous pour accéder à votre espace
             </Text>
-
-            <Pressable
-              onPress={() => {
-                setIsLogin(true);
-                setSignupDone(false);
-                setPassword("");
-                setShowPassword(false);
-              }}
-              className="h-12 w-full flex-row items-center justify-center rounded-xl bg-primary mt-2 active:opacity-90"
-            >
-              <Text className="text-base font-semibold text-primary-foreground">
-                Retour à la connexion
-              </Text>
-            </Pressable>
           </Animated.View>
         ) : (
-          <>
-            {/* Input Email */}
-            <View className="gap-2">
-              <Text className="text-sm font-medium text-foreground ml-1">
-                Email
-              </Text>
-              <TextInput
-                className="h-12 w-full rounded-xl border border-input bg-background px-4 text-base text-foreground focus:border-primary"
-                placeholder="votre@email.com"
-                placeholderTextColor="#94A3B8"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-            </View>
+          <Animated.View
+            entering={FadeIn.delay(100)}
+            exiting={FadeOut.duration(50)}
+            key="signup-text"
+          >
+            <Text className="text-3xl font-bold text-foreground text-center lg:text-left">
+              Créer un compte
+            </Text>
+            <Text className="mt-2 text-muted-foreground text-center lg:text-left text-base">
+              Remplissez les infos ci-dessous
+            </Text>
+          </Animated.View>
+        )}
+      </View>
 
-            {/* Input Password */}
-            <View className="gap-2">
-              <Text className="text-sm font-medium text-foreground ml-1">
-                Mot de passe
-              </Text>
-              <View className="relative justify-center">
-                <TextInput
-                  className="h-12 w-full rounded-xl border border-input bg-background px-4 pr-12 text-base text-foreground focus:border-primary"
-                  placeholder="••••••••"
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                />
-                <Pressable
-                  onPress={() => setShowPassword(!showPassword)}
-                  className="absolute right-4"
-                >
-                  {showPassword ? (
-                    <EyeOff size={20} color="#64748B" />
-                  ) : (
-                    <Eye size={20} color="#64748B" />
-                  )}
-                </Pressable>
-              </View>
-            </View>
-
-            {/* Bouton Submit */}
-            <Pressable
-              onPress={handleSubmit}
-              disabled={loading}
-              className={`h-12 w-full flex-row items-center justify-center rounded-xl bg-primary mt-2 ${
-                loading ? "opacity-70" : "active:opacity-90"
-              }`}
+      <View className="gap-5">
+        {/* Input Email */}
+        <View className="gap-2">
+          <Text className="text-sm font-medium text-foreground ml-1">
+            Email
+          </Text>
+          <TextInput
+            className={`h-12 w-full rounded-xl border bg-background px-4 text-base text-foreground ${
+              emailError
+                ? "border-destructive text-destructive"
+                : "border-input focus:border-primary"
+            }`}
+            placeholder="votre@email.com"
+            placeholderTextColor="#94A3B8"
+            value={email}
+            onChangeText={validateEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+          {/* Message d'erreur validation */}
+          {emailError ? (
+            <Animated.View
+              entering={FadeIn}
+              className="flex-row items-center ml-1"
             >
-              {loading ? (
-                <ActivityIndicator color="#FFF" />
+              <AlertCircle size={12} color="#EF4444" />
+              <Text className="text-destructive text-xs ml-1">
+                {emailError}
+              </Text>
+            </Animated.View>
+          ) : null}
+        </View>
+
+        {/* Input Password */}
+        <View className="gap-2">
+          <Text className="text-sm font-medium text-foreground ml-1">
+            Mot de passe
+          </Text>
+          <View className="relative justify-center">
+            <TextInput
+              className={`h-12 w-full rounded-xl border bg-background px-4 pr-12 text-base text-foreground ${
+                passwordError
+                  ? "border-destructive"
+                  : "border-input focus:border-primary"
+              }`}
+              placeholder="••••••••"
+              placeholderTextColor="#94A3B8"
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={validatePassword}
+            />
+            <Pressable
+              onPress={() => setShowPassword(!showPassword)}
+              className="absolute right-4"
+            >
+              {showPassword ? (
+                <EyeOff size={20} color="#64748B" />
               ) : (
-                <Text className="text-base font-semibold text-primary-foreground">
-                  {isLogin ? "Se connecter" : "S'inscrire"}
-                </Text>
+                <Eye size={20} color="#64748B" />
               )}
             </Pressable>
-          </>
-        )}
-      </Animated.View>
+          </View>
+          {/* Message d'erreur validation */}
+          {passwordError ? (
+            <Animated.View
+              entering={FadeIn}
+              className="flex-row items-center ml-1"
+            >
+              <AlertCircle size={12} color="#EF4444" />
+              <Text className="text-destructive text-xs ml-1">
+                {passwordError}
+              </Text>
+            </Animated.View>
+          ) : null}
+        </View>
+
+        {/* Bouton Submit */}
+        <Pressable
+          onPress={handleSubmit}
+          disabled={loading}
+          className={`h-12 w-full flex-row items-center justify-center rounded-xl bg-primary mt-2 ${
+            loading ? "opacity-70" : "active:opacity-90"
+          }`}
+        >
+          {loading ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text className="text-base font-semibold text-primary-foreground">
+              {isLogin ? "Se connecter" : "S'inscrire"}
+            </Text>
+          )}
+        </Pressable>
+      </View>
 
       {/* Toggle Login/Signup */}
-      <Animated.View
-        entering={FadeInUp.delay(300).duration(500)}
-        className="items-center"
-      >
+      <View className="items-center mt-8">
         <Pressable onPress={switchMode} className="p-2">
           <Text className="text-sm text-muted-foreground">
             {isLogin ? "Pas encore de compte ? " : "Déjà un compte ? "}
@@ -237,8 +330,8 @@ export default function LoginScreen() {
             </Text>
           </Text>
         </Pressable>
-      </Animated.View>
-    </View>
+      </View>
+    </Animated.View>
   );
 
   // --- RENDER MOBILE ---
@@ -256,7 +349,6 @@ export default function LoginScreen() {
           }}
         >
           <View className="items-center mb-8">
-            {/* Logo Mobile */}
             <View className="h-12 w-12 rounded-xl bg-primary/10 items-center justify-center mb-4">
               <CheckCircle2 size={24} color="#3B82F6" />
             </View>
@@ -270,22 +362,20 @@ export default function LoginScreen() {
     );
   }
 
-  // --- RENDER DESKTOP (Split Screen comme Auth.tsx) ---
+  // --- RENDER DESKTOP ---
   return (
     <View className="flex-1 flex-row bg-background">
-      {/* Colonne Gauche : Image + Overlay */}
       <View className="flex-1 relative hidden lg:flex bg-muted">
         <Image
           source={require("../../assets/login-hero.jpg")}
           className="absolute inset-0 w-full h-full"
           resizeMode="cover"
         />
-        {/* Gradient Overlay simulé avec background semi-transparent coloré */}
         <View className="absolute inset-0 bg-primary/40" />
         <View className="absolute inset-0 bg-black/10" />
 
         <View className="flex-1 justify-end p-12 z-10">
-          <Animated.View entering={FadeInDown.delay(200).duration(600)}>
+          <View>
             <Text className="text-4xl font-bold text-white mb-4">
               LVM Agenda
             </Text>
@@ -293,11 +383,10 @@ export default function LoginScreen() {
               La solution moderne pour gérer votre entreprise de nettoyage de
               vitres
             </Text>
-          </Animated.View>
+          </View>
         </View>
       </View>
 
-      {/* Colonne Droite : Formulaire */}
       <View className="flex-1 items-center justify-center p-12 bg-background">
         {AuthForm()}
       </View>
