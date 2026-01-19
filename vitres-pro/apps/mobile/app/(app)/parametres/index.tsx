@@ -1,13 +1,20 @@
-import React, { useState } from "react";
-import { View, ScrollView, Text, Pressable } from "react-native";
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  ScrollView,
+  Text,
+  Pressable,
+  ActivityIndicator,
+} from "react-native";
 import {
   User,
-  Building2,
   Lock,
   Save,
   LogOut,
   UserPlus,
   ChevronRight,
+  Users,
+  Briefcase,
 } from "lucide-react-native";
 import { Stack, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,23 +26,51 @@ import { Avatar } from "../../../src/ui/components/Avatar";
 import { toast } from "../../../src/ui/toast";
 import { supabase } from "../../../src/lib/supabase";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
+import { api } from "../../../src/lib/api";
 
 export default function ParametresScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
 
+  // États User
+  const [profile, setProfile] = useState<any>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
   // Gestion Mot de passe
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loadingPass, setLoadingPass] = useState(false);
 
-  // Simulation user (A remplacer par un vrai hook useUser() plus tard)
-  const userEmail = "admin@lvmagenda.be";
+  // Charger le profil réel
+  useEffect(() => {
+    const loadProfile = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        // On récupère aussi les infos étendues (role, nom) depuis notre API
+        try {
+          const res = await api.get("/api/employees"); // Idéalement endpoint /me, mais on filtre ici
+          const myProfile = res.data.find((e: any) => e.email === user.email);
+          setProfile({ ...user, ...myProfile });
+        } catch (e) {
+          setProfile(user); // Fallback sur user auth
+        }
+      }
+      setLoadingProfile(false);
+    };
+    loadProfile();
+  }, []);
 
   const handleChangePassword = async () => {
     if (!newPassword || newPassword.length < 6) {
       return toast.error("Erreur", "Minimum 6 caractères.");
     }
+    if (newPassword !== confirmPassword) {
+      return toast.error("Erreur", "Les mots de passe ne correspondent pas.");
+    }
+
     setLoadingPass(true);
     try {
       const { error } = await supabase.auth.updateUser({
@@ -44,6 +79,7 @@ export default function ParametresScreen() {
       if (error) throw error;
       toast.success("Succès", "Mot de passe mis à jour !");
       setNewPassword("");
+      setConfirmPassword("");
     } catch (e: any) {
       toast.error("Erreur", e.message);
     } finally {
@@ -63,7 +99,7 @@ export default function ParametresScreen() {
     icon: any;
     title: string;
   }) => (
-    <View className="flex-row items-center mb-4 mt-2">
+    <View className="flex-row items-center mb-4 mt-1">
       <View className="bg-primary/10 p-2 rounded-lg mr-3">
         <Icon size={20} color="#3B82F6" />
       </View>
@@ -72,6 +108,8 @@ export default function ParametresScreen() {
       </Text>
     </View>
   );
+
+  const isAdmin = profile?.role === "admin";
 
   return (
     <View
@@ -86,93 +124,162 @@ export default function ParametresScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 100 }}>
-        {/* 1. CARTE ADMIN : AJOUTER EMPLOYÉ */}
-        <Pressable
-          onPress={() =>
-            router.push("/(app)/parametres/create-employee" as any)
-          }
-          className="mb-6"
-        >
-          <Card className="bg-blue-500/5 border-blue-200 dark:border-blue-900 active:opacity-90">
-            <CardContent className="p-4 flex-row items-center justify-between">
-              <View className="flex-row items-center gap-4">
-                <View className="bg-blue-500 rounded-full p-3">
-                  <UserPlus size={24} color="white" />
-                </View>
-                <View>
-                  <Text className="text-lg font-bold text-foreground dark:text-white">
-                    Ajouter un employé
+      {loadingProfile ? (
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator color="#3B82F6" />
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
+          {/* === SECTION ADMIN (Visible seulement si Admin) === */}
+          {isAdmin && (
+            <View className="mb-8">
+              <Text className="text-xs font-bold uppercase text-muted-foreground mb-3 px-1">
+                Administration
+              </Text>
+
+              {/* Ajouter Employé */}
+              <Pressable
+                onPress={() =>
+                  router.push("/(app)/parametres/create-employee" as any)
+                }
+                className="mb-3"
+              >
+                <Card className="bg-blue-500/5 border-blue-200 dark:border-blue-900 active:scale-[0.99] transition-transform">
+                  <CardContent className="p-4 flex-row items-center justify-between">
+                    <View className="flex-row items-center gap-4">
+                      <View className="bg-blue-500 rounded-full p-3 items-center justify-center">
+                        <UserPlus size={24} color="white" />
+                      </View>
+                      <View className="justify-center pt-1">
+                        {/* pt-1 pour compenser visuellement la hauteur de ligne */}
+                        <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                          Ajouter un employé
+                        </Text>
+                        <Text className="text-sm text-muted-foreground">
+                          Créer un nouveau compte
+                        </Text>
+                      </View>
+                    </View>
+                    <ChevronRight
+                      size={20}
+                      color={isDark ? "white" : "black"}
+                    />
+                  </CardContent>
+                </Card>
+              </Pressable>
+
+              {/* Gérer Équipe (NOUVEAU) */}
+              <Pressable
+                onPress={() => router.push("/(app)/parametres/team" as any)}
+              >
+                <Card className="bg-purple-500/5 border-purple-200 dark:border-purple-900 active:scale-[0.99] transition-transform">
+                  <CardContent className="p-4 flex-row items-center justify-between">
+                    <View className="flex-row items-center gap-4">
+                      <View className="bg-purple-500 rounded-full p-3 items-center justify-center">
+                        <Users size={24} color="white" />
+                      </View>
+                      <View className="justify-center pt-1">
+                        <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                          Gérer l'équipe
+                        </Text>
+                        <Text className="text-sm text-muted-foreground">
+                          Horaires, Reset MDP...
+                        </Text>
+                      </View>
+                    </View>
+                    <ChevronRight
+                      size={20}
+                      color={isDark ? "white" : "black"}
+                    />
+                  </CardContent>
+                </Card>
+              </Pressable>
+            </View>
+          )}
+
+          {/* 2. PROFIL */}
+          <Card className="mb-6">
+            <CardHeader>
+              <SectionTitle icon={User} title="Mon Profil" />
+            </CardHeader>
+            <CardContent>
+              <View className="flex-row items-center mb-6">
+                <Avatar
+                  name={profile?.full_name || profile?.email || "?"}
+                  size="lg"
+                />
+                <View className="ml-4 flex-1">
+                  <Text className="text-xl font-bold text-foreground dark:text-white">
+                    {profile?.full_name || "Utilisateur"}
                   </Text>
-                  <Text className="text-sm text-muted-foreground">
-                    Créer un nouveau compte
-                  </Text>
+                  <View className="flex-row items-center mt-1">
+                    <Briefcase size={14} color="#94A3B8" />
+                    <Text className="text-muted-foreground ml-1 capitalize">
+                      {profile?.role === "admin" ? "Administrateur" : "Employé"}
+                    </Text>
+                  </View>
                 </View>
               </View>
-              <ChevronRight size={20} color={isDark ? "white" : "black"} />
+
+              <View className="bg-muted/50 p-3 rounded-lg">
+                <Text className="text-xs text-muted-foreground uppercase font-bold mb-1">
+                  Email de connexion
+                </Text>
+                <Text className="text-base font-medium text-foreground dark:text-white">
+                  {profile?.email}
+                </Text>
+              </View>
             </CardContent>
           </Card>
-        </Pressable>
 
-        {/* 2. PROFIL */}
-        <Card className="mb-6">
-          <CardHeader>
-            <SectionTitle icon={User} title="Mon Profil" />
-          </CardHeader>
-          <CardContent>
-            <View className="flex-row items-center mb-6">
-              <Avatar name="Moi" size="lg" />
-              <View className="ml-4">
-                <Text className="text-lg font-bold text-foreground dark:text-white">
-                  Mon Compte
-                </Text>
-                <Text className="text-muted-foreground">{userEmail}</Text>
+          {/* 3. SECURITÉ */}
+          <Card className="mb-6">
+            <CardHeader>
+              <SectionTitle icon={Lock} title="Sécurité" />
+            </CardHeader>
+            <CardContent>
+              <Text className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                Pour changer votre mot de passe, entrez le nouveau ci-dessous.
+              </Text>
+              <View className="gap-4">
+                <Input
+                  placeholder="Nouveau mot de passe"
+                  secureTextEntry
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                />
+                <Input
+                  placeholder="Confirmer le nouveau mot de passe"
+                  secureTextEntry
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                />
+                <Button
+                  onPress={handleChangePassword}
+                  loading={loadingPass}
+                  className="mt-2"
+                >
+                  <Save size={18} color="white" />
+                  <Text className="ml-2 font-bold text-white">
+                    Mettre à jour
+                  </Text>
+                </Button>
               </View>
-            </View>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* 3. SECURITÉ (Changement MDP) */}
-        <Card className="mb-6">
-          <CardHeader>
-            <SectionTitle icon={Lock} title="Sécurité" />
-          </CardHeader>
-          <CardContent>
-            <Text className="text-sm text-muted-foreground mb-3">
-              Modifiez votre mot de passe ici. Pas besoin de l'ancien.
+          {/* 4. DÉCONNEXION */}
+          <Pressable
+            onPress={handleLogout}
+            className="flex-row items-center justify-center p-4 rounded-xl border border-destructive/30 bg-destructive/5 active:bg-destructive/10"
+          >
+            <LogOut size={18} color="#EF4444" />
+            <Text className="ml-2 text-destructive font-bold">
+              Se déconnecter
             </Text>
-            <View className="gap-3">
-              <Input
-                placeholder="Nouveau mot de passe"
-                secureTextEntry
-                value={newPassword}
-                onChangeText={setNewPassword}
-              />
-              <Button
-                onPress={handleChangePassword}
-                loading={loadingPass}
-                variant="outline"
-              >
-                <Save size={16} color={isDark ? "white" : "black"} />
-                <Text className="ml-2 font-semibold text-foreground dark:text-white">
-                  Mettre à jour le mot de passe
-                </Text>
-              </Button>
-            </View>
-          </CardContent>
-        </Card>
-
-        {/* 4. DÉCONNEXION */}
-        <Pressable
-          onPress={handleLogout}
-          className="flex-row items-center justify-center p-4 rounded-xl border border-destructive/30 bg-destructive/5 active:bg-destructive/10"
-        >
-          <LogOut size={18} color="#EF4444" />
-          <Text className="ml-2 text-destructive font-bold">
-            Se déconnecter
-          </Text>
-        </Pressable>
-      </ScrollView>
+          </Pressable>
+        </ScrollView>
+      )}
     </View>
   );
 }

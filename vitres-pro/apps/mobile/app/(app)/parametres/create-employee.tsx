@@ -1,27 +1,39 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, Switch } from "react-native";
+import { View, Text, ScrollView, Switch, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../src/lib/api";
 import { ChevronLeft, Check, UserPlus } from "lucide-react-native";
 
-import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
+import { Card, CardContent } from "../../../src/ui/components/Card";
 import { Input } from "../../../src/ui/components/Input";
 import { Button } from "../../../src/ui/components/Button";
 import { toast } from "../../../src/ui/toast";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
+
+// Palette de couleurs prédéfinie
+const COLORS = [
+  "#3B82F6", // Bleu (Défaut)
+  "#10B981", // Vert
+  "#F59E0B", // Orange
+  "#EF4444", // Rouge
+  "#8B5CF6", // Violet
+  "#EC4899", // Rose
+  "#6366F1", // Indigo
+  "#14B8A6", // Teal
+];
 
 export default function CreateEmployeeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isDark } = useTheme();
 
-  // Formulaire
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("Bienvenue2026!"); // MDP par défaut suggéré
-  const [color, setColor] = useState("#10B981");
+  const [password, setPassword] = useState("Bienvenue2026!");
+  const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [weeklyHours, setWeeklyHours] = useState("38");
 
   const mutation = useMutation({
     mutationFn: async (data: any) => {
@@ -29,7 +41,7 @@ export default function CreateEmployeeScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employees"] });
-      toast.success("Succès", "Employé créé ! Donnez-lui ses identifiants.");
+      toast.success("Succès", "Employé créé !");
       router.back();
     },
     onError: (err: any) => {
@@ -41,23 +53,22 @@ export default function CreateEmployeeScreen() {
   });
 
   const handleSubmit = () => {
-    if (!email || !password || !fullName) {
-      return toast.error("Oups", "Merci de tout remplir.");
-    }
+    if (!email || !password || !fullName)
+      return toast.error("Oups", "Tout remplir !");
+
     mutation.mutate({
       full_name: fullName,
       email,
       password,
-      color,
+      color: selectedColor,
       role: isAdmin ? "admin" : "employee",
-      weekly_hours: 38,
+      weekly_hours: Number(weeklyHours) || 38,
     });
   };
 
   return (
     <View className="flex-1 bg-background dark:bg-slate-950">
-      {/* Header */}
-      <View className="px-4 pt-4 pb-2 flex-row items-center">
+      <View className="px-4 pt-4 pb-2 flex-row items-center border-b border-border dark:border-slate-800 bg-background dark:bg-slate-950">
         <Button variant="ghost" size="icon" onPress={() => router.back()}>
           <ChevronLeft size={24} color={isDark ? "white" : "black"} />
         </Button>
@@ -67,23 +78,13 @@ export default function CreateEmployeeScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20 }}>
-        <View className="items-center mb-6">
-          <View className="bg-primary/10 w-16 h-16 rounded-full items-center justify-center mb-3">
-            <UserPlus size={28} color="#3B82F6" />
-          </View>
-          <Text className="text-muted-foreground text-center px-4">
-            Vous créez le compte. Transmettez ensuite l'email et le mot de passe
-            à votre employé.
-          </Text>
-        </View>
-
-        <Card>
-          <CardHeader>
-            <Text className="text-xs font-bold uppercase text-muted-foreground tracking-wider">
-              Identifiants de connexion
+        <Card className="mb-6">
+          <View className="p-4 border-b border-border dark:border-slate-800 bg-muted/20">
+            <Text className="text-sm font-bold uppercase text-muted-foreground tracking-wider">
+              Identifiants
             </Text>
-          </CardHeader>
-          <CardContent className="gap-4">
+          </View>
+          <CardContent className="gap-5 pt-5">
             <Input
               label="Nom Complet"
               placeholder="Ex: Thomas Dubuisson"
@@ -106,27 +107,48 @@ export default function CreateEmployeeScreen() {
           </CardContent>
         </Card>
 
-        <Card className="mt-4">
-          <CardHeader>
-            <Text className="text-xs font-bold uppercase text-muted-foreground tracking-wider">
-              Paramètres
+        <Card className="mb-6">
+          <View className="p-4 border-b border-border dark:border-slate-800 bg-muted/20">
+            <Text className="text-sm font-bold uppercase text-muted-foreground tracking-wider">
+              Configuration
             </Text>
-          </CardHeader>
-          <CardContent className="gap-4">
+          </View>
+          <CardContent className="gap-6 pt-5">
+            {/* Color Picker */}
+            <View>
+              <Text className="text-sm font-medium text-foreground dark:text-white mb-3">
+                Couleur Planning
+              </Text>
+              <View className="flex-row flex-wrap gap-3">
+                {COLORS.map((c) => (
+                  <Pressable
+                    key={c}
+                    onPress={() => setSelectedColor(c)}
+                    style={{ backgroundColor: c }}
+                    className={`w-10 h-10 rounded-full items-center justify-center ${selectedColor === c ? "border-2 border-white ring-2 ring-primary" : ""}`}
+                  >
+                    {selectedColor === c && (
+                      <Check size={16} color="white" strokeWidth={3} />
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
             <Input
-              label="Couleur Planning (Hex)"
-              placeholder="#RRGGBB"
-              value={color}
-              onChangeText={setColor}
+              label="Heures par semaine"
+              value={weeklyHours}
+              onChangeText={setWeeklyHours}
+              keyboardType="numeric"
             />
 
-            <View className="flex-row items-center justify-between mt-2">
+            <View className="flex-row items-center justify-between pt-2 border-t border-border dark:border-slate-800">
               <View>
                 <Text className="text-base font-medium text-foreground dark:text-white">
                   Accès Administrateur
                 </Text>
                 <Text className="text-xs text-muted-foreground">
-                  Peut tout voir et tout modifier
+                  Peut modifier le planning de tous
                 </Text>
               </View>
               <Switch value={isAdmin} onValueChange={setIsAdmin} />
@@ -137,10 +159,12 @@ export default function CreateEmployeeScreen() {
         <Button
           onPress={handleSubmit}
           loading={mutation.isPending}
-          className="mt-8 h-12"
+          className="h-14 bg-primary rounded-xl"
         >
-          <Check size={20} color="white" />
-          <Text className="ml-2 font-bold text-white">Créer le compte</Text>
+          <UserPlus size={20} color="white" />
+          <Text className="ml-2 font-bold text-white text-lg">
+            Créer le compte
+          </Text>
         </Button>
       </ScrollView>
     </View>
