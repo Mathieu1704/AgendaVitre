@@ -24,7 +24,7 @@ export default function AddClientScreen() {
 
   const mutation = useMutation({
     mutationFn: async (newClient: any) => {
-      return await api.post("/api/clients/", newClient);
+      return await api.post("/api/clients", newClient);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
