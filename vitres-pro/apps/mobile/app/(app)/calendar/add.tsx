@@ -71,8 +71,8 @@ export default function AddInterventionScreen() {
   // Mutation (Envoi API)
   const mutation = useMutation({
     mutationFn: async (payload: any) => {
-      // ✅ On envoie le tableau employee_ids au backend
-      return await api.post("/api/interventions/", payload);
+      //  On envoie le tableau employee_ids au backend
+      return await api.post("/api/interventions", payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
