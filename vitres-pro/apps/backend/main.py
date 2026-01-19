@@ -26,6 +26,8 @@ app.include_router(interventions.router, prefix="/api/interventions", tags=["int
 app.include_router(planning.router, prefix="/api/planning", tags=["planning"])
 app.include_router(employees.router, prefix="/api/employees", tags=["employees"])
 
+# ... imports ...
+
 @app.get("/")
 def read_root():
-    return {"status": "ok", "message": "LVM Agenda API Running"}
+    return {"status": "ok", "message": "LVM Agenda API V2 (Prod Ready)"}

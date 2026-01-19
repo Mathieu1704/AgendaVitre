@@ -617,7 +617,7 @@ export default function CalendarScreen() {
         {/* Titre + Btn Aujourd'hui */}
         <View className="flex-row justify-between items-center mb-4">
           <Text className="text-3xl font-bold text-foreground dark:text-slate-50">
-            Planning
+            Planning {/* test */}
           </Text>
           <Pressable
             onPress={handleToday}
