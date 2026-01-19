@@ -12,7 +12,7 @@ router = APIRouter()
 @router.get("", response_model=List[EmployeeOut])
 def read_employees(
     db: Session = Depends(get_db), 
-    # current_user=Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
     return db.query(Employee).all()
 
