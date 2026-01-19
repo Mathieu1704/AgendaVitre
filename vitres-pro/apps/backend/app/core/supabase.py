@@ -1,0 +1,9 @@
+from supabase import create_client, Client
+from app.core.config import settings
+
+# On utilise la SERVICE_ROLE_KEY. 
+# Attention : Ce client a tous les droits, ne jamais l'utiliser ailleurs que dans le backend.
+supabase_admin: Client = create_client(
+    settings.SUPABASE_URL, 
+    settings.SUPABASE_SERVICE_ROLE_KEY
+)
