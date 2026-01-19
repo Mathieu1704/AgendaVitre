@@ -40,7 +40,7 @@ export default function ClientsListScreen() {
   const { data: clients, isLoading } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
-      const res = await api.get("/api/clients/");
+      const res = await api.get("/api/clients");
       return res.data as Client[];
     },
   });
@@ -50,7 +50,7 @@ export default function ClientsListScreen() {
     clients?.filter(
       (c) =>
         c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.address.toLowerCase().includes(searchQuery.toLowerCase())
+        c.address.toLowerCase().includes(searchQuery.toLowerCase()),
     ) || [];
 
   const renderItem = ({ item }: { item: Client }) => (

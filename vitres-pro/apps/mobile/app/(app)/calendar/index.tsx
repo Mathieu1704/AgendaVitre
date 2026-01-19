@@ -154,7 +154,7 @@ export default function CalendarScreen() {
   const { data: interventions, isLoading } = useQuery({
     queryKey: ["interventions"],
     queryFn: async () => {
-      const res = await api.get("/api/interventions/");
+      const res = await api.get("/api/interventions");
       return Array.isArray(res.data) ? res.data : [];
     },
   });

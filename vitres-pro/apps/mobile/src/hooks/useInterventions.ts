@@ -6,7 +6,7 @@ export const useInterventions = () => {
     queryKey: ["interventions"],
     queryFn: async () => {
       // On appelle ton API Python existante
-      const res = await api.get("/api/interventions/");
+      const res = await api.get("/api/interventions");
       return res.data || [];
     },
   });

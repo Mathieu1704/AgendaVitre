@@ -28,7 +28,7 @@ export default function AddInterventionScreen() {
   const { data: clients } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
-      const res = await api.get("/api/clients/");
+      const res = await api.get("/api/clients");
       return res.data as Client[];
     },
   });
