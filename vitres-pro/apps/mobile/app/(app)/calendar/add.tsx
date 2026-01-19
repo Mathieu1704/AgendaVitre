@@ -1,4 +1,3 @@
-// apps/mobile/app/(app)/calendar/add.tsx
 import React, { useMemo, useState } from "react";
 import { View, ScrollView, Text } from "react-native";
 import { useRouter } from "expo-router";
@@ -9,12 +8,14 @@ import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
 import { Input } from "../../../src/ui/components/Input";
 import { Button } from "../../../src/ui/components/Button";
 import { Select } from "../../../src/ui/components/Select";
+import { MultiSelect } from "../../../src/ui/components/MultiSelect"; // ✅ Import du composant
 import { toast } from "../../../src/ui/toast";
 
 import {
   parseLocalDateTimeString,
   toLocalDateTimeString,
 } from "../../../src/lib/date";
+import { useEmployees } from "../../../src/hooks/useEmployees"; // ✅ Import du hook
 
 type Client = { id: string; name: string; address: string };
 
@@ -22,21 +23,8 @@ export default function AddInterventionScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [title, setTitle] = useState("Lavage Vitres");
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [price, setPrice] = useState("");
-
-  // ✅ Default: demain 09:00 au format "YYYY-MM-DDTHH:MM" (stable web + app)
-  const defaultStart = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(9, 0, 0, 0);
-    return toLocalDateTimeString(d).replace(" ", "T");
-  }, []);
-
-  const [startDateStr, setStartDateStr] = useState(defaultStart);
-  const [durationHours, setDurationHours] = useState("2");
-
+  // Données
+  const { employees } = useEmployees();
   const { data: clients } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -45,22 +33,52 @@ export default function AddInterventionScreen() {
     },
   });
 
+  // États Formulaire
+  const [title, setTitle] = useState("Lavage Vitres");
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+
+  // ✅ On stocke une liste d'IDs maintenant
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+
+  const [price, setPrice] = useState("");
+
+  // Dates
+  const defaultStart = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0);
+    return toLocalDateTimeString(d).replace(" ", "T");
+  }, []);
+  const [startDateStr, setStartDateStr] = useState(defaultStart);
+  const [durationHours, setDurationHours] = useState("2");
+
+  // Formatage pour les selects
   const clientItems = useMemo(
-    () =>
-      (clients ?? []).map((c) => ({
-        id: c.id,
-        label: c.name,
-      })),
-    [clients]
+    () => (clients ?? []).map((c) => ({ id: c.id, label: c.name })),
+    [clients],
   );
 
+  const employeeItems = useMemo(
+    () =>
+      (employees ?? []).map((e) => ({
+        id: e.id,
+        label: e.full_name || e.email,
+        color: e.color,
+      })),
+    [employees],
+  );
+
+  // Mutation (Envoi API)
   const mutation = useMutation({
     mutationFn: async (payload: any) => {
+      // ✅ On envoie le tableau employee_ids au backend
       return await api.post("/api/interventions/", payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
-      toast.success("Intervention planifiée", "C’est enregistré ✅");
+      // On invalide aussi le planning pour que la jauge se mette à jour
+      queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
+      toast.success("Succès", "Intervention enregistrée ✅");
       router.back();
     },
     onError: (err: any) => {
@@ -69,29 +87,25 @@ export default function AddInterventionScreen() {
   });
 
   const handleSubmit = () => {
-    if (!selectedClient) {
-      toast.error("Manquant", "Sélectionne un client.");
-      return;
-    }
+    if (!selectedClient)
+      return toast.error("Manquant", "Sélectionne un client.");
+    if (selectedEmployeeIds.length === 0)
+      return toast.error("Manquant", "Assigne au moins un employé.");
 
-    // parseLocalDateTimeString accepte "YYYY-MM-DD HH:MM" ou "YYYY-MM-DDTHH:MM"
     const start = parseLocalDateTimeString(startDateStr);
-    if (!start || Number.isNaN(start.getTime())) {
-      toast.error("Date invalide", "Utilise le format YYYY-MM-DDTHH:MM");
-      return;
-    }
+    if (!start || Number.isNaN(start.getTime()))
+      return toast.error("Date invalide", "Format YYYY-MM-DDTHH:MM");
 
-    const dur = Math.max(0, Number(durationHours || 0));
-    if (!Number.isFinite(dur) || dur <= 0) {
-      toast.error("Durée invalide", "Mets un nombre d’heures > 0.");
-      return;
-    }
+    const dur = Number(durationHours);
+    if (!dur || dur <= 0)
+      return toast.error("Durée invalide", "Mets une durée correcte.");
 
     const end = new Date(start.getTime() + dur * 60 * 60 * 1000);
 
     const payload = {
       title,
       client_id: selectedClient.id,
+      employee_ids: selectedEmployeeIds, // ✅ Liste
       start_time: start.toISOString(),
       end_time: end.toISOString(),
       price_estimated: Number(price) || 0,
@@ -102,67 +116,71 @@ export default function AddInterventionScreen() {
   };
 
   return (
-    <View className="flex-1 bg-bg dark:bg-bg-dark">
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
+    <View className="flex-1 bg-background dark:bg-slate-950">
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <Card className="max-w-2xl w-full self-center">
           <CardHeader>
-            <Text className="text-2xl font-extrabold text-fg dark:text-fg-dark">
-              Planifier une intervention
+            <Text className="text-2xl font-extrabold text-foreground dark:text-white">
+              Planifier
             </Text>
-            <Text className="mt-2 opacity-70 text-fg dark:text-fg-dark">
-              Choisis un client, une date, une durée et valide.
+            <Text className="mt-1 opacity-70 text-foreground dark:text-slate-400">
+              Nouvelle intervention
             </Text>
           </CardHeader>
 
-          <CardContent>
-            <Text className="text-xs font-bold uppercase opacity-60 mb-2 text-fg dark:text-fg-dark">
-              Client
-            </Text>
-
-            <Select
-              title="Choisir un client"
-              placeholder="Sélectionner un client…"
-              value={
-                selectedClient
-                  ? { id: selectedClient.id, label: selectedClient.name }
-                  : null
-              }
-              items={clientItems}
-              onChange={(v) => {
-                const c = (clients ?? []).find((x) => x.id === v.id);
-                if (c) setSelectedClient(c);
-              }}
-            />
-
-            {selectedClient?.address ? (
-              <Text className="mt-2 text-xs opacity-70 text-fg dark:text-fg-dark">
-                Adresse : {selectedClient.address}
+          <CardContent className="gap-5">
+            {/* CLIENT */}
+            <View>
+              <Text className="text-xs font-bold uppercase opacity-60 mb-2 text-foreground dark:text-slate-400">
+                Pour qui ?
               </Text>
-            ) : null}
-
-            <View className="mt-6">
-              <Text className="text-xs font-bold uppercase opacity-60 mb-2 text-fg dark:text-fg-dark">
-                Détails
-              </Text>
-
-              <Input
-                placeholder="Titre"
-                value={title}
-                onChangeText={setTitle}
-                className="mb-3"
+              <Select
+                title="Choisir un client"
+                value={
+                  selectedClient
+                    ? { id: selectedClient.id, label: selectedClient.name }
+                    : null
+                }
+                items={clientItems}
+                onChange={(v) => {
+                  const c = clients?.find((x) => x.id === v.id);
+                  if (c) setSelectedClient(c);
+                }}
               />
+            </View>
+
+            {/* EMPLOYES (MULTI) */}
+            <View>
+              <Text className="text-xs font-bold uppercase opacity-60 mb-2 text-foreground dark:text-slate-400">
+                Qui intervient ?
+              </Text>
+              <MultiSelect
+                items={employeeItems}
+                selectedIds={selectedEmployeeIds}
+                onChange={setSelectedEmployeeIds}
+                label=""
+              />
+            </View>
+
+            {/* DETAILS */}
+            <View className="gap-3 mt-2">
+              <Text className="text-xs font-bold uppercase opacity-60 mb-1 text-foreground dark:text-slate-400">
+                Quoi & Quand ?
+              </Text>
+
+              <Input label="Titre" value={title} onChangeText={setTitle} />
 
               <View className="flex-row gap-3">
                 <View style={{ flex: 2 }}>
                   <Input
-                    placeholder="Début (YYYY-MM-DDTHH:MM)"
+                    label="Début (AAAA-MM-JJTHH:MM)"
                     value={startDateStr}
                     onChangeText={setStartDateStr}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Input
-                    placeholder="Durée (h)"
+                    label="Durée (h)"
                     value={durationHours}
                     onChangeText={setDurationHours}
                     keyboardType="numeric"
@@ -171,14 +189,14 @@ export default function AddInterventionScreen() {
               </View>
 
               <Input
-                placeholder="Prix estimé (€)"
+                label="Prix estimé (€)"
                 value={price}
                 onChangeText={setPrice}
                 keyboardType="numeric"
-                className="mt-3"
               />
             </View>
 
+            {/* ACTIONS */}
             <View className="mt-6 flex-row gap-3">
               <Button
                 variant="outline"
@@ -190,9 +208,9 @@ export default function AddInterventionScreen() {
               <Button
                 onPress={handleSubmit}
                 disabled={mutation.isPending}
-                className={mutation.isPending ? "opacity-70 flex-1" : "flex-1"}
+                className="flex-1"
               >
-                {mutation.isPending ? "Création…" : "Valider"}
+                {mutation.isPending ? "Envoi..." : "Valider"}
               </Button>
             </View>
           </CardContent>

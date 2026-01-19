@@ -43,6 +43,11 @@ import { Card } from "../../../src/ui/components/Card";
 import { StatusBadge } from "../../../src/ui/components/StatusBadge";
 import { Avatar } from "../../../src/ui/components/Avatar";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
+import { PlanningHeader } from "../../../src/ui/components/PlanningHeader";
+import {
+  usePlanningRangeStats,
+  usePlanningStats,
+} from "../../../src/hooks/usePlanning";
 
 // --- CONFIGURATION LOCALE ---
 LocaleConfig.locales["fr"] = {
@@ -89,6 +94,33 @@ LocaleConfig.locales["fr"] = {
 LocaleConfig.defaultLocale = "fr";
 
 type ViewMode = "day" | "week" | "month" | "year";
+
+const DailyStatsBadge = ({ dateStr }: { dateStr: string }) => {
+  const { stats, isLoading } = usePlanningStats(dateStr);
+
+  if (isLoading || !stats) return null;
+
+  let bgClass = "bg-green-100 dark:bg-green-900/50";
+  let textClass = "text-green-700 dark:text-green-400";
+
+  if (stats.status === "warning") {
+    bgClass = "bg-orange-100 dark:bg-orange-900/50";
+    textClass = "text-orange-700 dark:text-orange-400";
+  } else if (stats.status === "overload") {
+    bgClass = "bg-red-100 dark:bg-red-900/50";
+    textClass = "text-red-700 dark:text-red-400";
+  }
+
+  return (
+    <View className={`px-3 py-1.5 rounded-full ${bgClass}`}>
+      <Text className={`text-sm font-bold ${textClass}`}>
+        {" "}
+        {/* text-sm au lieu de text-xs */}
+        {stats.planned_hours}h / {stats.capacity_hours}h
+      </Text>
+    </View>
+  );
+};
 
 export default function CalendarScreen() {
   const router = useRouter();
@@ -189,7 +221,7 @@ export default function CalendarScreen() {
       if (start.getMonth() === end.getMonth()) {
         return `${start.getDate()} - ${end.getDate()} ${start.toLocaleDateString(
           "fr-FR",
-          { month: "long" }
+          { month: "long" },
         )}`;
       }
       return `${start.getDate()} ${start.toLocaleDateString("fr-FR", {
@@ -247,7 +279,7 @@ export default function CalendarScreen() {
     </Pressable>
   );
 
-  // --- VUE : MOIS (Classique) ---
+  // --- VUE : MOIS (Classique) ---//
   const RenderMonth = () => {
     const calendarTheme = useMemo(() => {
       const textColor = isDark ? "#F8FAFC" : "#09090B";
@@ -313,23 +345,31 @@ export default function CalendarScreen() {
           />
         </Card>
 
-        <View className="px-4 py-6 pb-24">
-          <Text className="text-lg font-bold text-foreground dark:text-white mb-4">
-            {new Date(selectedDate).toLocaleDateString("fr-FR", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-            })}
-          </Text>
-          {dayList.length === 0 ? (
-            <Text className="text-muted-foreground dark:text-slate-500 text-center py-8">
-              Rien de prévu.
+        <View className="pt-6 pb-24">
+          <View className="flex-row items-center justify-start px-4 mb-4 gap-3">
+            <Text className="text-xl font-bold text-foreground dark:text-white capitalize">
+              {new Date(selectedDate).toLocaleDateString("fr-FR", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+              })}
             </Text>
-          ) : (
-            dayList.map((item) => (
-              <InterventionCard key={item.id} item={item} />
-            ))
-          )}
+
+            <DailyStatsBadge dateStr={selectedDate} />
+          </View>
+
+          {/* 3. Liste des interventions */}
+          <View className="px-4">
+            {dayList.length === 0 ? (
+              <Text className="text-muted-foreground dark:text-slate-500 text-center py-8">
+                Rien de prévu.
+              </Text>
+            ) : (
+              dayList.map((item) => (
+                <InterventionCard key={item.id} item={item} />
+              ))
+            )}
+          </View>
         </View>
       </View>
     );
@@ -338,7 +378,13 @@ export default function CalendarScreen() {
   // --- VUE : SEMAINE (Colonnes responsive) ---
   const RenderWeek = () => {
     const start = startOfWeek(cursorDate, 1);
+    const end = addDays(start, 6);
     const weekDays = datesRange(start, 7);
+
+    const { rangeStats } = usePlanningRangeStats(
+      toISODate(start),
+      toISODate(end),
+    );
 
     const WeekContent = () => (
       <>
@@ -346,6 +392,26 @@ export default function CalendarScreen() {
           const iso = toISODate(date);
           const list = itemsByDate[iso] || [];
           const isToday = iso === toISODate(new Date());
+
+          const stat = rangeStats ? rangeStats[iso] : null;
+
+          // Couleur du badge
+          let badgeBg = "bg-muted";
+          let badgeText = "text-muted-foreground";
+          if (stat) {
+            if (stat.status === "ok") {
+              badgeBg = "bg-green-100 dark:bg-green-900";
+              badgeText = "text-green-700 dark:text-green-300";
+            }
+            if (stat.status === "warning") {
+              badgeBg = "bg-orange-100 dark:bg-orange-900";
+              badgeText = "text-orange-700 dark:text-orange-300";
+            }
+            if (stat.status === "overload") {
+              badgeBg = "bg-red-100 dark:bg-red-900";
+              badgeText = "text-red-700 dark:text-red-300";
+            }
+          }
 
           return (
             <View
@@ -367,6 +433,16 @@ export default function CalendarScreen() {
                     day: "numeric",
                   })}
                 </Text>
+
+                {stat && (
+                  <View
+                    className={`mt-2 py-1 px-2 rounded-md items-center justify-center ${badgeBg}`}
+                  >
+                    <Text className={`text-[10px] font-bold ${badgeText}`}>
+                      {stat.planned_hours}h / {stat.capacity_hours}h
+                    </Text>
+                  </View>
+                )}
               </View>
               <View className="bg-muted/30 dark:bg-slate-900/50 min-h-[400px] border-b border-x border-border dark:border-slate-800 rounded-b-xl p-2">
                 {list.map((item) => (
@@ -410,6 +486,7 @@ export default function CalendarScreen() {
 
     return (
       <View className="px-4 w-full">
+        <PlanningHeader dateStr={iso} />
         {list.length === 0 ? (
           <View className="items-center justify-center py-20 bg-muted/20 dark:bg-slate-900/30 rounded-2xl border border-dashed border-border dark:border-slate-800">
             <Clock size={48} color="#94A3B8" />
@@ -435,8 +512,10 @@ export default function CalendarScreen() {
 
     // Breakpoints
     let cols = 1;
-    if (width >= 1280) cols = 4; // Grand écran
-    else if (width >= 1024) cols = 3; // Desktop normal
+    if (width >= 1280)
+      cols = 4; // Grand écran
+    else if (width >= 1024)
+      cols = 3; // Desktop normal
     else if (width >= 768) cols = 2; // Tablette
     // Mobile : 1 col pour bien voir les dates (comme screenshot iOS)
 
@@ -487,7 +566,7 @@ export default function CalendarScreen() {
           },
         },
       }),
-      [isDark]
+      [isDark],
     );
 
     return (
