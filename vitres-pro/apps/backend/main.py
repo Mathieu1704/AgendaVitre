@@ -13,7 +13,9 @@ app.add_middleware(
         "http://127.0.0.1:19006",
         "https://lvmagenda.be",
         "https://www.lvmagenda.be",
+        "https://agenda-vitre.vercel.app",
     ],
+
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
