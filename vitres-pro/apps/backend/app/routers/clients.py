@@ -7,7 +7,7 @@ from app.core.deps import get_current_user
 
 router = APIRouter()
 
-@router.post("/", response_model=ClientOut)
+@router.post("", response_model=ClientOut)
 def create_client(
     client: ClientCreate, 
     db: Session = Depends(get_db),
@@ -19,7 +19,7 @@ def create_client(
     db.refresh(new_client)
     return new_client
 
-@router.get("/", response_model=List[ClientOut])
+@router.get("", response_model=List[ClientOut])
 def read_clients(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     return db.query(Client).all()
 

@@ -12,8 +12,8 @@ from app.core.deps import get_current_user
 
 router = APIRouter()
 
-# ✅ GET /api/interventions/  (LISTE)
-@router.get("/", response_model=List[InterventionOut])
+# GET /api/interventions/  (LISTE)
+@router.get("", response_model=List[InterventionOut])
 def read_interventions(
     skip: int = 0,
     limit: int = 100,
@@ -23,7 +23,7 @@ def read_interventions(
     return db.query(Intervention).offset(skip).limit(limit).all()
 
 
-# ✅ GET /api/interventions/{intervention_id} (DETAIL)
+# GET /api/interventions/{intervention_id} (DETAIL)
 @router.get("/{intervention_id}", response_model=InterventionOut)
 def read_intervention(
     intervention_id: UUID,
@@ -40,8 +40,8 @@ def read_intervention(
     return intervention
 
 
-# ✅ POST /api/interventions/ (CREATE)
-@router.post("/", response_model=InterventionOut)
+# POST /api/interventions/ (CREATE)
+@router.post("", response_model=InterventionOut)
 def create_intervention(
     intervention: InterventionCreate,
     db: Session = Depends(get_db),
@@ -63,7 +63,7 @@ def create_intervention(
     return new_intervention
 
 
-# ✅ PATCH /api/interventions/{intervention_id} (UPDATE)
+# PATCH /api/interventions/{intervention_id} (UPDATE)
 @router.patch("/{intervention_id}", response_model=InterventionOut)
 def update_intervention(
     intervention_id: UUID,
