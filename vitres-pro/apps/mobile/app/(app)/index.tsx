@@ -47,12 +47,12 @@ export default function Dashboard() {
 
   const todayInterventions =
     interventions?.filter(
-      (i: any) => i.start_time && isToday(parseISO(i.start_time))
+      (i: any) => i.start_time && isToday(parseISO(i.start_time)),
     ) || [];
 
   const upcomingInterventions =
     interventions?.filter(
-      (i: any) => i.start_time && parseISO(i.start_time) >= new Date()
+      (i: any) => i.start_time && parseISO(i.start_time) >= new Date(),
     ) || [];
 
   const totalRevenue =
@@ -60,7 +60,7 @@ export default function Dashboard() {
       ?.filter((i: any) => i.status === "done")
       .reduce(
         (acc: number, i: any) => acc + (Number(i.price_estimated) || 0),
-        0
+        0,
       ) || 0;
 
   const chartData: ChartItem[] = [
@@ -122,7 +122,7 @@ export default function Dashboard() {
             className="w-full md:w-[32%] flex-grow"
           >
             <Card className="min-h-[130px] justify-center">
-              <CardContent className="py-6">
+              <CardContent className="p-6">
                 <View className="flex-row justify-between items-center mb-2">
                   <View className="flex-1 justify-center">
                     <Text className="text-sm font-medium text-muted-foreground dark:text-slate-400 mb-1">
@@ -153,26 +153,24 @@ export default function Dashboard() {
       </View>
 
       <View className="flex-col lg:flex-row gap-6">
-        {/* ✅ GRAPHIQUE CORRIGÉ */}
         <Animated.View
           entering={FadeInDown.delay(300)}
           className="flex-1 min-h-[420px]"
         >
           <Card className="h-full">
-            <CardHeader className="pb-2">
+            <CardHeader className="p-6 pb-2">
               <CardTitle className="flex-row items-center gap-2">
                 <TrendingUp size={20} color="#3B82F6" />
                 Évolution des revenus
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              {/* ✅ Conteneur qui capture la largeur */}
+            <CardContent className="p-6 pt-0">
+              {/* Le graphique reste identique */}
               <View
                 className="w-full"
                 style={{ paddingTop: 16, paddingBottom: 8 }}
                 onLayout={(e) => {
                   const containerWidth = e.nativeEvent.layout.width;
-                  // On enlève juste un peu de marge pour éviter le débordement
                   setChartWidth(Math.max(containerWidth - 20, 250));
                 }}
               >
@@ -181,7 +179,6 @@ export default function Dashboard() {
                 >
                   <LineChart
                     data={chartData}
-                    // Style
                     color="#3B82F6"
                     thickness={3}
                     startFillColor="rgba(59, 130, 246, 0.3)"
@@ -190,30 +187,24 @@ export default function Dashboard() {
                     endOpacity={0.3}
                     areaChart
                     curved
-                    // Points
                     hideDataPoints={false}
                     dataPointsColor="#3B82F6"
                     dataPointsRadius={6}
-                    // ✅ DIMENSIONS CLÉS
                     width={chartWidth}
                     height={280}
                     adjustToWidth={true}
-                    // ✅ ESPACEMENT ENTRE LES POINTS
                     spacing={(chartWidth - 10) / chartData.length}
                     initialSpacing={20}
                     endSpacing={20}
-                    // Axes
                     showVerticalLines={false}
                     rulesType="solid"
                     rulesColor="#E4E4E7"
                     rulesThickness={1}
-                    // ✅ Style des labels Y
                     yAxisTextStyle={{
                       color: "#71717A",
                       fontSize: 11,
                       fontWeight: "400",
                     }}
-                    // ✅ Style des labels X (mois) - CORRIGÉ
                     xAxisLabelTextStyle={{
                       color: "#71717A",
                       fontSize: 12,
@@ -227,7 +218,6 @@ export default function Dashboard() {
                     xAxisColor="#E4E4E7"
                     noOfSections={5}
                     maxValue={3500}
-                    // Tooltip
                     pointerConfig={{
                       pointerStripHeight: 200,
                       pointerStripColor: "#CBD5E1",
@@ -259,10 +249,10 @@ export default function Dashboard() {
           className="w-full lg:w-[350px]"
         >
           <Card className="h-full">
-            <CardHeader>
+            <CardHeader className="p-6 pb-4">
               <CardTitle>Aujourd'hui</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6 pt-0">
               {todayInterventions.length === 0 ? (
                 <View className="items-center justify-center py-12">
                   <Text className="text-muted-foreground dark:text-slate-400 text-sm">

@@ -75,12 +75,12 @@ export default function AddClientScreen() {
         </View>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="p-6 pb-4">
             <Text className="text-sm font-bold uppercase text-muted-foreground dark:text-slate-500 tracking-wider">
               Informations Principales
             </Text>
           </CardHeader>
-          <CardContent className="gap-4">
+          <CardContent className="p-6 pt-0 gap-4">
             <Input
               label="Nom / Entreprise *"
               placeholder="Ex: Jean Dupont"
@@ -100,12 +100,12 @@ export default function AddClientScreen() {
         </Card>
 
         <Card className="mt-4">
-          <CardHeader>
+          <CardHeader className="p-6 pb-4">
             <Text className="text-sm font-bold uppercase text-muted-foreground dark:text-slate-500 tracking-wider">
               Coordonnées & Notes
             </Text>
           </CardHeader>
-          <CardContent className="gap-4">
+          <CardContent className="p-6 pt-0 gap-4">
             <Input
               label="Téléphone"
               placeholder="06 12 34 56 78"

@@ -8,14 +8,15 @@ import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
 import { Input } from "../../../src/ui/components/Input";
 import { Button } from "../../../src/ui/components/Button";
 import { Select } from "../../../src/ui/components/Select";
-import { MultiSelect } from "../../../src/ui/components/MultiSelect"; // ✅ Import du composant
+import { MultiSelect } from "../../../src/ui/components/MultiSelect";
 import { toast } from "../../../src/ui/toast";
+import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
 
 import {
   parseLocalDateTimeString,
   toLocalDateTimeString,
 } from "../../../src/lib/date";
-import { useEmployees } from "../../../src/hooks/useEmployees"; // ✅ Import du hook
+import { useEmployees } from "../../../src/hooks/useEmployees";
 
 type Client = { id: string; name: string; address: string };
 
@@ -119,7 +120,7 @@ export default function AddInterventionScreen() {
     <View className="flex-1 bg-background dark:bg-slate-950">
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <Card className="max-w-2xl w-full self-center">
-          <CardHeader>
+          <CardHeader className="p-6 pb-4">
             <Text className="text-2xl font-extrabold text-foreground dark:text-white">
               Planifier
             </Text>
@@ -128,7 +129,7 @@ export default function AddInterventionScreen() {
             </Text>
           </CardHeader>
 
-          <CardContent className="gap-5">
+          <CardContent className="p-6 pt-0 gap-5">
             {/* CLIENT */}
             <View>
               <Text className="text-xs font-bold uppercase opacity-60 mb-2 text-foreground dark:text-slate-400">
@@ -170,23 +171,20 @@ export default function AddInterventionScreen() {
 
               <Input label="Titre" value={title} onChangeText={setTitle} />
 
-              <View className="flex-row gap-3">
-                <View style={{ flex: 2 }}>
-                  <Input
-                    label="Début (AAAA-MM-JJTHH:MM)"
-                    value={startDateStr}
-                    onChangeText={setStartDateStr}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Input
-                    label="Durée (h)"
-                    value={durationHours}
-                    onChangeText={setDurationHours}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
+              {/* ✅ Nouveau DateTimePicker */}
+              <DateTimePicker
+                value={startDateStr}
+                onChange={setStartDateStr}
+                label="Début de l'intervention"
+              />
+
+              {/* Durée (reste identique) */}
+              <Input
+                label="Durée (heures)"
+                value={durationHours}
+                onChangeText={setDurationHours}
+                keyboardType="numeric"
+              />
 
               <Input
                 label="Prix estimé (€)"

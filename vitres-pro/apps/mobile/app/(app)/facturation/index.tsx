@@ -47,7 +47,7 @@ export default function FacturationScreen() {
   const { interventions, isLoading } = useInterventions();
   const { isDark } = useTheme();
   const [statusFilter, setStatusFilter] = useState<"all" | "done" | "pending">(
-    "all"
+    "all",
   );
 
   // --- LOGIQUE MÉTIER ---
@@ -63,7 +63,7 @@ export default function FacturationScreen() {
         isWithinInterval(parseISO(i.start_time), {
           start: currentMonthStart,
           end: currentMonthEnd,
-        })
+        }),
     );
 
     const completed = thisMonth.filter((i: any) => i.status === "done");
@@ -71,11 +71,11 @@ export default function FacturationScreen() {
 
     const totalHT = completed.reduce(
       (acc: number, i: any) => acc + (Number(i.price_estimated) || 0),
-      0
+      0,
     );
     const pendingHT = pending.reduce(
       (acc: number, i: any) => acc + (Number(i.price_estimated) || 0),
-      0
+      0,
     );
 
     return {
@@ -238,7 +238,7 @@ export default function FacturationScreen() {
 
       {/* 2. LISTE DES FACTURES */}
       <Card className="min-h-[400px] mb-20">
-        <CardHeader className="border-b border-border dark:border-slate-800 pb-4">
+        <CardHeader className="p-6 border-b border-border dark:border-slate-800 pb-4">
           <View className="flex-col md:flex-row md:items-center justify-between gap-4">
             <CardTitle className="flex-row items-center gap-2">
               <FileText size={20} color="#3B82F6" />
@@ -267,8 +267,8 @@ export default function FacturationScreen() {
                     {filter === "all"
                       ? "Tout"
                       : filter === "done"
-                      ? "Payées"
-                      : "À faire"}
+                        ? "Payées"
+                        : "À faire"}
                   </Text>
                 </Pressable>
               ))}
@@ -276,8 +276,7 @@ export default function FacturationScreen() {
           </View>
         </CardHeader>
 
-        {/* ✅ CORRECTION ESPACEMENT : pt-6 au lieu de pt-4 */}
-        <CardContent className="pt-6">
+        <CardContent className="p-6">
           {isLoading ? (
             <ActivityIndicator color="#3B82F6" className="mt-8" />
           ) : filteredInterventions.length === 0 ? (
@@ -288,13 +287,9 @@ export default function FacturationScreen() {
               </Text>
             </View>
           ) : (
-            // ✅ CORRECTION ESPACEMENT : mt-2 pour décoller la liste du header
-            <View className="gap-3 mt-2">
+            <View className="gap-3">
               {filteredInterventions.map((item: any, index: number) => {
-                const invoiceNumber = `2024-${String(index + 1).padStart(
-                  3,
-                  "0"
-                )}`;
+                const invoiceNumber = `2024-${String(index + 1).padStart(3, "0")}`;
 
                 return (
                   <View
@@ -341,7 +336,7 @@ export default function FacturationScreen() {
                         onPress={() =>
                           toast.success(
                             "Téléchargement",
-                            `Facture #${invoiceNumber} générée`
+                            `Facture #${invoiceNumber} générée`,
                           )
                         }
                         className="p-2 rounded-lg hover:bg-muted dark:hover:bg-slate-800 active:opacity-50 border border-border dark:border-slate-700 ml-2"

@@ -3,7 +3,7 @@ import { PaperProvider, MD3LightTheme, MD3DarkTheme } from "react-native-paper";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useColorScheme } from "react-native";
-
+import { ToastHost } from "../src/ui/toast";
 import "../app.css";
 
 const queryClient = new QueryClient();
@@ -56,6 +56,7 @@ export default function RootLayout() {
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(app)" />
           </Stack>
+          <ToastHost />
         </PaperProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

@@ -49,7 +49,7 @@ export default function ClientDetailScreen() {
     if (client?.address) {
       const query = encodeURIComponent(client.address);
       Linking.openURL(
-        `https://www.google.com/maps/search/?api=1&query=${query}`
+        `https://www.google.com/maps/search/?api=1&query=${query}`,
       );
     }
   };
@@ -118,7 +118,7 @@ export default function ClientDetailScreen() {
 
         {/* Informations */}
         <Card className="mb-6">
-          <CardContent className="gap-6 p-5">
+          <CardContent className="p-5 gap-6">
             <View className="flex-row items-start">
               <Phone size={18} color="#94A3B8" className="mt-1 mr-3" />
               <View>

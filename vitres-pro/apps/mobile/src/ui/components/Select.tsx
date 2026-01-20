@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Dialog } from "./Dialog";
 import { Button } from "./Button";
@@ -24,48 +24,65 @@ export function Select<T extends { id: string; label: string }>({
       <Button
         variant="outline"
         onPress={() => setOpen(true)}
-        className="justify-between"
+        className="justify-between h-11"
       >
         <View className="flex-1 flex-row items-center justify-between">
-          <Text className={cn("font-semibold", value ? "" : "opacity-60")}>
+          <Text
+            className={cn(
+              "text-base",
+              value
+                ? "text-foreground dark:text-white font-medium"
+                : "text-muted-foreground",
+            )}
+          >
             {value ? value.label : placeholder}
           </Text>
-          <Text className="opacity-50">▾</Text>
+          <Text className="text-muted-foreground ml-2">▾</Text>
         </View>
       </Button>
 
-      <Dialog open={open} onClose={() => setOpen(false)} position="bottom">
-        <Text className="text-lg font-extrabold mb-3">{title}</Text>
+      <Dialog open={open} onClose={() => setOpen(false)} position="center">
+        <View className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl p-5">
+          <Text className="text-lg font-bold mb-3 text-foreground dark:text-white">
+            {title}
+          </Text>
 
-        <ScrollView style={{ maxHeight: 420 }}>
-          {items.map((it) => {
-            const active = value?.id === it.id;
-            return (
-              <Pressable
-                key={it.id}
-                onPress={() => {
-                  onChange(it);
-                  setOpen(false);
-                }}
-                className={cn(
-                  "px-4 py-3 rounded-xl border mb-2",
-                  active
-                    ? "border-primary bg-primary/10"
-                    : "border-border dark:border-border-dark"
-                )}
-                style={({ pressed }) => [
-                  { transform: [{ scale: pressed ? 0.99 : 1 }] },
-                ]}
-              >
-                <Text className="font-bold">{it.label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+          <View className="gap-2 mb-4">
+            {items.map((it) => {
+              const active = value?.id === it.id;
+              return (
+                <Pressable
+                  key={it.id}
+                  onPress={() => {
+                    onChange(it);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "px-4 py-3 rounded-lg border",
+                    active
+                      ? "border-primary bg-primary/10"
+                      : "border-border dark:border-slate-700 bg-background dark:bg-slate-800",
+                  )}
+                >
+                  <Text
+                    className={cn(
+                      "font-medium",
+                      active
+                        ? "text-primary"
+                        : "text-foreground dark:text-white",
+                    )}
+                  >
+                    {it.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-        <Button variant="ghost" onPress={() => setOpen(false)} className="mt-2">
-          Fermer
-        </Button>
+          <Button variant="ghost" onPress={() => setOpen(false)}>
+            Fermer
+          </Button>
+        </View>
       </Dialog>
     </>
   );

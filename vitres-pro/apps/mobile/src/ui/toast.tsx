@@ -14,20 +14,33 @@ export function ToastHost() {
   return (
     <Toast
       position="top"
-      topOffset={52}
+      topOffset={40}
       config={{
         success: (props) => (
           <BaseToast
             {...props}
             style={{
-              borderLeftColor: "#22c55e",
-              borderRadius: 14,
+              borderLeftColor: "#22c55e", // Ligne à gauche verte
+              borderLeftWidth: 6,
+              borderRadius: 12,
               borderWidth: 1,
-              borderColor: "#e2e8f0",
+              borderColor: "#bcf0da", // Contour léger vert
               backgroundColor: "#ffffff",
+              width: "auto", // Permet de réduire la largeur
+              minWidth: 280, // Largeur minimum
+              maxWidth: "90%", // Pas trop large sur mobile
+              height: 60,
+              paddingRight: 20,
+              // Ombre portée pour le côté flottant
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.1,
+              shadowRadius: 8,
+              elevation: 5,
             }}
-            text1Style={{ fontWeight: "800", color: "#0b1020" }}
-            text2Style={{ color: "#334155" }}
+            contentContainerStyle={{ paddingHorizontal: 15 }}
+            text1Style={{ fontSize: 15, fontWeight: "800", color: "#0b1020" }}
+            text2Style={{ fontSize: 13, color: "#4b5563" }}
           />
         ),
         error: (props) => (
@@ -35,13 +48,24 @@ export function ToastHost() {
             {...props}
             style={{
               borderLeftColor: "#ef4444",
-              borderRadius: 14,
+              borderLeftWidth: 6,
+              borderRadius: 12,
               borderWidth: 1,
-              borderColor: "#e2e8f0",
+              borderColor: "#fee2e2",
               backgroundColor: "#ffffff",
+              width: "auto",
+              minWidth: 280,
+              maxWidth: "90%",
+              height: 60,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.1,
+              shadowRadius: 8,
+              elevation: 5,
             }}
-            text1Style={{ fontWeight: "800", color: "#0b1020" }}
-            text2Style={{ color: "#334155" }}
+            contentContainerStyle={{ paddingHorizontal: 15 }}
+            text1Style={{ fontSize: 15, fontWeight: "800", color: "#0b1020" }}
+            text2Style={{ fontSize: 13, color: "#4b5563" }}
           />
         ),
         info: (props) => (
@@ -49,13 +73,24 @@ export function ToastHost() {
             {...props}
             style={{
               borderLeftColor: "#3b82f6",
-              borderRadius: 14,
+              borderLeftWidth: 6,
+              borderRadius: 12,
               borderWidth: 1,
-              borderColor: "#e2e8f0",
+              borderColor: "#dbeafe",
               backgroundColor: "#ffffff",
+              width: "auto",
+              minWidth: 280,
+              maxWidth: "90%",
+              height: 60,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.1,
+              shadowRadius: 8,
+              elevation: 5,
             }}
-            text1Style={{ fontWeight: "800", color: "#0b1020" }}
-            text2Style={{ color: "#334155" }}
+            contentContainerStyle={{ paddingHorizontal: 15 }}
+            text1Style={{ fontSize: 15, fontWeight: "800", color: "#0b1020" }}
+            text2Style={{ fontSize: 13, color: "#4b5563" }}
           />
         ),
       }}

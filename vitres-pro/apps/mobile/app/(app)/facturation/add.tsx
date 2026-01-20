@@ -33,7 +33,7 @@ export default function AddFactureScreen() {
     // Simulation d'envoi API
     toast.success(
       "Facture créée",
-      `Facture de ${total.toFixed(2)}€ enregistrée.`
+      `Facture de ${total.toFixed(2)}€ enregistrée.`,
     );
     router.back();
   };
@@ -61,12 +61,12 @@ export default function AddFactureScreen() {
         </View>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="p-6 pb-4">
             <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
               Détails de la prestation
             </Text>
           </CardHeader>
-          <CardContent className="gap-5">
+          <CardContent className="p-6 pt-0 gap-5">
             <Input
               label="Nom du Client"
               placeholder="Ex: Restaurant Le Gourmet"

@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from app.models.models import get_db, Employee
-from app.schemas.schemas import EmployeeBase, EmployeeOut
+from app.schemas.schemas import EmployeeBase, EmployeeOut, EmployeeUpdate
 from app.core.deps import get_current_user
 from app.core.supabase import supabase_admin 
 
@@ -98,3 +98,33 @@ def sync_profile(
     db.commit()
     db.refresh(emp)
     return emp
+
+@router.patch("/{employee_id}", response_model=EmployeeOut)
+def update_employee(
+    employee_id: UUID,
+    obj_in: EmployeeUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    # Vérification Admin (Optionnel mais conseillé)
+    admin_id = UUID(current_user["sub"])
+    admin = db.query(Employee).filter(Employee.id == admin_id).first()
+    if not admin or admin.role != "admin":
+        raise HTTPException(status_code=403, detail="Seul un admin peut modifier un employé")
+
+    db_obj = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not db_obj:
+        raise HTTPException(status_code=404, detail="Employé non trouvé")
+
+    update_data = obj_in.model_dump(exclude_unset=True)
+    
+    # Si on change les heures hebdo, on recalcule la capacité journalière (hebdo / 5)
+    if "weekly_hours" in update_data:
+        update_data["daily_capacity"] = update_data["weekly_hours"] / 5
+
+    for field in update_data:
+        setattr(db_obj, field, update_data[field])
+
+    db.commit()
+    db.refresh(db_obj)
+    return db_obj

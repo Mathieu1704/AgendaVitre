@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Users,
   Briefcase,
+  Info,
 } from "lucide-react-native";
 import { Stack, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -146,20 +147,22 @@ export default function ParametresScreen() {
               >
                 <Card className="bg-blue-500/5 border-blue-200 dark:border-blue-900 active:scale-[0.99] transition-transform">
                   <CardContent className="p-4 flex-row items-center justify-between">
-                    <View className="flex-row items-center gap-4">
-                      <View className="bg-blue-500 rounded-full p-3 items-center justify-center">
+                    <View className="flex-row items-center gap-4 flex-1">
+                      {/* Icône Ronde */}
+                      <View className="bg-blue-500 rounded-full w-12 h-12 items-center justify-center">
                         <UserPlus size={24} color="white" />
                       </View>
-                      <View className="justify-center pt-1">
-                        {/* pt-1 pour compenser visuellement la hauteur de ligne */}
+                      {/* Textes Centrés */}
+                      <View className="flex-1 justify-center">
                         <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
                           Ajouter un employé
                         </Text>
-                        <Text className="text-sm text-muted-foreground">
+                        <Text className="text-sm text-muted-foreground leading-tight">
                           Créer un nouveau compte
                         </Text>
                       </View>
                     </View>
+                    {/* Flèche Droite */}
                     <ChevronRight
                       size={20}
                       color={isDark ? "white" : "black"}
@@ -168,25 +171,28 @@ export default function ParametresScreen() {
                 </Card>
               </Pressable>
 
-              {/* Gérer Équipe (NOUVEAU) */}
+              {/* Gérer Équipe */}
               <Pressable
                 onPress={() => router.push("/(app)/parametres/team" as any)}
               >
                 <Card className="bg-purple-500/5 border-purple-200 dark:border-purple-900 active:scale-[0.99] transition-transform">
                   <CardContent className="p-4 flex-row items-center justify-between">
-                    <View className="flex-row items-center gap-4">
-                      <View className="bg-purple-500 rounded-full p-3 items-center justify-center">
+                    <View className="flex-row items-center gap-4 flex-1">
+                      {/* Icône Ronde */}
+                      <View className="bg-purple-500 rounded-full w-12 h-12 items-center justify-center">
                         <Users size={24} color="white" />
                       </View>
-                      <View className="justify-center pt-1">
+                      {/* Textes Centrés */}
+                      <View className="flex-1 justify-center">
                         <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
                           Gérer l'équipe
                         </Text>
-                        <Text className="text-sm text-muted-foreground">
+                        <Text className="text-sm text-muted-foreground leading-tight">
                           Horaires, Reset MDP...
                         </Text>
                       </View>
                     </View>
+                    {/* Flèche Droite */}
                     <ChevronRight
                       size={20}
                       color={isDark ? "white" : "black"}
@@ -199,10 +205,10 @@ export default function ParametresScreen() {
 
           {/* 2. PROFIL */}
           <Card className="mb-6">
-            <CardHeader>
+            <CardHeader className="p-6 pb-4">
               <SectionTitle icon={User} title="Mon Profil" />
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6 pt-0">
               <View className="flex-row items-center mb-6">
                 <Avatar
                   name={profile?.full_name || profile?.email || "?"}
@@ -233,35 +239,85 @@ export default function ParametresScreen() {
           </Card>
 
           {/* 3. SECURITÉ */}
-          <Card className="mb-6">
-            <CardHeader>
+          <Card className="mb-8">
+            <CardHeader className="p-6 pb-4">
               <SectionTitle icon={Lock} title="Sécurité" />
             </CardHeader>
-            <CardContent>
-              <Text className="text-sm text-muted-foreground mb-4 leading-relaxed">
+            <CardContent className="p-6 pt-0">
+              <Text className="text-sm text-muted-foreground mb-6 leading-relaxed">
                 Pour changer votre mot de passe, entrez le nouveau ci-dessous.
               </Text>
-              <View className="gap-4">
-                <Input
-                  placeholder="Nouveau mot de passe"
-                  secureTextEntry
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                />
-                <Input
-                  placeholder="Confirmer le nouveau mot de passe"
-                  secureTextEntry
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                />
+
+              {/* ✅ Ajout de w-full ici pour garantir que les enfants prennent toute la largeur */}
+              <View className="gap-2 w-full">
+                {/* Champ Nouveau MDP */}
+                <View className="w-full">
+                  <Input
+                    placeholder="Nouveau mot de passe"
+                    secureTextEntry
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    className="w-full" // Force width sur l'input interne
+                  />
+                  {newPassword.length > 0 && newPassword.length < 8 && (
+                    <View className="flex-row items-center mt-2 ml-1">
+                      <Info size={14} color="#EF4444" />
+                      <Text className="text-xs text-destructive ml-1.5 font-medium">
+                        8 caractères minimum requis
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Champ Confirmation */}
+                <View className="w-full">
+                  <Input
+                    placeholder="Confirmer le nouveau mot de passe"
+                    secureTextEntry
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    className="w-full"
+                  />
+                  {confirmPassword.length > 0 &&
+                    newPassword !== confirmPassword && (
+                      <View className="flex-row items-center mt-2 ml-1">
+                        <Info size={14} color="#EF4444" />
+                        <Text className="text-xs text-destructive ml-1.5 font-medium">
+                          Les mots de passe ne correspondent pas
+                        </Text>
+                      </View>
+                    )}
+                </View>
+
+                {/* ✅ SPACER EXPLICITE : Plus fiable que mt-8 */}
+                <View className="h-8 w-full" />
+
+                {/* Bouton Mettre à jour */}
                 <Button
                   onPress={handleChangePassword}
                   loading={loadingPass}
-                  className="mt-2"
+                  disabled={
+                    !newPassword ||
+                    newPassword.length < 8 ||
+                    newPassword !== confirmPassword
+                  }
+                  // On retire le mt-8 d'ici car on a mis un Spacer
+                  className="w-full"
                 >
-                  <Save size={18} color="white" />
-                  <Text className="ml-2 font-bold text-white">
-                    Mettre à jour
+                  <Save
+                    size={18}
+                    color={
+                      !newPassword ||
+                      newPassword.length < 8 ||
+                      newPassword !== confirmPassword
+                        ? "#9CA3AF"
+                        : "white"
+                    }
+                  />
+                  <Text
+                    className={`ml-2 font-bold ${!newPassword || newPassword.length < 8 || newPassword !== confirmPassword ? "text-gray-400" : "text-white"}`}
+                  >
+                    Mettre à jour le mot de passe
                   </Text>
                 </Button>
               </View>

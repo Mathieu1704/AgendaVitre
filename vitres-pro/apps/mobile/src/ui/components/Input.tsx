@@ -12,7 +12,7 @@ export function Input({ label, className, ...props }: InputProps) {
   return (
     <View className="gap-2 w-full">
       {label && (
-        <Text className="text-sm font-medium text-foreground dark:text-white ml-1">
+        <Text className="text-sm font-semibold text-foreground dark:text-white ml-1 mb-1.5">
           {label}
         </Text>
       )}
@@ -28,7 +28,7 @@ export function Input({ label, className, ...props }: InputProps) {
           "dark:bg-slate-900 dark:text-white dark:border-slate-700",
           // Focus
           isFocused && "border-primary dark:border-primary",
-          className
+          className,
         )}
         {...props}
       />

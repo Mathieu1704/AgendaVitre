@@ -17,6 +17,28 @@ class EmployeeOut(EmployeeBase):
     class Config:
         from_attributes = True
 
+class EmployeeUpdate(BaseModel):
+    full_name: Optional[str] = None
+    color: Optional[str] = None
+    role: Optional[str] = None
+    weekly_hours: Optional[float] = None
+    daily_capacity: Optional[float] = None
+
+# --- ABSENCE ---
+class AbsenceBase(BaseModel):
+    employee_id: UUID
+    start_date: datetime
+    end_date: datetime
+    reason: Optional[str] = "Maladie"
+
+class AbsenceCreate(AbsenceBase):
+    pass
+
+class AbsenceOut(AbsenceBase):
+    id: UUID
+    class Config:
+        from_attributes = True
+
 # --- ABSENCE ---
 class AbsenceCreate(BaseModel):
     employee_id: UUID

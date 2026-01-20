@@ -1,27 +1,16 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, Switch, Pressable } from "react-native";
+import { View, Text, ScrollView, Switch } from "react-native";
 import { useRouter } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../src/lib/api";
-import { ChevronLeft, Check, UserPlus } from "lucide-react-native";
+import { ChevronLeft, UserPlus } from "lucide-react-native";
 
-import { Card, CardContent } from "../../../src/ui/components/Card";
+import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
 import { Input } from "../../../src/ui/components/Input";
 import { Button } from "../../../src/ui/components/Button";
 import { toast } from "../../../src/ui/toast";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
-
-// Palette de couleurs prédéfinie
-const COLORS = [
-  "#3B82F6", // Bleu (Défaut)
-  "#10B981", // Vert
-  "#F59E0B", // Orange
-  "#EF4444", // Rouge
-  "#8B5CF6", // Violet
-  "#EC4899", // Rose
-  "#6366F1", // Indigo
-  "#14B8A6", // Teal
-];
+import { ColorPicker } from "../../../src/ui/components/ColorPicker";
 
 export default function CreateEmployeeScreen() {
   const router = useRouter();
@@ -31,7 +20,7 @@ export default function CreateEmployeeScreen() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("Bienvenue2026!");
-  const [selectedColor, setSelectedColor] = useState(COLORS[0]);
+  const [selectedColor, setSelectedColor] = useState("#3B82F6");
   const [isAdmin, setIsAdmin] = useState(false);
   const [weeklyHours, setWeeklyHours] = useState("38");
 
@@ -42,7 +31,8 @@ export default function CreateEmployeeScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employees"] });
       toast.success("Succès", "Employé créé !");
-      router.back();
+      // ✅ FIX: Retour vers /parametres au lieu de .back()
+      router.push("/(app)/parametres");
     },
     onError: (err: any) => {
       toast.error(
@@ -68,8 +58,14 @@ export default function CreateEmployeeScreen() {
 
   return (
     <View className="flex-1 bg-background dark:bg-slate-950">
+      {/* Header */}
       <View className="px-4 pt-4 pb-2 flex-row items-center border-b border-border dark:border-slate-800 bg-background dark:bg-slate-950">
-        <Button variant="ghost" size="icon" onPress={() => router.back()}>
+        {/* ✅ FIX: Navigation vers /parametres au lieu de .back() */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onPress={() => router.push("/(app)/parametres")}
+        >
           <ChevronLeft size={24} color={isDark ? "white" : "black"} />
         </Button>
         <Text className="text-xl font-bold text-foreground dark:text-white ml-2">
@@ -77,14 +73,15 @@ export default function CreateEmployeeScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20 }}>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+        {/* CARD 1: Identifiants */}
         <Card className="mb-6">
-          <View className="p-4 border-b border-border dark:border-slate-800 bg-muted/20">
+          <CardHeader className="p-6 pb-4 border-b border-border dark:border-slate-800 bg-muted/20">
             <Text className="text-sm font-bold uppercase text-muted-foreground tracking-wider">
               Identifiants
             </Text>
-          </View>
-          <CardContent className="gap-5 pt-5">
+          </CardHeader>
+          <CardContent className="p-6 pt-5 gap-5">
             <Input
               label="Nom Complet"
               placeholder="Ex: Thomas Dubuisson"
@@ -107,33 +104,20 @@ export default function CreateEmployeeScreen() {
           </CardContent>
         </Card>
 
+        {/* CARD 2: Configuration */}
         <Card className="mb-6">
-          <View className="p-4 border-b border-border dark:border-slate-800 bg-muted/20">
+          <CardHeader className="p-6 pb-4 border-b border-border dark:border-slate-800 bg-muted/20">
             <Text className="text-sm font-bold uppercase text-muted-foreground tracking-wider">
               Configuration
             </Text>
-          </View>
-          <CardContent className="gap-6 pt-5">
-            {/* Color Picker */}
-            <View>
-              <Text className="text-sm font-medium text-foreground dark:text-white mb-3">
-                Couleur Planning
-              </Text>
-              <View className="flex-row flex-wrap gap-3">
-                {COLORS.map((c) => (
-                  <Pressable
-                    key={c}
-                    onPress={() => setSelectedColor(c)}
-                    style={{ backgroundColor: c }}
-                    className={`w-10 h-10 rounded-full items-center justify-center ${selectedColor === c ? "border-2 border-white ring-2 ring-primary" : ""}`}
-                  >
-                    {selectedColor === c && (
-                      <Check size={16} color="white" strokeWidth={3} />
-                    )}
-                  </Pressable>
-                ))}
-              </View>
-            </View>
+          </CardHeader>
+          <CardContent className="p-6 pt-5 gap-6">
+            {/* ✅ ColorPicker (40 couleurs) */}
+            <ColorPicker
+              selectedColor={selectedColor}
+              onColorChange={setSelectedColor}
+              label="Couleur Planning"
+            />
 
             <Input
               label="Heures par semaine"
@@ -151,11 +135,16 @@ export default function CreateEmployeeScreen() {
                   Peut modifier le planning de tous
                 </Text>
               </View>
-              <Switch value={isAdmin} onValueChange={setIsAdmin} />
+              <Switch
+                value={isAdmin}
+                onValueChange={setIsAdmin}
+                trackColor={{ false: "#767577", true: "#3B82F6" }}
+              />
             </View>
           </CardContent>
         </Card>
 
+        {/* Bouton Submit */}
         <Button
           onPress={handleSubmit}
           loading={mutation.isPending}

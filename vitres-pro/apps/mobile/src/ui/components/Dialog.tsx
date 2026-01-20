@@ -22,17 +22,18 @@ export function Dialog({
     >
       <Pressable
         onPress={onClose}
-        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}
+        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
         className={cn(
-          "p-3",
-          position === "bottom" ? "justify-end" : "justify-center"
+          "p-4",
+          position === "bottom" ? "justify-end" : "justify-center",
         )}
       >
         <Pressable
           onPress={(e) => e.stopPropagation()}
-          style={{ width: "100%" }}
+          className="w-full max-w-md self-center"
         >
-          <View className="rounded-2xl border border-border dark:border-border-dark bg-card dark:bg-card-dark p-4">
+          {/* On enlève le View p-6 interne pour éviter les coupures */}
+          <View className="rounded-3xl border border-border dark:border-slate-800 bg-card dark:bg-slate-900 shadow-2xl overflow-hidden">
             {children}
           </View>
         </Pressable>
