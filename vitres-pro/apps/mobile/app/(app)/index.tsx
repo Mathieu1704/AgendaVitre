@@ -1,16 +1,24 @@
-import React, { useState } from "react";
-import { View, Text, ScrollView, useWindowDimensions } from "react-native";
+import React, { useState, useEffect } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  View,
+  Text,
+  ScrollView,
+  useWindowDimensions,
+  Platform,
+  ActivityIndicator,
+} from "react-native";
 import {
   TrendingUp,
   Calendar as CalendarIcon,
   Users,
   Euro,
   ArrowUpRight,
+  Clock,
 } from "lucide-react-native";
 import { LineChart } from "react-native-gifted-charts";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { format, isToday, parseISO } from "date-fns";
-import { fr } from "date-fns/locale";
 
 import {
   Card,
@@ -22,6 +30,8 @@ import { StatusBadge } from "../../src/ui/components/StatusBadge";
 import { Avatar } from "../../src/ui/components/Avatar";
 import { useInterventions } from "../../src/hooks/useInterventions";
 import { useClients } from "../../src/hooks/useClients";
+import { supabase } from "../../src/lib/supabase";
+import { api } from "../../src/lib/api";
 
 interface ChartItem {
   value: number;
@@ -38,11 +48,42 @@ interface StatItem {
 }
 
 export default function Dashboard() {
-  const { interventions } = useInterventions();
+  const insets = useSafeAreaInsets();
+  const { interventions, isLoading: interventionsLoading } = useInterventions();
   const { clients } = useClients();
   const { width } = useWindowDimensions();
 
-  // ✅ Largeur du graphique
+  // ✅ Détection Mobile/Desktop
+  const isMobile = width < 768;
+  const isDesktop = width >= 1024;
+
+  // ✅ État pour le rôle utilisateur
+  const [userRole, setUserRole] = useState<"admin" | "employee" | null>(null);
+  const [loadingRole, setLoadingRole] = useState(true);
+
+  // Charger le rôle de l'utilisateur
+  useEffect(() => {
+    const loadUserRole = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          const res = await api.get("/api/employees");
+          const myProfile = res.data.find((e: any) => e.email === user.email);
+          setUserRole(myProfile?.role || "employee");
+        }
+      } catch (e) {
+        setUserRole("employee");
+      } finally {
+        setLoadingRole(false);
+      }
+    };
+    loadUserRole();
+  }, []);
+
+  const isAdmin = userRole === "admin";
+
   const [chartWidth, setChartWidth] = useState(300);
 
   const todayInterventions =
@@ -51,9 +92,13 @@ export default function Dashboard() {
     ) || [];
 
   const upcomingInterventions =
-    interventions?.filter(
-      (i: any) => i.start_time && parseISO(i.start_time) >= new Date(),
-    ) || [];
+    interventions?.filter((i: any) => {
+      if (!i.start_time) return false;
+      const startDate = parseISO(i.start_time);
+
+      // Exclure aujourd'hui (déjà dans "Aujourd'hui")
+      return startDate >= new Date() && !isToday(startDate);
+    }) || [];
 
   const totalRevenue =
     interventions
@@ -99,10 +144,331 @@ export default function Dashboard() {
     },
   ];
 
+  const mobileStats: StatItem[] = [
+    ...stats,
+    {
+      label: "Aujourd'hui",
+      value: todayInterventions.length.toString(),
+      icon: Clock,
+      color: "#8B5CF6",
+      bg: "bg-purple-500/10",
+      trend: "",
+    },
+  ];
+
+  // Loading state
+  if (loadingRole) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background dark:bg-slate-950">
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
+
+  // ========================================
+  // 📱 RENDU MOBILE (UNIQUEMENT)
+  // ========================================
+  if (isMobile) {
+    return (
+      <ScrollView
+        className="flex-1 bg-background dark:bg-slate-950"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingTop: insets.top + 16,
+          paddingBottom: 120,
+          paddingHorizontal: 16,
+        }}
+      >
+        {/* Header */}
+        <View className="mb-6">
+          <Text className="text-2xl font-bold text-foreground dark:text-white">
+            Tableau de bord
+          </Text>
+          <Text className="text-muted-foreground dark:text-slate-400 mt-1 text-sm">
+            {isAdmin
+              ? "Bienvenue sur votre espace LVM Agenda"
+              : "Vos interventions du jour"}
+          </Text>
+        </View>
+
+        {/* ========== ADMIN : KPIs 2x2 ========== */}
+        {isAdmin && (
+          <View className="flex-row flex-wrap gap-3 mb-6">
+            {mobileStats.map((stat, index) => {
+              const cardWidth = (width - 32 - 12) / 2;
+
+              return (
+                <Animated.View
+                  key={index}
+                  entering={FadeInDown.delay(index * 80).springify()}
+                  style={{ width: cardWidth }}
+                >
+                  <Card className="rounded-3xl">
+                    <CardContent
+                      className="p-3 items-center justify-center"
+                      style={{ minHeight: 100 }}
+                    >
+                      {/* 1. Icône + Label (même ligne) */}
+                      <View className="flex-row items-center mb-2">
+                        <View
+                          className={`p-2 ${stat.bg} mr-2`}
+                          style={{ borderRadius: 12 }}
+                        >
+                          <stat.icon size={16} color={stat.color} />
+                        </View>
+                        <Text
+                          // className="text-base text-foreground dark:text-white font-semibold tracking-wide flex-1 leading-tight"
+                          className="text-base font-semibold text-foreground dark:text-white flex-1"
+                          numberOfLines={2}
+                        >
+                          {stat.label}
+                        </Text>
+                      </View>
+
+                      {/* 2. Valeur + Trend (même ligne) */}
+                      <View className="flex-row items-end">
+                        <Text className="text-2xl font-extrabold text-foreground dark:text-white leading-none">
+                          {stat.value}
+                        </Text>
+                        {stat.trend ? (
+                          <View className="flex-row items-center ml-2 mb-0.5">
+                            <ArrowUpRight
+                              size={11}
+                              color="#22C55E"
+                              strokeWidth={2.5}
+                            />
+                            <Text className="text-[10px] text-green-600 dark:text-green-400 font-bold ml-0.5">
+                              {stat.trend}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </CardContent>
+                  </Card>
+                </Animated.View>
+              );
+            })}
+          </View>
+        )}
+        {/* ========== ADMIN : Graphique ========== */}
+        {isAdmin && (
+          <Animated.View entering={FadeInDown.delay(300)} className="mb-6">
+            <Card className="rounded-3xl">
+              <CardHeader className="p-4 pb-2">
+                <View className="flex-row items-center gap-2">
+                  <TrendingUp size={18} color="#3B82F6" />
+                  <Text className="text-base font-semibold text-foreground dark:text-white">
+                    Évolution des revenus
+                  </Text>
+                </View>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <View
+                  className="w-full"
+                  style={{ paddingTop: 8 }}
+                  onLayout={(e) => {
+                    const containerWidth = e.nativeEvent.layout.width;
+                    setChartWidth(Math.max(containerWidth - 20, 250));
+                  }}
+                >
+                  <LineChart
+                    data={chartData}
+                    color="#3B82F6"
+                    thickness={2}
+                    startFillColor="rgba(59, 130, 246, 0.2)"
+                    endFillColor="rgba(59, 130, 246, 0.02)"
+                    startOpacity={0.8}
+                    endOpacity={0.1}
+                    areaChart
+                    curved
+                    hideDataPoints={false}
+                    dataPointsColor="#3B82F6"
+                    dataPointsRadius={4}
+                    width={chartWidth}
+                    height={180}
+                    adjustToWidth={true}
+                    spacing={(chartWidth - 10) / chartData.length}
+                    initialSpacing={15}
+                    endSpacing={15}
+                    showVerticalLines={false}
+                    rulesType="solid"
+                    rulesColor="#E4E4E7"
+                    rulesThickness={1}
+                    yAxisTextStyle={{
+                      color: "#71717A",
+                      fontSize: 10,
+                    }}
+                    xAxisLabelTextStyle={{
+                      color: "#71717A",
+                      fontSize: 10,
+                      fontWeight: "500",
+                    }}
+                    hideYAxisText={false}
+                    yAxisThickness={0}
+                    xAxisThickness={0}
+                    noOfSections={4}
+                    maxValue={4000}
+                  />
+                </View>
+              </CardContent>
+            </Card>
+          </Animated.View>
+        )}
+
+        {/* ========== Aujourd'hui (Tous) ========== */}
+        <Animated.View
+          entering={FadeInDown.delay(isAdmin ? 400 : 100)}
+          className="mb-6"
+        >
+          <Card className="rounded-3xl">
+            <CardHeader className="p-4 pb-3">
+              <View className="flex-row items-center gap-2">
+                <Clock size={18} color="#8B5CF6" />
+                <Text className="text-base font-semibold text-foreground dark:text-white">
+                  Aujourd'hui
+                </Text>
+                {todayInterventions.length > 0 && (
+                  <View className="bg-primary/10 px-2 py-0.5 rounded-full">
+                    <Text className="text-xs font-bold text-primary">
+                      {todayInterventions.length}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              {interventionsLoading ? (
+                <View className="py-8 items-center">
+                  <ActivityIndicator size="small" color="#3B82F6" />
+                </View>
+              ) : todayInterventions.length === 0 ? (
+                <View className="items-center justify-center py-8 bg-muted/30 dark:bg-slate-800/30 rounded-2xl">
+                  <CalendarIcon size={32} color="#94A3B8" />
+                  <Text className="text-muted-foreground dark:text-slate-400 text-sm mt-3">
+                    Aucune intervention prévue
+                  </Text>
+                </View>
+              ) : (
+                <View className="gap-3">
+                  {todayInterventions.map((item: any, i: number) => (
+                    <View
+                      key={i}
+                      className="flex-row items-center gap-3 p-3 rounded-2xl bg-muted/40 dark:bg-slate-800/50"
+                    >
+                      <Avatar
+                        name={item.client?.name || item.title}
+                        size="sm"
+                      />
+                      <View className="flex-1">
+                        <Text
+                          className="text-sm font-semibold text-foreground dark:text-white"
+                          numberOfLines={1}
+                        >
+                          {item.title}
+                        </Text>
+                        <Text className="text-xs text-muted-foreground dark:text-slate-400">
+                          {item.start_time
+                            ? format(parseISO(item.start_time), "HH:mm")
+                            : "--:--"}{" "}
+                          • {item.client?.name || "Client"}
+                        </Text>
+                      </View>
+                      <StatusBadge status={item.status} />
+                    </View>
+                  ))}
+                </View>
+              )}
+            </CardContent>
+          </Card>
+        </Animated.View>
+
+        {/* ========== À venir (Employés) ========== */}
+        {!isAdmin && upcomingInterventions.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(200)} className="mb-6">
+            <Card className="rounded-3xl">
+              <CardHeader className="p-4 pb-3">
+                <CardTitle className="flex-row items-center gap-2">
+                  <CalendarIcon size={18} color="#3B82F6" />
+                  <Text className="text-base font-semibold text-foreground dark:text-white">
+                    À venir
+                  </Text>
+                  <View className="bg-blue-500/10 px-2 py-0.5 rounded-full ml-2">
+                    <Text className="text-xs font-bold text-blue-600">
+                      {upcomingInterventions.length}
+                    </Text>
+                  </View>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <View className="gap-3">
+                  {upcomingInterventions
+                    .slice(0, 5)
+                    .map((item: any, i: number) => (
+                      <View
+                        key={i}
+                        className="flex-row items-center gap-3 p-3 rounded-2xl bg-muted/40 dark:bg-slate-800/50"
+                      >
+                        <View className="bg-blue-500/10 p-2 rounded-xl">
+                          <CalendarIcon size={16} color="#3B82F6" />
+                        </View>
+                        <View className="flex-1">
+                          <Text
+                            className="text-sm font-semibold text-foreground dark:text-white"
+                            numberOfLines={1}
+                          >
+                            {item.title}
+                          </Text>
+                          <Text className="text-xs text-muted-foreground dark:text-slate-400">
+                            {item.start_time
+                              ? format(
+                                  parseISO(item.start_time),
+                                  "dd/MM • HH:mm",
+                                )
+                              : "--/-- • --:--"}{" "}
+                            • {item.client?.name || "Client"}
+                          </Text>
+                        </View>
+                        <StatusBadge status={item.status} />
+                      </View>
+                    ))}
+                </View>
+              </CardContent>
+            </Card>
+          </Animated.View>
+        )}
+
+        {/* Message vide (Employés) */}
+        {!isAdmin &&
+          upcomingInterventions.length === 0 &&
+          todayInterventions.length === 0 && (
+            <Animated.View entering={FadeInDown.delay(200)}>
+              <Card className="rounded-3xl">
+                <CardContent className="p-8 items-center">
+                  <View className="bg-green-500/10 p-4 rounded-full mb-4">
+                    <CalendarIcon size={32} color="#22C55E" />
+                  </View>
+                  <Text className="text-lg font-bold text-foreground dark:text-white text-center">
+                    Tout est à jour !
+                  </Text>
+                  <Text className="text-sm text-muted-foreground dark:text-slate-400 text-center mt-2">
+                    Vous n'avez pas d'interventions planifiées pour le moment.
+                  </Text>
+                </CardContent>
+              </Card>
+            </Animated.View>
+          )}
+      </ScrollView>
+    );
+  }
+
+  // ========================================
+  // 💻 RENDU WEB (TON CODE ORIGINAL)
+  // ========================================
   return (
     <ScrollView
       className="flex-1 bg-background dark:bg-slate-950 p-4 lg:p-8"
       showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingTop: insets.top + 16 }}
     >
       <View className="mb-8">
         <Text className="text-3xl font-bold text-foreground dark:text-white">
@@ -165,7 +531,6 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-0">
-              {/* Le graphique reste identique */}
               <View
                 className="w-full"
                 style={{ paddingTop: 16, paddingBottom: 8 }}

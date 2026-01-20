@@ -131,6 +131,41 @@ export default function ParametresScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
+          {/* 2. PROFIL */}
+          <Card className="mb-6">
+            <CardHeader className="p-6 pb-4">
+              <SectionTitle icon={User} title="Mon Profil" />
+            </CardHeader>
+            <CardContent className="p-6 pt-0">
+              <View className="flex-row items-center mb-6">
+                <Avatar
+                  name={profile?.full_name || profile?.email || "?"}
+                  size="lg"
+                />
+                <View className="ml-4 flex-1">
+                  <Text className="text-xl font-bold text-foreground dark:text-white">
+                    {profile?.full_name || "Utilisateur"}
+                  </Text>
+                  <View className="flex-row items-center mt-1">
+                    <Briefcase size={14} color="#94A3B8" />
+                    <Text className="text-muted-foreground ml-1 capitalize">
+                      {profile?.role === "admin" ? "Administrateur" : "Employé"}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View className="bg-muted/50 p-3 rounded-lg">
+                <Text className="text-xs text-muted-foreground uppercase font-bold mb-1">
+                  Email de connexion
+                </Text>
+                <Text className="text-base font-medium text-foreground dark:text-white">
+                  {profile?.email}
+                </Text>
+              </View>
+            </CardContent>
+          </Card>
+
           {/* === SECTION ADMIN (Visible seulement si Admin) === */}
           {isAdmin && (
             <View className="mb-8">
@@ -203,41 +238,6 @@ export default function ParametresScreen() {
             </View>
           )}
 
-          {/* 2. PROFIL */}
-          <Card className="mb-6">
-            <CardHeader className="p-6 pb-4">
-              <SectionTitle icon={User} title="Mon Profil" />
-            </CardHeader>
-            <CardContent className="p-6 pt-0">
-              <View className="flex-row items-center mb-6">
-                <Avatar
-                  name={profile?.full_name || profile?.email || "?"}
-                  size="lg"
-                />
-                <View className="ml-4 flex-1">
-                  <Text className="text-xl font-bold text-foreground dark:text-white">
-                    {profile?.full_name || "Utilisateur"}
-                  </Text>
-                  <View className="flex-row items-center mt-1">
-                    <Briefcase size={14} color="#94A3B8" />
-                    <Text className="text-muted-foreground ml-1 capitalize">
-                      {profile?.role === "admin" ? "Administrateur" : "Employé"}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              <View className="bg-muted/50 p-3 rounded-lg">
-                <Text className="text-xs text-muted-foreground uppercase font-bold mb-1">
-                  Email de connexion
-                </Text>
-                <Text className="text-base font-medium text-foreground dark:text-white">
-                  {profile?.email}
-                </Text>
-              </View>
-            </CardContent>
-          </Card>
-
           {/* 3. SECURITÉ */}
           <Card className="mb-8">
             <CardHeader className="p-6 pb-4">
@@ -248,7 +248,6 @@ export default function ParametresScreen() {
                 Pour changer votre mot de passe, entrez le nouveau ci-dessous.
               </Text>
 
-              {/* ✅ Ajout de w-full ici pour garantir que les enfants prennent toute la largeur */}
               <View className="gap-2 w-full">
                 {/* Champ Nouveau MDP */}
                 <View className="w-full">
@@ -289,7 +288,6 @@ export default function ParametresScreen() {
                     )}
                 </View>
 
-                {/* ✅ SPACER EXPLICITE : Plus fiable que mt-8 */}
                 <View className="h-8 w-full" />
 
                 {/* Bouton Mettre à jour */}
