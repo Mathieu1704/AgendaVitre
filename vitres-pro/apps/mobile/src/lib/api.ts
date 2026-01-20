@@ -3,8 +3,7 @@ import { supabase } from "./supabase";
 
 // Pour le WEB, localhost marche.
 // Pour ANDROID Emulator, il faudra peut-être utiliser 'http://10.0.2.2:8000' plus tard.
-// const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000";
-const API_URL = "http://localhost:8000";
+const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000";
 
 export const api = axios.create({
   baseURL: API_URL,

@@ -283,5 +283,3 @@ export default function ParametresScreen() {
     </View>
   );
 }
-
-// test pour pouvoir push
