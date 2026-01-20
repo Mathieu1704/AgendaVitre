@@ -25,6 +25,7 @@ import {
 } from "lucide-react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useLocalSearchParams } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Imports internes
 import { api } from "../../../src/lib/api";
@@ -114,8 +115,6 @@ const DailyStatsBadge = ({ dateStr }: { dateStr: string }) => {
   return (
     <View className={`px-3 py-1.5 rounded-full ${bgClass}`}>
       <Text className={`text-sm font-bold ${textClass}`}>
-        {" "}
-        {/* text-sm au lieu de text-xs */}
         {stats.planned_hours}h / {stats.capacity_hours}h
       </Text>
     </View>
@@ -127,6 +126,9 @@ export default function CalendarScreen() {
   const params = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const { isDark } = useTheme();
+
+  const insets = useSafeAreaInsets();
+  const isWeb = Platform.OS === "web";
 
   // Breakpoint pour Desktop
   const isDesktop = width >= 1024;
@@ -140,13 +142,10 @@ export default function CalendarScreen() {
     if (params.date) {
       const dateStr =
         typeof params.date === "string" ? params.date : params.date[0];
-      // On extrait juste la partie YYYY-MM-DD
       const isoDate = dateStr.split("T")[0];
 
       setSelectedDate(isoDate);
       setCursorDate(new Date(isoDate));
-      // Optionnel : Forcer la vue jour pour voir le détail direct
-      // setViewMode('day');
     }
   }, [params.date]);
 
@@ -173,7 +172,6 @@ export default function CalendarScreen() {
       const k = dayKeyFromDateTime(it.start_time);
       (map[k] ||= []).push(it);
     }
-    // Tri par heure
     for (const k of Object.keys(map)) {
       map[k].sort((a, b) => a.start_time.localeCompare(b.start_time));
     }
@@ -233,53 +231,58 @@ export default function CalendarScreen() {
     return d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
   }, [cursorDate, viewMode]);
 
-  // --- COMPOSANT CARTE INTERVENTION ---
+  // --- COMPOSANT CARTE INTERVENTION (CORRIGÉ AVEC STYLE EXPLICITE) ---
   const InterventionCard = ({
     item,
     compact = false,
   }: {
     item: any;
     compact?: boolean;
-  }) => (
-    <Pressable
-      onPress={() => router.push(`/(app)/calendar/${item.id}` as any)}
-      className={`bg-card dark:bg-slate-900 border border-border dark:border-slate-800 rounded-xl p-3 shadow-sm active:scale-[0.98] mb-2 ${
-        compact ? "p-2" : ""
-      }`}
-    >
-      <View className="flex-row justify-between items-start mb-1">
-        <Text className="text-xs font-bold text-primary dark:text-blue-400">
-          {new Date(item.start_time).toLocaleTimeString("fr-FR", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </Text>
-        {!compact && <StatusBadge status={item.status} />}
-      </View>
+  }) => {
+    const isMobile = width < 768;
+    // On force le radius via le style direct pour éviter les bugs CSS
+    const cardRadius = compact ? 16 : 24;
 
-      <Text
-        className={`font-bold text-foreground dark:text-white ${
-          compact ? "text-xs" : "text-sm mb-1"
-        }`}
-        numberOfLines={2}
+    return (
+      <Pressable
+        onPress={() => router.push(`/(app)/calendar/${item.id}` as any)}
+        className={`bg-card dark:bg-slate-900 border border-border dark:border-slate-800 shadow-sm active:scale-[0.98] mb-2 ${compact ? "p-2" : "p-3"}`}
+        style={{ borderRadius: cardRadius }}
       >
-        {item.title}
-      </Text>
-
-      {!compact && (
-        <View className="flex-row items-center mt-1">
-          <Text
-            className="text-xs text-muted-foreground dark:text-slate-400"
-            numberOfLines={1}
-          >
-            {item.client?.name || "Client"}
+        <View className="flex-row justify-between items-start mb-1">
+          <Text className="text-xs font-bold text-primary dark:text-blue-400">
+            {new Date(item.start_time).toLocaleTimeString("fr-FR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
           </Text>
+          {!compact && <StatusBadge status={item.status} />}
         </View>
-      )}
-    </Pressable>
-  );
 
-  // --- VUE : MOIS (Classique) ---//
+        <Text
+          className={`font-bold text-foreground dark:text-white ${
+            compact ? "text-xs" : "text-sm mb-1"
+          }`}
+          numberOfLines={2}
+        >
+          {item.title}
+        </Text>
+
+        {!compact && (
+          <View className="flex-row items-center mt-1">
+            <Text
+              className="text-xs text-muted-foreground dark:text-slate-400"
+              numberOfLines={1}
+            >
+              {item.client?.name || "Client"}
+            </Text>
+          </View>
+        )}
+      </Pressable>
+    );
+  };
+
+  // --- VUE : MOIS ---
   const RenderMonth = () => {
     const calendarTheme = useMemo(() => {
       const textColor = isDark ? "#F8FAFC" : "#09090B";
@@ -301,6 +304,12 @@ export default function CalendarScreen() {
         textMonthFontWeight: "bold" as const,
         textDayHeaderFontWeight: "600" as const,
         textDayFontSize: 16,
+        "stylesheet.calendar.header": {
+          header: {
+            marginBottom: 10,
+            marginTop: 0,
+          },
+        },
       };
     }, [isDark]);
 
@@ -328,7 +337,10 @@ export default function CalendarScreen() {
 
     return (
       <View>
-        <Card className="overflow-hidden border border-border dark:border-slate-800 bg-card dark:bg-slate-900 shadow-sm mx-4">
+        <View
+          className="mx-4 shadow-sm bg-card dark:bg-slate-900 border border-border dark:border-slate-800"
+          style={{ borderRadius: 25, overflow: "hidden" }}
+        >
           <RNCalendar
             key={`${isDark ? "d" : "l"}-${toISODate(cursorDate)}`}
             current={toISODate(cursorDate)}
@@ -342,12 +354,14 @@ export default function CalendarScreen() {
             enableSwipeMonths={true}
             disableMonthChange={true}
             theme={calendarTheme}
+            renderHeader={() => null}
           />
-        </Card>
+        </View>
 
         <View className="pt-6 pb-24">
-          <View className="flex-row items-center justify-start px-4 mb-4 gap-3">
-            <Text className="text-xl font-bold text-foreground dark:text-white capitalize">
+          {/* ✅ DATE + HEURES : Alignés sur la même ligne */}
+          <View className="flex-row items-center px-6 mb-4">
+            <Text className="text-xl font-bold text-foreground dark:text-white capitalize mr-3">
               {new Date(selectedDate).toLocaleDateString("fr-FR", {
                 weekday: "long",
                 day: "numeric",
@@ -355,10 +369,10 @@ export default function CalendarScreen() {
               })}
             </Text>
 
+            {/* Badge aligné juste à droite */}
             <DailyStatsBadge dateStr={selectedDate} />
           </View>
 
-          {/* 3. Liste des interventions */}
           <View className="px-4">
             {dayList.length === 0 ? (
               <Text className="text-muted-foreground dark:text-slate-500 text-center py-8">
@@ -375,7 +389,7 @@ export default function CalendarScreen() {
     );
   };
 
-  // --- VUE : SEMAINE (Colonnes responsive) ---
+  // --- VUE : SEMAINE ---
   const RenderWeek = () => {
     const start = startOfWeek(cursorDate, 1);
     const end = addDays(start, 6);
@@ -392,10 +406,8 @@ export default function CalendarScreen() {
           const iso = toISODate(date);
           const list = itemsByDate[iso] || [];
           const isToday = iso === toISODate(new Date());
-
           const stat = rangeStats ? rangeStats[iso] : null;
 
-          // Couleur du badge
           let badgeBg = "bg-muted";
           let badgeText = "text-muted-foreground";
           if (stat) {
@@ -419,7 +431,7 @@ export default function CalendarScreen() {
               className={`${isDesktop ? "flex-1 mx-1" : "w-[140px] mr-3"}`}
             >
               <View
-                className={`p-3 rounded-t-xl border-t border-x border-border dark:border-slate-800 ${
+                className={`p-3 rounded-t-3xl border-t border-x border-border dark:border-slate-800 ${
                   isToday ? "bg-primary/10" : "bg-card dark:bg-slate-900"
                 }`}
               >
@@ -444,12 +456,12 @@ export default function CalendarScreen() {
                   </View>
                 )}
               </View>
-              <View className="bg-muted/30 dark:bg-slate-900/50 min-h-[400px] border-b border-x border-border dark:border-slate-800 rounded-b-xl p-2">
+              <View className="bg-muted/30 dark:bg-slate-900/50 min-h-[400px] border-b border-x border-border dark:border-slate-800 rounded-b-3xl p-3">
                 {list.map((item) => (
                   <InterventionCard key={item.id} item={item} compact />
                 ))}
                 {list.length === 0 && (
-                  <Text className="text-xs text-muted-foreground text-center mt-4">
+                  <Text className="text-xs text-muted-foreground text-center mt-4 opacity-50">
                     -
                   </Text>
                 )}
@@ -501,27 +513,19 @@ export default function CalendarScreen() {
     );
   };
 
-  // --- VUE : ANNÉE (Grille de 12 calendriers) ---
+  // --- VUE : ANNÉE ---
   const RenderYear = () => {
     const year = cursorDate.getFullYear();
     const months = Array.from({ length: 12 }, (_, i) => new Date(year, i, 1));
-
-    // Calcul responsive de la grille
-    const padding = 32; // 16px gauche + 16px droite
+    const padding = 32;
     const gap = 12;
-
-    // Breakpoints
     let cols = 1;
-    if (width >= 1280)
-      cols = 4; // Grand écran
-    else if (width >= 1024)
-      cols = 3; // Desktop normal
-    else if (width >= 768) cols = 2; // Tablette
-    // Mobile : 1 col pour bien voir les dates (comme screenshot iOS)
+    if (width >= 1280) cols = 4;
+    else if (width >= 1024) cols = 3;
+    else if (width >= 768) cols = 2;
 
     const itemWidth = (width - padding - gap * (cols - 1)) / cols;
 
-    // Markers pour l'année (juste les points)
     const yearMarkers = useMemo(() => {
       const marks: any = {};
       interventions?.forEach((item: any) => {
@@ -533,7 +537,6 @@ export default function CalendarScreen() {
       return marks;
     }, [interventions]);
 
-    // Thème minimaliste pour les mini-calendriers
     const miniTheme = useMemo(
       () => ({
         calendarBackground: "transparent",
@@ -543,7 +546,7 @@ export default function CalendarScreen() {
         textDisabledColor: isDark ? "#1E293B" : "#F4F4F5",
         dotColor: "#3B82F6",
         selectedDotColor: "#3B82F6",
-        monthTextColor: "transparent", // On cache le titre natif pour mettre le nôtre
+        monthTextColor: "transparent",
         textDayFontSize: 10,
         textDayHeaderFontSize: 10,
         textDayFontWeight: "400" as const,
@@ -589,7 +592,8 @@ export default function CalendarScreen() {
 
               <View
                 pointerEvents="none"
-                className="bg-card dark:bg-slate-900 border border-border dark:border-slate-800 rounded-xl p-2 shadow-sm"
+                className="bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-2 shadow-sm"
+                style={{ borderRadius: 16, overflow: "hidden" }}
               >
                 <RNCalendar
                   key={`year-${monthISO}-${isDark ? "d" : "l"}`}
@@ -600,7 +604,7 @@ export default function CalendarScreen() {
                   firstDay={1}
                   markedDates={yearMarkers}
                   theme={miniTheme}
-                  renderHeader={() => null} // Hack pour cacher le header
+                  renderHeader={() => null}
                 />
               </View>
             </Pressable>
@@ -613,11 +617,17 @@ export default function CalendarScreen() {
   return (
     <View className="flex-1 bg-background dark:bg-slate-950">
       {/* === HEADER PRINCIPAL === */}
-      <View className="px-6 pt-6 pb-2 bg-background dark:bg-slate-950 z-10">
+      <View
+        className="px-6 pb-2 bg-background dark:bg-slate-950 z-10"
+        // ✅ Modification clé : Ajout dynamique du padding en haut
+        // Si Web -> 24px (pt-6)
+        // Si Mobile -> insets.top + 10px pour descendre sous l'encoche
+        style={{ paddingTop: isWeb ? 24 : insets.top + 10 }}
+      >
         {/* Titre + Btn Aujourd'hui */}
         <View className="flex-row justify-between items-center mb-4">
           <Text className="text-3xl font-bold text-foreground dark:text-slate-50">
-            Planning {/* test */}
+            Planning
           </Text>
           <Pressable
             onPress={handleToday}
@@ -631,7 +641,8 @@ export default function CalendarScreen() {
         </View>
 
         {/* Slider (View Selector) */}
-        <View className="flex-row bg-muted dark:bg-slate-800 p-1 rounded-xl mb-4">
+        {/* ✅ Parent : rounded-full pour un effet "pilule" parfait */}
+        <View className="flex-row bg-muted dark:bg-slate-800 p-1 rounded-full mb-4">
           {[
             { id: "day", label: "Jour" },
             { id: "week", label: "Semaine" },
@@ -641,7 +652,8 @@ export default function CalendarScreen() {
             <Pressable
               key={mode.id}
               onPress={() => setViewMode(mode.id as ViewMode)}
-              className={`flex-1 py-1.5 items-center rounded-lg ${
+              // ✅ Enfant : rounded-full aussi pour épouser la forme du parent
+              className={`flex-1 py-1.5 items-center rounded-full ${
                 viewMode === mode.id
                   ? "bg-background dark:bg-slate-600 shadow-sm"
                   : "bg-transparent"
@@ -661,7 +673,8 @@ export default function CalendarScreen() {
         </View>
 
         {/* Barre de Navigation (Flèches + Titre) */}
-        <View className="flex-row items-center justify-between bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-3 rounded-xl shadow-sm mb-4">
+        {/* ✅ Modification : rounded-3xl pour plus de rondeur */}
+        <View className="flex-row items-center justify-between bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-3 rounded-3xl shadow-sm mb-4">
           <Pressable
             onPress={handlePrev}
             className="p-2 rounded-full hover:bg-muted dark:hover:bg-slate-800 active:opacity-50 active:bg-muted/50"
@@ -705,7 +718,8 @@ export default function CalendarScreen() {
       {/* FAB */}
       <Pressable
         onPress={() => router.push("/(app)/calendar/add")}
-        className="absolute bottom-6 right-6 h-14 w-14 bg-primary rounded-2xl items-center justify-center shadow-lg shadow-primary/30 active:scale-90 transition-transform"
+        className="absolute bottom-6 right-6 h-14 w-14 bg-primary items-center justify-center shadow-lg shadow-primary/30 active:scale-90 transition-transform"
+        style={{ borderRadius: 999 }}
       >
         <Plus size={28} color="white" />
       </Pressable>
