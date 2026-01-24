@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  ViewStyle,
+  StyleProp,
+} from "react-native";
 import { Dialog } from "./Dialog";
 import { Button } from "./Button";
 import { cn } from "../cn";
@@ -10,12 +17,18 @@ export function Select<T extends { id: string; label: string }>({
   items,
   placeholder = "Sélectionner…",
   title = "Choisir",
+  // ✅ AJOUTS
+  className,
+  style,
 }: {
   value: T | null;
   onChange: (v: T) => void;
   items: T[];
   placeholder?: string;
   title?: string;
+  // ✅ TYPES
+  className?: string;
+  style?: StyleProp<ViewStyle>;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -24,7 +37,9 @@ export function Select<T extends { id: string; label: string }>({
       <Button
         variant="outline"
         onPress={() => setOpen(true)}
-        className="justify-between h-11"
+        // ✅ ON PASSE LE CLASSNAME ET LE STYLE ICI
+        className={cn("justify-between h-11", className)}
+        style={style}
       >
         <View className="flex-1 flex-row items-center justify-between">
           <Text
@@ -42,6 +57,7 @@ export function Select<T extends { id: string; label: string }>({
       </Button>
 
       <Dialog open={open} onClose={() => setOpen(false)} position="center">
+        {/* Le reste ne change pas */}
         <View className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl p-5">
           <Text className="text-lg font-bold mb-3 text-foreground dark:text-white">
             {title}

@@ -6,7 +6,7 @@ interface InputProps extends TextInputProps {
   label?: string;
 }
 
-export function Input({ label, className, ...props }: InputProps) {
+export function Input({ label, className, style, ...props }: InputProps) {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
@@ -20,6 +20,8 @@ export function Input({ label, className, ...props }: InputProps) {
         placeholderTextColor="#A1A1AA"
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
+        // ✅ J'ajoute le style ici pour que le borderRadius: 32 fonctionne si passé via style
+        style={style}
         className={cn(
           "h-11 rounded-lg border px-3 text-base",
           // Couleurs par défaut

@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  ViewStyle,
+  StyleProp,
+} from "react-native";
 import { Dialog } from "./Dialog";
 import { Button } from "./Button";
 import { cn } from "../cn";
@@ -12,11 +19,17 @@ export function MultiSelect({
   selectedIds,
   onChange,
   label = "Sélectionner",
+  // ✅ AJOUTS
+  className,
+  style,
 }: {
   items: Item[];
   selectedIds: string[];
   onChange: (ids: string[]) => void;
   label?: string;
+  // ✅ TYPES
+  className?: string;
+  style?: StyleProp<ViewStyle>;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -42,7 +55,9 @@ export function MultiSelect({
         <Button
           variant="outline"
           onPress={() => setOpen(true)}
-          className="justify-between h-auto min-h-[44px] py-2"
+          // ✅ ON PASSE LES PROPS ICI
+          className={cn("justify-between h-auto min-h-[44px] py-2", className)}
+          style={style}
         >
           <Text
             className={cn(
@@ -65,6 +80,7 @@ export function MultiSelect({
         </Button>
       </View>
 
+      {/* Le Dialog reste identique */}
       <Dialog open={open} onClose={() => setOpen(false)} position="bottom">
         <Text className="text-lg font-bold mb-4 text-foreground dark:text-white">
           Assigner à...

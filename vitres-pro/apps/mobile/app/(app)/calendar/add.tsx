@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { View, ScrollView, Text } from "react-native";
+import { View, ScrollView, Text, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../src/lib/api";
@@ -11,6 +11,7 @@ import { Select } from "../../../src/ui/components/Select";
 import { MultiSelect } from "../../../src/ui/components/MultiSelect";
 import { toast } from "../../../src/ui/toast";
 import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   parseLocalDateTimeString,
@@ -23,6 +24,8 @@ type Client = { id: string; name: string; address: string };
 export default function AddInterventionScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
+  const isWeb = Platform.OS === "web";
 
   // Données
   const { employees } = useEmployees();
@@ -37,10 +40,7 @@ export default function AddInterventionScreen() {
   // États Formulaire
   const [title, setTitle] = useState("Lavage Vitres");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-
-  // ✅ On stocke une liste d'IDs maintenant
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
-
   const [price, setPrice] = useState("");
 
   // Dates
@@ -72,12 +72,10 @@ export default function AddInterventionScreen() {
   // Mutation (Envoi API)
   const mutation = useMutation({
     mutationFn: async (payload: any) => {
-      //  On envoie le tableau employee_ids au backend
       return await api.post("/api/interventions", payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
-      // On invalide aussi le planning pour que la jauge se mette à jour
       queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
       toast.success("Succès", "Intervention enregistrée ✅");
       router.back();
@@ -106,7 +104,7 @@ export default function AddInterventionScreen() {
     const payload = {
       title,
       client_id: selectedClient.id,
-      employee_ids: selectedEmployeeIds, // ✅ Liste
+      employee_ids: selectedEmployeeIds,
       start_time: start.toISOString(),
       end_time: end.toISOString(),
       price_estimated: Number(price) || 0,
@@ -116,15 +114,26 @@ export default function AddInterventionScreen() {
     mutation.mutate(payload);
   };
 
+  // Styles constants pour la cohérence
+  const inputStyle = { borderRadius: 16 };
+  const buttonStyle = { borderRadius: 24 };
+
   return (
-    <View className="flex-1 bg-background dark:bg-slate-950">
+    <View
+      className="flex-1 bg-background dark:bg-slate-950"
+      style={{ paddingTop: isWeb ? 0 : insets.top }}
+    >
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        <Card className="max-w-2xl w-full self-center">
+        {/* CARD : Arrondi forcé 32 */}
+        <Card
+          className="max-w-2xl w-full self-center border border-border dark:border-slate-800"
+          style={{ borderRadius: 32 }}
+        >
           <CardHeader className="p-6 pb-4">
-            <Text className="text-2xl font-extrabold text-foreground dark:text-white">
+            <Text className="text-2xl font-extrabold text-foreground dark:text-white text-center">
               Planifier
             </Text>
-            <Text className="mt-1 opacity-70 text-foreground dark:text-slate-400">
+            <Text className="mt-1 opacity-70 text-foreground dark:text-slate-400 text-center font-medium">
               Nouvelle intervention
             </Text>
           </CardHeader>
@@ -132,7 +141,7 @@ export default function AddInterventionScreen() {
           <CardContent className="p-6 pt-0 gap-5">
             {/* CLIENT */}
             <View>
-              <Text className="text-xs font-bold uppercase opacity-60 mb-2 text-foreground dark:text-slate-400">
+              <Text className="text-xs font-bold uppercase opacity-60 mb-2 ml-1 text-foreground dark:text-slate-400">
                 Pour qui ?
               </Text>
               <Select
@@ -147,12 +156,13 @@ export default function AddInterventionScreen() {
                   const c = clients?.find((x) => x.id === v.id);
                   if (c) setSelectedClient(c);
                 }}
+                style={inputStyle} // ✅ Arrondi forcé
               />
             </View>
 
             {/* EMPLOYES (MULTI) */}
             <View>
-              <Text className="text-xs font-bold uppercase opacity-60 mb-2 text-foreground dark:text-slate-400">
+              <Text className="text-xs font-bold uppercase opacity-60 mb-2 ml-1 text-foreground dark:text-slate-400">
                 Qui intervient ?
               </Text>
               <MultiSelect
@@ -160,30 +170,36 @@ export default function AddInterventionScreen() {
                 selectedIds={selectedEmployeeIds}
                 onChange={setSelectedEmployeeIds}
                 label=""
+                style={inputStyle} // ✅ Arrondi forcé
               />
             </View>
 
             {/* DETAILS */}
             <View className="gap-3 mt-2">
-              <Text className="text-xs font-bold uppercase opacity-60 mb-1 text-foreground dark:text-slate-400">
+              <Text className="text-xs font-bold uppercase opacity-60 mb-1 ml-1 text-foreground dark:text-slate-400">
                 Quoi & Quand ?
               </Text>
 
-              <Input label="Titre" value={title} onChangeText={setTitle} />
+              <Input
+                label="Titre"
+                value={title}
+                onChangeText={setTitle}
+                style={inputStyle} // ✅ Arrondi forcé
+              />
 
-              {/* ✅ Nouveau DateTimePicker */}
               <DateTimePicker
                 value={startDateStr}
                 onChange={setStartDateStr}
                 label="Début de l'intervention"
+                style={inputStyle} // ✅ Arrondi forcé
               />
 
-              {/* Durée (reste identique) */}
               <Input
                 label="Durée (heures)"
                 value={durationHours}
                 onChangeText={setDurationHours}
                 keyboardType="numeric"
+                style={inputStyle} // ✅ Arrondi forcé
               />
 
               <Input
@@ -191,6 +207,7 @@ export default function AddInterventionScreen() {
                 value={price}
                 onChangeText={setPrice}
                 keyboardType="numeric"
+                style={inputStyle} // ✅ Arrondi forcé
               />
             </View>
 
@@ -199,14 +216,16 @@ export default function AddInterventionScreen() {
               <Button
                 variant="outline"
                 onPress={() => router.back()}
-                className="flex-1"
+                className="flex-1 h-12"
+                style={buttonStyle} // ✅ Arrondi forcé
               >
                 Annuler
               </Button>
               <Button
                 onPress={handleSubmit}
                 disabled={mutation.isPending}
-                className="flex-1"
+                className="flex-1 h-12"
+                style={buttonStyle}
               >
                 {mutation.isPending ? "Envoi..." : "Valider"}
               </Button>

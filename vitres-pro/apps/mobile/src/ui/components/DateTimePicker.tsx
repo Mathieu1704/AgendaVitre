@@ -5,24 +5,32 @@ import {
   Pressable,
   ScrollView,
   Platform,
-  StyleSheet,
+  ViewStyle, // ✅ Ajout
+  StyleProp, // ✅ Ajout
 } from "react-native";
 import { Calendar as CalendarIcon, Clock } from "lucide-react-native";
 import { Calendar, DateData } from "react-native-calendars";
 import { Dialog } from "./Dialog";
 import { Button } from "./Button";
 import { useTheme } from "./ThemeToggle";
+import { cn } from "../cn"; // ✅ Ajout
 
 interface DateTimePickerProps {
   value: string;
   onChange: (value: string) => void;
   label?: string;
+  // ✅ AJOUTS
+  className?: string;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function DateTimePicker({
   value,
   onChange,
   label = "Date et Heure",
+  // ✅ Props
+  className,
+  style,
 }: DateTimePickerProps) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -30,6 +38,7 @@ export function DateTimePicker({
 
   const isWeb = Platform.OS === "web";
 
+  // ... (Logique identique : refs, split value, useEffect scroll) ...
   const hoursScrollRef = useRef<ScrollView>(null);
   const minutesScrollRef = useRef<ScrollView>(null);
 
@@ -44,11 +53,9 @@ export function DateTimePicker({
     year: "numeric",
   });
 
-  // Scroll automatique à l'ouverture
   useEffect(() => {
     if (showTimePicker) {
       setTimeout(() => {
-        // Sur le Web, le scroll programmé peut parfois être capricieux, on sécurise
         try {
           hoursScrollRef.current?.scrollTo({ y: hours * 48, animated: true });
           minutesScrollRef.current?.scrollTo({
@@ -56,7 +63,7 @@ export function DateTimePicker({
             animated: true,
           });
         } catch (e) {
-          console.log("Erreur scroll auto", e);
+          console.log(e);
         }
       }, 100);
     }
@@ -89,8 +96,6 @@ export function DateTimePicker({
 
   const hoursArray = Array.from({ length: 24 }, (_, i) => i);
   const minutesArray = Array.from({ length: 12 }, (_, i) => i * 5);
-
-  // Style Web CRUCIAL pour éviter la sélection de texte qui bloque le drag
   const itemStyle = isWeb
     ? { cursor: "pointer" as const, userSelect: "none" as const }
     : {};
@@ -98,13 +103,18 @@ export function DateTimePicker({
   return (
     <>
       <View>
-        <Text className="text-sm font-medium text-foreground dark:text-white mb-2">
+        <Text className="text-sm font-medium text-foreground dark:text-white mb-2 ml-1">
           {label}
         </Text>
 
+        {/* ✅ BOUTON DATE : Application du style et className */}
         <Pressable
           onPress={() => setShowCalendar(true)}
-          className="h-12 flex-row items-center justify-between px-4 rounded-xl border border-border dark:border-slate-700 bg-background dark:bg-slate-900 mb-3"
+          style={style} // <-- Le radius forcé ira ici
+          className={cn(
+            "h-12 flex-row items-center justify-between px-4 rounded-xl border border-border dark:border-slate-700 bg-background dark:bg-slate-900 mb-3",
+            className,
+          )}
         >
           <View className="flex-row items-center gap-3">
             <CalendarIcon size={18} color="#3B82F6" />
@@ -114,9 +124,14 @@ export function DateTimePicker({
           </View>
         </Pressable>
 
+        {/* ✅ BOUTON HEURE : Application du style et className */}
         <Pressable
           onPress={() => setShowTimePicker(true)}
-          className="h-12 flex-row items-center px-4 rounded-xl border border-border dark:border-slate-700 bg-background dark:bg-slate-900"
+          style={style} // <-- Le radius forcé ira ici aussi
+          className={cn(
+            "h-12 flex-row items-center px-4 rounded-xl border border-border dark:border-slate-700 bg-background dark:bg-slate-900",
+            className,
+          )}
         >
           <View className="bg-muted dark:bg-slate-800 p-2 rounded-lg mr-3">
             <Clock size={18} color="#94A3B8" />
@@ -127,6 +142,7 @@ export function DateTimePicker({
         </Pressable>
       </View>
 
+      {/* Les Dialogs ne changent pas */}
       <Dialog
         open={showCalendar}
         onClose={() => setShowCalendar(false)}
@@ -136,7 +152,6 @@ export function DateTimePicker({
           <Text className="text-lg font-bold mb-4 text-foreground dark:text-white text-center">
             Sélectionner une date
           </Text>
-
           <Calendar
             current={datePart}
             onDayPress={handleDateSelect}
@@ -147,7 +162,6 @@ export function DateTimePicker({
             theme={calendarTheme}
             style={{ borderRadius: 12, overflow: "hidden" }}
           />
-
           <Button
             variant="ghost"
             onPress={() => setShowCalendar(false)}
@@ -163,25 +177,21 @@ export function DateTimePicker({
         onClose={() => setShowTimePicker(false)}
         position="bottom"
       >
+        {/* ... Contenu du TimePicker identique ... */}
         <View className="p-4">
           <Text className="text-lg font-bold mb-4 text-foreground dark:text-white text-center">
             Sélectionner l'heure
           </Text>
-
           <View className="flex-row justify-center items-center gap-2 h-48 bg-muted/20 dark:bg-slate-800/30 rounded-xl overflow-hidden relative">
-            {/* Barre de sélection centrale - AJOUT DE pointerEvents="none" */}
             <View
               pointerEvents="none"
               className="absolute w-full h-12 bg-primary/10 border-y border-primary/20 top-[72px] z-10"
             />
-
-            {/* Colonne Heures */}
             <ScrollView
               ref={hoursScrollRef}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingVertical: 72 }}
               className="flex-1"
-              // Désactivation du snap sur Web pour fluidité totale
               snapToInterval={isWeb ? undefined : 48}
               decelerationRate="normal"
             >
@@ -189,28 +199,20 @@ export function DateTimePicker({
                 <Pressable
                   key={h}
                   onPress={() => handleTimeSelect(h, minutes)}
-                  // @ts-ignore
                   style={itemStyle}
                   className="h-12 items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
                 >
                   <Text
-                    className={`text-2xl font-bold ${
-                      h === hours
-                        ? "text-primary scale-110"
-                        : "text-muted-foreground opacity-50"
-                    }`}
+                    className={`text-2xl font-bold ${h === hours ? "text-primary scale-110" : "text-muted-foreground opacity-50"}`}
                   >
                     {String(h).padStart(2, "0")}
                   </Text>
                 </Pressable>
               ))}
             </ScrollView>
-
             <Text className="text-3xl font-bold text-foreground dark:text-white pb-1 z-0">
               :
             </Text>
-
-            {/* Colonne Minutes */}
             <ScrollView
               ref={minutesScrollRef}
               showsVerticalScrollIndicator={false}
@@ -223,16 +225,11 @@ export function DateTimePicker({
                 <Pressable
                   key={m}
                   onPress={() => handleTimeSelect(hours, m)}
-                  // @ts-ignore
                   style={itemStyle}
                   className="h-12 items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
                 >
                   <Text
-                    className={`text-2xl font-bold ${
-                      m === minutes
-                        ? "text-primary scale-110"
-                        : "text-muted-foreground opacity-50"
-                    }`}
+                    className={`text-2xl font-bold ${m === minutes ? "text-primary scale-110" : "text-muted-foreground opacity-50"}`}
                   >
                     {String(m).padStart(2, "0")}
                   </Text>
@@ -240,7 +237,6 @@ export function DateTimePicker({
               ))}
             </ScrollView>
           </View>
-
           <View className="flex-row gap-3 mt-4">
             <Button
               variant="outline"

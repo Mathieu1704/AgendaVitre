@@ -1,5 +1,12 @@
 import React from "react";
-import { Pressable, Text, ActivityIndicator } from "react-native";
+// 1. AJOUT de StyleProp et ViewStyle dans les imports
+import {
+  Pressable,
+  Text,
+  ActivityIndicator,
+  StyleProp,
+  ViewStyle,
+} from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -17,6 +24,8 @@ interface ButtonProps {
   loading?: boolean;
   disabled?: boolean;
   className?: string;
+  // 2. AJOUT de la définition du style ici
+  style?: StyleProp<ViewStyle>;
 }
 
 export function Button({
@@ -26,6 +35,8 @@ export function Button({
   loading,
   disabled,
   className,
+  // 3. RÉCUPÉRATION de la variable style ici
+  style,
 }: ButtonProps) {
   const scale = useSharedValue(1);
 
@@ -36,13 +47,13 @@ export function Button({
   const variantStyles = {
     default: cn(
       "bg-primary border-primary",
-      "dark:bg-blue-600 dark:border-blue-600"
+      "dark:bg-blue-600 dark:border-blue-600",
     ),
     outline: cn("bg-transparent border-border", "dark:border-slate-700"),
     ghost: "bg-transparent border-transparent",
     destructive: cn(
       "bg-destructive border-destructive",
-      "dark:bg-red-600 dark:border-red-600"
+      "dark:bg-red-600 dark:border-red-600",
     ),
   };
 
@@ -59,12 +70,13 @@ export function Button({
       disabled={disabled || loading}
       onPressIn={() => (scale.value = withSpring(0.97))}
       onPressOut={() => (scale.value = withSpring(1))}
-      style={[animatedStyle]}
+      // 4. APPLICATION du style ici (ajouté au tableau)
+      style={[animatedStyle, style]}
       className={cn(
         "h-11 flex-row items-center justify-center rounded-lg border px-4",
         variantStyles[variant],
         (loading || disabled) && "opacity-50",
-        className
+        className,
       )}
     >
       {loading ? (
