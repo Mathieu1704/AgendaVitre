@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { View, ScrollView, Text, Switch, Platform } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { ChevronLeft, Check, FileText } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -13,12 +13,14 @@ import { useTheme } from "../../../src/ui/components/ThemeToggle";
 export default function AddFactureScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
-  const insets = useSafeAreaInsets(); // ✅ Gestion Notch
+  const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
+
+  const scrollRef = useRef<ScrollView>(null);
 
   // États du formulaire
   const [clientName, setClientName] = useState("");
-  const [description, setDescription] = useState("Lavage de vitres");
+  const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [isPaid, setIsPaid] = useState(false);
 
@@ -26,6 +28,23 @@ export default function AddFactureScreen() {
   const price = parseFloat(amount) || 0;
   const tva = price * 0.21;
   const total = price + tva;
+
+  useFocusEffect(
+    useCallback(() => {
+      // 1. Force le scroll en haut à l'arrivée
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({ y: 0, animated: false });
+      }
+
+      // 2. Nettoyage du formulaire quand on quitte la page
+      return () => {
+        setClientName("");
+        setDescription("Lavage de vitres"); // Retour à la valeur par défaut
+        setAmount("");
+        setIsPaid(false);
+      };
+    }, []),
+  );
 
   const handleSubmit = () => {
     if (!clientName || !amount) {
@@ -38,7 +57,7 @@ export default function AddFactureScreen() {
       "Facture créée",
       `Facture de ${total.toFixed(2)}€ enregistrée.`,
     );
-    router.back();
+    router.push("/(app)/facturation");
   };
 
   return (
@@ -49,7 +68,11 @@ export default function AddFactureScreen() {
     >
       {/* Header */}
       <View className="px-4 pt-4 pb-2 flex-row items-center">
-        <Button variant="ghost" size="icon" onPress={() => router.back()}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onPress={() => router.push("/(app)/facturation")}
+        >
           <ChevronLeft size={24} color={isDark ? "white" : "black"} />
         </Button>
         <Text className="text-xl font-bold text-foreground dark:text-white ml-2">
@@ -57,7 +80,10 @@ export default function AddFactureScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      >
         {/* Info Box Arrondie */}
         <View className="bg-blue-500/10 p-4 mb-6 flex-row items-start border border-blue-500/20 rounded-[24px]">
           <FileText size={20} color="#3B82F6" className="mt-0.5" />
@@ -67,19 +93,22 @@ export default function AddFactureScreen() {
           </Text>
         </View>
 
-        {/* Card Arrondie */}
         <Card className="rounded-[32px] overflow-hidden">
-          <CardHeader className="p-6 pb-4">
-            <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider text-center">
+          {/* Header ajusté : px-6 pt-4 pb-2 */}
+          <CardHeader className="px-6 pt-4 pb-2">
+            <Text className="text-sm font-bold uppercase text-center text-muted-foreground dark:text-slate-500 tracking-wider">
               Détails de la prestation
             </Text>
           </CardHeader>
-          <CardContent className="p-6 pt-0 gap-5">
+
+          {/* Content ajusté : px-6 pb-6 pt-4 gap-4 */}
+          <CardContent className="px-6 pb-6 pt-4 gap-4">
             <Input
               label="Nom du Client"
               placeholder="Ex: Restaurant Le Gourmet"
               value={clientName}
               onChangeText={setClientName}
+              containerStyle={{ marginBottom: 8 }} // Petit espacement supplémentaire comme sur Client
             />
 
             <Input
@@ -89,7 +118,8 @@ export default function AddFactureScreen() {
               onChangeText={setDescription}
             />
 
-            <View className="flex-row gap-4">
+            {/* Ligne Montant + TVA */}
+            <View className="flex-row gap-4 w-full">
               <View className="flex-1">
                 <Input
                   label="Montant HT (€)"
@@ -99,7 +129,8 @@ export default function AddFactureScreen() {
                   onChangeText={setAmount}
                 />
               </View>
-              <View className="flex-1 justify-end pb-3">
+              {/* Résumé TVA aligné */}
+              <View className="flex-1 justify-end pb-3 pr-6">
                 <Text className="text-right text-xs text-muted-foreground mb-1">
                   TVA (21%)
                 </Text>
@@ -109,7 +140,8 @@ export default function AddFactureScreen() {
               </View>
             </View>
 
-            <View className="border-t border-border dark:border-slate-800 pt-4 flex-row justify-between items-center">
+            {/* Total TTC */}
+            <View className="border-t border-border dark:border-slate-800 pt-4 mt-2 flex-row justify-between items-center">
               <Text className="font-bold text-lg text-foreground dark:text-white">
                 Total TTC
               </Text>

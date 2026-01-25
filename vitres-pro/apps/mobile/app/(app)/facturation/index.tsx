@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Platform,
+  useWindowDimensions,
 } from "react-native";
 import {
   FileText,
@@ -16,6 +17,7 @@ import {
   Clock,
   Download,
   FilePlus,
+  ArrowUpRight,
 } from "lucide-react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import {
@@ -26,7 +28,7 @@ import {
   isWithinInterval,
 } from "date-fns";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 
 // Composants UI
 import {
@@ -35,7 +37,6 @@ import {
   CardHeader,
   CardTitle,
 } from "../../../src/ui/components/Card";
-import { Button } from "../../../src/ui/components/Button";
 import { StatusBadge } from "../../../src/ui/components/StatusBadge";
 import { toast } from "../../../src/ui/toast";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
@@ -47,10 +48,22 @@ export default function FacturationScreen() {
   const router = useRouter();
   const { interventions, isLoading } = useInterventions();
   const { isDark } = useTheme();
-  const insets = useSafeAreaInsets(); // ✅ Gestion Notch
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
+
+  const scrollRef = useRef<ScrollView>(null);
+
   const [statusFilter, setStatusFilter] = useState<"all" | "done" | "pending">(
     "all",
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({ y: 0, animated: false });
+      }
+    }, []),
   );
 
   // --- LOGIQUE MÉTIER ---
@@ -102,6 +115,46 @@ export default function FacturationScreen() {
     return filtered.filter((i: any) => i.price_estimated);
   }, [interventions, statusFilter]);
 
+  // ✅ CONFIGURATION DES KPIS (Style Dashboard)
+  const kpiStats = [
+    {
+      label: "Encaissé (HT)",
+      value: `${stats.totalHT.toFixed(0)} €`,
+      icon: Euro,
+      color: "#22C55E",
+      bg: "bg-green-500/10",
+      trend: `+${(stats.totalHT * 0.21).toFixed(0)}€ TVA`, // On utilise le slot trend pour la TVA
+      trendColor: "text-green-600 dark:text-green-400",
+    },
+    {
+      label: "En attente",
+      value: `${stats.pendingHT.toFixed(0)} €`,
+      icon: Clock,
+      color: "#F97316",
+      bg: "bg-orange-500/10",
+      trend: "À facturer",
+      trendColor: "text-orange-600 dark:text-orange-400",
+    },
+    {
+      label: "Terminées",
+      value: stats.completedCount.toString(),
+      icon: CheckCircle2,
+      color: "#3B82F6",
+      bg: "bg-blue-500/10",
+      trend: "Ce mois",
+      trendColor: "text-blue-600 dark:text-blue-400",
+    },
+    {
+      label: "Planifiées",
+      value: stats.pendingCount.toString(),
+      icon: Calendar,
+      color: "#A855F7",
+      bg: "bg-purple-500/10",
+      trend: "À venir",
+      trendColor: "text-purple-600 dark:text-purple-400",
+    },
+  ];
+
   // --- RENDER ---
   return (
     <View
@@ -109,12 +162,13 @@ export default function FacturationScreen() {
       style={{ paddingTop: isWeb ? 0 : insets.top }}
     >
       <ScrollView
+        ref={scrollRef}
         className="flex-1 px-4 lg:p-8"
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Header Page */}
-        <View className="flex-row items-center justify-between mb-8 pt-4">
+        <View className="flex-row items-center justify-between mb-6 pt-4">
           <View>
             <Text className="text-3xl font-bold text-foreground dark:text-white">
               Facturation
@@ -125,108 +179,92 @@ export default function FacturationScreen() {
           </View>
         </View>
 
-        {/* 1. STATS CARDS - GRILLE 2x2 */}
-        <View className="flex-row flex-wrap justify-between gap-y-4 mb-8">
-          {/* Carte 1 : Encaissé */}
-          <Animated.View entering={FadeInDown.delay(100)} className="w-[48%]">
-            {/* ✅ FIX : h-40 pour fixer la hauteur et éviter l'étirement */}
-            <Card className="h-40 justify-center rounded-[32px]">
-              <CardContent className="p-4 flex-col justify-between h-full">
-                <View className="bg-green-500/10 p-2.5 rounded-full self-start">
-                  <Euro size={20} color="#22C55E" />
-                </View>
-                <View>
-                  <Text className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                    Encaissé (HT)
-                  </Text>
-                  {isLoading ? (
-                    <ActivityIndicator size="small" className="self-start" />
-                  ) : (
-                    <Text className="text-xl font-bold text-foreground dark:text-white">
-                      {stats.totalHT.toFixed(0)} €
-                    </Text>
-                  )}
-                  <Text className="text-[10px] text-green-600 mt-0.5">
-                    + {(stats.totalHT * 0.21).toFixed(0)} € TVA
-                  </Text>
-                </View>
-              </CardContent>
-            </Card>
-          </Animated.View>
+        {/* 1. KPIS GRID (Style Exact du Dashboard) */}
+        {/* On utilise gap-3 comme dans le dashboard */}
+        <View className="flex-row flex-wrap gap-3 mb-8">
+          {kpiStats.map((stat, index) => {
+            // Calcul exact de la largeur comme dans le dashboard
+            // width - 32 (padding container px-4*2) - 12 (gap-3) / 2
+            const cardWidth = (width - 32 - 12) / 2;
 
-          {/* Carte 2 : En attente */}
-          <Animated.View entering={FadeInDown.delay(200)} className="w-[48%]">
-            <Card className="h-40 justify-center rounded-[32px]">
-              <CardContent className="p-4 flex-col justify-between h-full">
-                <View className="bg-orange-500/10 p-2.5 rounded-full self-start">
-                  <Clock size={20} color="#F97316" />
-                </View>
-                <View>
-                  <Text className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                    En attente
-                  </Text>
-                  {isLoading ? (
-                    <ActivityIndicator size="small" className="self-start" />
-                  ) : (
-                    <Text className="text-xl font-bold text-foreground dark:text-white">
-                      {stats.pendingHT.toFixed(0)} €
-                    </Text>
-                  )}
-                  <Text className="text-[10px] text-muted-foreground mt-0.5">
-                    À facturer
-                  </Text>
-                </View>
-              </CardContent>
-            </Card>
-          </Animated.View>
+            return (
+              <Animated.View
+                key={index}
+                entering={FadeInDown.delay(index * 80).springify()}
+                style={{ width: cardWidth }}
+              >
+                <Card className="rounded-[24px]">
+                  <CardContent
+                    className="p-3 items-center justify-center"
+                    style={{ minHeight: 100 }}
+                  >
+                    {/* 1. Icône + Label (Ligne du haut) */}
+                    <View className="flex-row items-center mb-3 w-full">
+                      <View
+                        className={`p-2 ${stat.bg} mr-2`}
+                        style={{ borderRadius: 12 }}
+                      >
+                        <stat.icon size={16} color={stat.color} />
+                      </View>
+                      <Text
+                        className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex-1"
+                        numberOfLines={1}
+                      >
+                        {stat.label}
+                      </Text>
+                    </View>
 
-          {/* Carte 3 : Terminées */}
-          <Animated.View entering={FadeInDown.delay(300)} className="w-[48%]">
-            <Card className="h-40 justify-center rounded-[32px]">
-              <CardContent className="p-4 flex-col justify-between h-full">
-                <View className="bg-blue-500/10 p-2.5 rounded-full self-start mb-2">
-                  <CheckCircle2 size={20} color="#3B82F6" />
-                </View>
-                <View>
-                  <Text className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
-                    Terminées
-                  </Text>
-                  <Text className="text-2xl font-bold text-foreground dark:text-white">
-                    {stats.completedCount}
-                  </Text>
-                </View>
-              </CardContent>
-            </Card>
-          </Animated.View>
-
-          {/* Carte 4 : Planifiées */}
-          <Animated.View entering={FadeInDown.delay(400)} className="w-[48%]">
-            <Card className="h-40 justify-center rounded-[32px]">
-              <CardContent className="p-4 flex-col justify-between h-full">
-                <View className="bg-purple-500/10 p-2.5 rounded-full self-start mb-2">
-                  <Calendar size={20} color="#A855F7" />
-                </View>
-                <View>
-                  <Text className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
-                    Planifiées
-                  </Text>
-                  <Text className="text-2xl font-bold text-foreground dark:text-white">
-                    {stats.pendingCount}
-                  </Text>
-                </View>
-              </CardContent>
-            </Card>
-          </Animated.View>
+                    {/* 2. Valeur + Trend (Ligne du bas) */}
+                    <View className="w-full">
+                      {isLoading ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={stat.color}
+                          className="self-start py-1"
+                        />
+                      ) : (
+                        <View className="flex-row items-baseline justify-center flex-wrap">
+                          <Text className="text-2xl font-extrabold text-foreground dark:text-white leading-none mr-2">
+                            {stat.value}
+                          </Text>
+                          {stat.trend ? (
+                            <View className="flex-row items-center mt-1">
+                              {/* Petite flèche esthétique */}
+                              <ArrowUpRight
+                                size={10}
+                                color={stat.color} // On utilise la couleur de l'icone pour la fleche
+                                strokeWidth={3}
+                                className="opacity-80"
+                              />
+                              <Text
+                                className={`text-[10px] font-bold ml-0.5 ${stat.trendColor}`}
+                              >
+                                {stat.trend}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      )}
+                    </View>
+                  </CardContent>
+                </Card>
+              </Animated.View>
+            );
+          })}
         </View>
 
         {/* 2. LISTE DES FACTURES */}
         <Card className="min-h-[400px] mb-20 rounded-[32px] overflow-hidden">
           <CardHeader className="p-6 border-b border-border dark:border-slate-800 pb-4">
-            <View className="flex-col gap-4">
-              <CardTitle className="flex-row items-center gap-2">
+            <View className="gap-4">
+              <View className="flex-row items-center">
                 <FileText size={20} color="#3B82F6" />
-                <Text className="text-lg">Historique</Text>
-              </CardTitle>
+
+                {/* On utilise ml-3 pour l'écart et on retire le padding bizarre */}
+                <Text className="text-lg font-bold text-foreground dark:text-white ml-2">
+                  Historique
+                </Text>
+              </View>
 
               {/* Filtres Tabs Arrondis */}
               <View className="flex-row bg-muted dark:bg-slate-800 p-1 rounded-full self-start">
