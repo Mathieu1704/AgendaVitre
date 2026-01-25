@@ -718,8 +718,7 @@ export default function CalendarScreen() {
       {/* FAB */}
       <Pressable
         onPress={() => router.push("/(app)/calendar/add")}
-        className="absolute bottom-6 right-6 h-14 w-14 bg-primary items-center justify-center shadow-lg shadow-primary/30 active:scale-90 transition-transform"
-        style={{ borderRadius: 999 }}
+        className="absolute bottom-6 right-6 h-14 w-14 bg-primary items-center justify-center shadow-lg shadow-primary/30 active:scale-90 transition-transform rounded-full"
       >
         <Plus size={28} color="white" />
       </Pressable>

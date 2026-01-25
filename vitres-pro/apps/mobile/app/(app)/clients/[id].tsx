@@ -6,9 +6,11 @@ import {
   Pressable,
   Linking,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ChevronLeft,
   Phone,
@@ -28,6 +30,8 @@ export default function ClientDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { isDark } = useTheme();
+  const insets = useSafeAreaInsets(); // ✅ Gestion Notch
+  const isWeb = Platform.OS === "web";
 
   const { data: client, isLoading } = useQuery({
     queryKey: ["client", id],
@@ -65,10 +69,17 @@ export default function ClientDetailScreen() {
   if (!client) return null;
 
   return (
-    <View className="flex-1 bg-background dark:bg-slate-950">
+    <View
+      className="flex-1 bg-background dark:bg-slate-950"
+      style={{ paddingTop: isWeb ? 0 : insets.top }}
+    >
       {/* Header */}
-      <View className="flex-row items-center p-4 border-b border-border dark:border-slate-800">
-        <Button variant="ghost" size="icon" onPress={() => router.back()}>
+      <View className="flex-row items-center px-4 py-2 border-b border-border dark:border-slate-800">
+        <Button
+          variant="ghost"
+          size="icon"
+          onPress={() => router.push("/(app)/clients")}
+        >
           <ChevronLeft size={24} color={isDark ? "white" : "black"} />
         </Button>
         <Text className="ml-2 text-lg font-bold text-foreground dark:text-white">
@@ -78,7 +89,7 @@ export default function ClientDetailScreen() {
 
       <ScrollView contentContainerStyle={{ padding: 20 }}>
         {/* Profil Header */}
-        <View className="items-center mb-8">
+        <View className="items-center mb-8 pt-4">
           <Avatar name={client.name} size="lg" className="h-24 w-24 mb-4" />
           <Text className="text-2xl font-bold text-foreground dark:text-white text-center">
             {client.name}
@@ -117,7 +128,8 @@ export default function ClientDetailScreen() {
         </View>
 
         {/* Informations */}
-        <Card className="mb-6">
+        {/* ✅ Card arrondie */}
+        <Card className="mb-6 rounded-[32px] overflow-hidden">
           <CardContent className="p-5 gap-6">
             <View className="flex-row items-start">
               <Phone size={18} color="#94A3B8" className="mt-1 mr-3" />
@@ -157,11 +169,11 @@ export default function ClientDetailScreen() {
           </CardContent>
         </Card>
 
-        {/* Bouton Historique (Mock pour l'instant) */}
+        {/* Bouton Historique */}
         <Button
           variant="outline"
           onPress={() => alert("Historique bientôt disponible")}
-          className="w-full"
+          className="w-full h-12 rounded-[24px]"
         >
           <ExternalLink size={18} color={isDark ? "white" : "black"} />
           <Text className="ml-2 font-bold text-foreground dark:text-white">

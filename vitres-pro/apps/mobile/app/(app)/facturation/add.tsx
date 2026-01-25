@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { View, ScrollView, Text, Switch } from "react-native";
+import { View, ScrollView, Text, Switch, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { ChevronLeft, Check, FileText } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
 import { Input } from "../../../src/ui/components/Input";
@@ -12,6 +13,8 @@ import { useTheme } from "../../../src/ui/components/ThemeToggle";
 export default function AddFactureScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
+  const insets = useSafeAreaInsets(); // ✅ Gestion Notch
+  const isWeb = Platform.OS === "web";
 
   // États du formulaire
   const [clientName, setClientName] = useState("");
@@ -39,7 +42,11 @@ export default function AddFactureScreen() {
   };
 
   return (
-    <View className="flex-1 bg-background dark:bg-slate-950">
+    <View
+      className="flex-1 bg-background dark:bg-slate-950"
+      // ✅ Padding Top dynamique
+      style={{ paddingTop: isWeb ? 0 : insets.top }}
+    >
       {/* Header */}
       <View className="px-4 pt-4 pb-2 flex-row items-center">
         <Button variant="ghost" size="icon" onPress={() => router.back()}>
@@ -50,9 +57,9 @@ export default function AddFactureScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
-        {/* Info Box */}
-        <View className="bg-blue-500/10 p-4 rounded-xl mb-6 flex-row items-start border border-blue-500/20">
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+        {/* Info Box Arrondie */}
+        <View className="bg-blue-500/10 p-4 mb-6 flex-row items-start border border-blue-500/20 rounded-[24px]">
           <FileText size={20} color="#3B82F6" className="mt-0.5" />
           <Text className="ml-3 text-sm text-foreground dark:text-slate-300 flex-1 leading-relaxed">
             Saisie manuelle pour un paiement rapide ou hors planning. Si vous
@@ -60,9 +67,10 @@ export default function AddFactureScreen() {
           </Text>
         </View>
 
-        <Card>
+        {/* Card Arrondie */}
+        <Card className="rounded-[32px] overflow-hidden">
           <CardHeader className="p-6 pb-4">
-            <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+            <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider text-center">
               Détails de la prestation
             </Text>
           </CardHeader>
@@ -113,7 +121,7 @@ export default function AddFactureScreen() {
         </Card>
 
         {/* Options */}
-        <Card className="mt-4">
+        <Card className="mt-4 rounded-[24px] overflow-hidden">
           <CardContent className="p-4 flex-row items-center justify-between">
             <Text className="font-medium text-foreground dark:text-white">
               Facture déjà payée ?
@@ -128,7 +136,7 @@ export default function AddFactureScreen() {
 
         <Button
           onPress={handleSubmit}
-          className="mt-8 h-14 bg-primary hover:bg-primary/90"
+          className="mt-8 h-14 bg-primary hover:bg-primary/90 rounded-[28px]"
         >
           <Check size={20} color="white" />
           <Text className="ml-2 text-white font-bold text-lg">

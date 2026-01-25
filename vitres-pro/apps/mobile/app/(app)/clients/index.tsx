@@ -6,9 +6,11 @@ import {
   Text,
   ActivityIndicator,
   TextInput,
+  Platform,
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Plus,
   Search,
@@ -35,6 +37,8 @@ type Client = {
 export default function ClientsListScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
+  const insets = useSafeAreaInsets(); // ✅ Gestion Notch
+  const isWeb = Platform.OS === "web";
   const [searchQuery, setSearchQuery] = useState("");
 
   const { data: clients, isLoading } = useQuery({
@@ -58,8 +62,8 @@ export default function ClientsListScreen() {
       onPress={() => router.push(`/(app)/clients/${item.id}` as any)}
       className="mx-4 mb-3"
     >
-      <Card className="active:scale-[0.99] transition-transform">
-        <View className="p-4">
+      <Card className="active:scale-[0.99] transition-transform rounded-[32px] overflow-hidden">
+        <View className="p-5">
           <View className="flex-row items-center">
             <Avatar name={item.name} size="md" />
 
@@ -84,7 +88,7 @@ export default function ClientsListScreen() {
 
           {/* Contact Info Footer (si dispo) */}
           {(item.phone || item.email) && (
-            <View className="mt-3 pt-3 border-t border-border dark:border-slate-800 flex-row gap-4">
+            <View className="mt-3 pt-3 dark:border-slate-800 flex-row gap-4 ml-6">
               {item.phone && (
                 <View className="flex-row items-center">
                   <Phone size={12} color="#3B82F6" />
@@ -112,14 +116,19 @@ export default function ClientsListScreen() {
   );
 
   return (
-    <View className="flex-1 bg-background dark:bg-slate-950">
+    <View
+      className="flex-1 bg-background dark:bg-slate-950"
+      // ✅ Padding Top dynamique pour éviter l'encoche
+      style={{ paddingTop: isWeb ? 0 : insets.top }}
+    >
       {/* Header avec Recherche */}
-      <View className="px-6 pt-6 pb-4 bg-background dark:bg-slate-950 z-10">
+      <View className="px-6 pt-2 pb-4 bg-background dark:bg-slate-950 z-10">
         <Text className="text-3xl font-bold text-foreground dark:text-white mb-4">
           Clients
         </Text>
 
-        <View className="flex-row items-center bg-muted/50 dark:bg-slate-900 border border-transparent focus:border-primary rounded-xl px-3 h-12">
+        {/* ✅ MODIFICATION ICI : "rounded-full" au lieu de "rounded-xl" */}
+        <View className="flex-row items-center bg-muted/50 dark:bg-slate-900 border border-transparent focus:border-primary rounded-full px-4 h-12">
           <Search size={18} color="#94A3B8" />
           <TextInput
             placeholder="Rechercher un client..."
@@ -163,7 +172,8 @@ export default function ClientsListScreen() {
       {/* FAB (Bouton Ajouter) */}
       <Pressable
         onPress={() => router.push("/(app)/clients/add")}
-        className="absolute bottom-6 right-6 h-14 w-14 bg-primary rounded-2xl items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition-transform"
+        // rounded-full pour un cercle parfait
+        className="absolute bottom-6 right-6 h-14 w-14 bg-primary rounded-full items-center justify-center shadow-lg shadow-primary/30 active:scale-90 transition-transform"
       >
         <Plus size={28} color="white" />
       </Pressable>
