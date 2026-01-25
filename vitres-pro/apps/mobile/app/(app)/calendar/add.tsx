@@ -27,7 +27,6 @@ export default function AddInterventionScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
 
-  // Données
   const { employees } = useEmployees();
   const { data: clients } = useQuery({
     queryKey: ["clients"],
@@ -37,13 +36,11 @@ export default function AddInterventionScreen() {
     },
   });
 
-  // États Formulaire
-  const [title, setTitle] = useState("Lavage Vitres");
+  const [title, setTitle] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [price, setPrice] = useState("");
 
-  // Dates
   const defaultStart = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
@@ -51,9 +48,8 @@ export default function AddInterventionScreen() {
     return toLocalDateTimeString(d).replace(" ", "T");
   }, []);
   const [startDateStr, setStartDateStr] = useState(defaultStart);
-  const [durationHours, setDurationHours] = useState("2");
+  const [durationHours, setDurationHours] = useState("");
 
-  // Formatage pour les selects
   const clientItems = useMemo(
     () => (clients ?? []).map((c) => ({ id: c.id, label: c.name })),
     [clients],
@@ -69,7 +65,6 @@ export default function AddInterventionScreen() {
     [employees],
   );
 
-  // Mutation (Envoi API)
   const mutation = useMutation({
     mutationFn: async (payload: any) => {
       return await api.post("/api/interventions", payload);
@@ -78,7 +73,10 @@ export default function AddInterventionScreen() {
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
       queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
       toast.success("Succès", "Intervention enregistrée ✅");
-      router.back();
+      router.push({
+        pathname: "/(app)/calendar",
+        params: { date: startDateStr },
+      });
     },
     onError: (err: any) => {
       toast.error("Erreur", err.response?.data?.detail || "Erreur inconnue");
@@ -114,34 +112,26 @@ export default function AddInterventionScreen() {
     mutation.mutate(payload);
   };
 
-  // Styles constants pour la cohérence
-  const inputStyle = { borderRadius: 16 };
-  const buttonStyle = { borderRadius: 24 };
-
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
       style={{ paddingTop: isWeb ? 0 : insets.top }}
     >
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        {/* CARD : Arrondi forcé 32 */}
-        <Card
-          className="max-w-2xl w-full self-center border border-border dark:border-slate-800"
-          style={{ borderRadius: 32 }}
-        >
-          <CardHeader className="p-6 pb-4">
+        <Card className="max-w-2xl w-full self-center rounded-[40px] overflow-hidden">
+          <CardHeader className="p-6 pb-2">
             <Text className="text-2xl font-extrabold text-foreground dark:text-white text-center">
               Planifier
             </Text>
-            <Text className="mt-1 opacity-70 text-foreground dark:text-slate-400 text-center font-medium">
+            <Text className="mt-1 text-muted-foreground text-center font-medium">
               Nouvelle intervention
             </Text>
           </CardHeader>
 
-          <CardContent className="p-6 pt-0 gap-5">
+          <CardContent className="p-6 pt-4 gap-5">
             {/* CLIENT */}
-            <View>
-              <Text className="text-xs font-bold uppercase opacity-60 mb-2 ml-1 text-foreground dark:text-slate-400">
+            <View className="gap-1">
+              <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">
                 Pour qui ?
               </Text>
               <Select
@@ -156,79 +146,73 @@ export default function AddInterventionScreen() {
                   const c = clients?.find((x) => x.id === v.id);
                   if (c) setSelectedClient(c);
                 }}
-                style={inputStyle} // ✅ Arrondi forcé
               />
             </View>
 
-            {/* EMPLOYES (MULTI) */}
-            <View>
-              <Text className="text-xs font-bold uppercase opacity-60 mb-2 ml-1 text-foreground dark:text-slate-400">
+            {/* EMPLOYES */}
+            <View className="gap-1">
+              <Text className="text-sm font-semibold text-foreground dark:text-white">
                 Qui intervient ?
               </Text>
               <MultiSelect
                 items={employeeItems}
                 selectedIds={selectedEmployeeIds}
                 onChange={setSelectedEmployeeIds}
-                label=""
-                style={inputStyle} // ✅ Arrondi forcé
               />
             </View>
 
             {/* DETAILS */}
-            <View className="gap-3 mt-2">
-              <Text className="text-xs font-bold uppercase opacity-60 mb-1 ml-1 text-foreground dark:text-slate-400">
-                Quoi & Quand ?
-              </Text>
-
-              <Input
-                label="Titre"
-                value={title}
-                onChangeText={setTitle}
-                style={inputStyle} // ✅ Arrondi forcé
-              />
+            <View className="gap-4 mt-2">
+              <Input label="Titre" value={title} onChangeText={setTitle} />
 
               <DateTimePicker
                 value={startDateStr}
                 onChange={setStartDateStr}
                 label="Début de l'intervention"
-                style={inputStyle} // ✅ Arrondi forcé
               />
 
-              <Input
-                label="Durée (heures)"
-                value={durationHours}
-                onChangeText={setDurationHours}
-                keyboardType="numeric"
-                style={inputStyle} // ✅ Arrondi forcé
-              />
+              <View className="flex-row gap-3">
+                <Input
+                  label="Durée (heures)"
+                  value={durationHours}
+                  onChangeText={setDurationHours}
+                  keyboardType="numeric"
+                  containerStyle={{ flex: 1, marginLeft: -22, marginRight: 15 }}
+                />
 
-              <Input
-                label="Prix estimé (€)"
-                value={price}
-                onChangeText={setPrice}
-                keyboardType="numeric"
-                style={inputStyle} // ✅ Arrondi forcé
-              />
+                <Input
+                  label="Prix estimé (€)"
+                  value={price}
+                  onChangeText={setPrice}
+                  keyboardType="numeric"
+                  containerStyle={{ flex: 1, marginRight: 7 }}
+                />
+              </View>
             </View>
 
             {/* ACTIONS */}
             <View className="mt-6 flex-row gap-3">
-              <Button
-                variant="outline"
-                onPress={() => router.back()}
-                className="flex-1 h-12"
-                style={buttonStyle} // ✅ Arrondi forcé
-              >
-                Annuler
-              </Button>
-              <Button
-                onPress={handleSubmit}
-                disabled={mutation.isPending}
-                className="flex-1 h-12"
-                style={buttonStyle}
-              >
-                {mutation.isPending ? "Envoi..." : "Valider"}
-              </Button>
+              <View style={{ flex: 1, marginLeft: -22, marginRight: 15 }}>
+                <Button
+                  variant="outline"
+                  onPress={() => router.push("/(app)/calendar")}
+                  className="w-full" // Force le bouton à remplir le wrapper
+                  style={{ borderRadius: 20 }}
+                >
+                  Annuler
+                </Button>
+              </View>
+
+              <View style={{ flex: 1, marginRight: 16 }}>
+                <Button
+                  onPress={handleSubmit}
+                  disabled={mutation.isPending}
+                  className="w-full" // Force le bouton à remplir le wrapper
+                  style={{ borderRadius: 20 }}
+                >
+                  {mutation.isPending ? "Envoi..." : "Valider"}
+                </Button>
+              </View>
             </View>
           </CardContent>
         </Card>

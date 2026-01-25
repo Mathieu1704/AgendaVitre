@@ -1,5 +1,4 @@
 import React from "react";
-// 1. AJOUT de StyleProp et ViewStyle dans les imports
 import {
   Pressable,
   Text,
@@ -24,7 +23,6 @@ interface ButtonProps {
   loading?: boolean;
   disabled?: boolean;
   className?: string;
-  // 2. AJOUT de la définition du style ici
   style?: StyleProp<ViewStyle>;
 }
 
@@ -35,7 +33,6 @@ export function Button({
   loading,
   disabled,
   className,
-  // 3. RÉCUPÉRATION de la variable style ici
   style,
 }: ButtonProps) {
   const scale = useSharedValue(1);
@@ -70,10 +67,10 @@ export function Button({
       disabled={disabled || loading}
       onPressIn={() => (scale.value = withSpring(0.97))}
       onPressOut={() => (scale.value = withSpring(1))}
-      // 4. APPLICATION du style ici (ajouté au tableau)
-      style={[animatedStyle, style]}
+      // ✅ Style avec borderRadius par défaut de 16, overflow hidden pour forcer l'arrondi
+      style={[animatedStyle, { borderRadius: 16, overflow: "hidden" }, style]}
       className={cn(
-        "h-11 flex-row items-center justify-center rounded-lg border px-4",
+        "h-12 flex-row items-center justify-center border px-4",
         variantStyles[variant],
         (loading || disabled) && "opacity-50",
         className,
@@ -86,7 +83,7 @@ export function Button({
           }
         />
       ) : typeof children === "string" ? (
-        <Text className={cn("text-base font-medium", textStyles[variant])}>
+        <Text className={cn("text-base font-semibold", textStyles[variant])}>
           {children}
         </Text>
       ) : (

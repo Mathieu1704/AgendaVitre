@@ -5,21 +5,20 @@ import {
   Pressable,
   ScrollView,
   Platform,
-  ViewStyle, // ✅ Ajout
-  StyleProp, // ✅ Ajout
+  ViewStyle,
+  StyleProp,
 } from "react-native";
 import { Calendar as CalendarIcon, Clock } from "lucide-react-native";
 import { Calendar, DateData } from "react-native-calendars";
 import { Dialog } from "./Dialog";
 import { Button } from "./Button";
 import { useTheme } from "./ThemeToggle";
-import { cn } from "../cn"; // ✅ Ajout
+import { cn } from "../cn";
 
 interface DateTimePickerProps {
   value: string;
   onChange: (value: string) => void;
   label?: string;
-  // ✅ AJOUTS
   className?: string;
   style?: StyleProp<ViewStyle>;
 }
@@ -28,24 +27,18 @@ export function DateTimePicker({
   value,
   onChange,
   label = "Date et Heure",
-  // ✅ Props
   className,
   style,
 }: DateTimePickerProps) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const { isDark } = useTheme();
-
   const isWeb = Platform.OS === "web";
-
-  // ... (Logique identique : refs, split value, useEffect scroll) ...
   const hoursScrollRef = useRef<ScrollView>(null);
   const minutesScrollRef = useRef<ScrollView>(null);
-
   const [datePart, timePart = "09:00"] = value.split("T");
   const currentDate = new Date(value);
   const [hours, minutes] = timePart.split(":").map(Number);
-
   const displayDate = currentDate.toLocaleDateString("fr-FR", {
     weekday: "long",
     day: "numeric",
@@ -100,19 +93,43 @@ export function DateTimePicker({
     ? { cursor: "pointer" as const, userSelect: "none" as const }
     : {};
 
+  const handleScrollEnd = (e: any, type: "hours" | "minutes") => {
+    const y = e.nativeEvent.contentOffset.y;
+    const itemHeight = 48; // Correspond à h-12 (48px)
+    const index = Math.round(y / itemHeight);
+
+    if (type === "hours") {
+      const val = hoursArray[index];
+      // On vérifie que la valeur existe et qu'elle est différente pour éviter les boucles
+      if (val !== undefined && val !== hours) {
+        handleTimeSelect(val, minutes);
+      }
+    } else {
+      const val = minutesArray[index];
+      if (val !== undefined && val !== minutes) {
+        handleTimeSelect(hours, val);
+      }
+    }
+  };
+
   return (
     <>
-      <View>
-        <Text className="text-sm font-medium text-foreground dark:text-white mb-2 ml-1">
-          {label}
-        </Text>
+      <View className="gap-1.5 w-full">
+        {label && (
+          <Text className="text-sm font-semibold text-foreground dark:text-white">
+            {label}
+          </Text>
+        )}
 
-        {/* ✅ BOUTON DATE : Application du style et className */}
+        {/* BOUTON DATE */}
         <Pressable
           onPress={() => setShowCalendar(true)}
-          style={style} // <-- Le radius forcé ira ici
+          style={[{ borderRadius: 16, overflow: "hidden" }, style]}
           className={cn(
-            "h-12 flex-row items-center justify-between px-4 rounded-xl border border-border dark:border-slate-700 bg-background dark:bg-slate-900 mb-3",
+            "h-12 flex-row items-center justify-between px-4 border",
+            "bg-background border-border",
+            "dark:bg-slate-900 dark:border-slate-700",
+            "active:opacity-80 mb-2",
             className,
           )}
         >
@@ -124,25 +141,28 @@ export function DateTimePicker({
           </View>
         </Pressable>
 
-        {/* ✅ BOUTON HEURE : Application du style et className */}
+        {/* BOUTON HEURE */}
         <Pressable
           onPress={() => setShowTimePicker(true)}
-          style={style} // <-- Le radius forcé ira ici aussi
+          style={[{ borderRadius: 16, overflow: "hidden" }, style]}
           className={cn(
-            "h-12 flex-row items-center px-4 rounded-xl border border-border dark:border-slate-700 bg-background dark:bg-slate-900",
+            "h-12 flex-row items-center px-4 border",
+            "bg-background border-border",
+            "dark:bg-slate-900 dark:border-slate-700",
+            "active:opacity-80",
             className,
           )}
         >
-          <View className="bg-muted dark:bg-slate-800 p-2 rounded-lg mr-3">
-            <Clock size={18} color="#94A3B8" />
+          <View className="flex-row items-center gap-3">
+            <Clock size={18} color="#3B82F6" />
+            <Text className="text-foreground dark:text-white font-medium">
+              {timePart}
+            </Text>
           </View>
-          <Text className="text-foreground dark:text-white font-medium text-lg">
-            {timePart}
-          </Text>
         </Pressable>
       </View>
 
-      {/* Les Dialogs ne changent pas */}
+      {/* DIALOGS */}
       <Dialog
         open={showCalendar}
         onClose={() => setShowCalendar(false)}
@@ -152,16 +172,17 @@ export function DateTimePicker({
           <Text className="text-lg font-bold mb-4 text-foreground dark:text-white text-center">
             Sélectionner une date
           </Text>
-          <Calendar
-            current={datePart}
-            onDayPress={handleDateSelect}
-            markedDates={{
-              [datePart]: { selected: true, selectedColor: "#3B82F6" },
-            }}
-            firstDay={1}
-            theme={calendarTheme}
-            style={{ borderRadius: 12, overflow: "hidden" }}
-          />
+          <View style={{ borderRadius: 16, overflow: "hidden" }}>
+            <Calendar
+              current={datePart}
+              onDayPress={handleDateSelect}
+              markedDates={{
+                [datePart]: { selected: true, selectedColor: "#3B82F6" },
+              }}
+              firstDay={1}
+              theme={calendarTheme}
+            />
+          </View>
           <Button
             variant="ghost"
             onPress={() => setShowCalendar(false)}
@@ -177,12 +198,14 @@ export function DateTimePicker({
         onClose={() => setShowTimePicker(false)}
         position="bottom"
       >
-        {/* ... Contenu du TimePicker identique ... */}
         <View className="p-4">
           <Text className="text-lg font-bold mb-4 text-foreground dark:text-white text-center">
             Sélectionner l'heure
           </Text>
-          <View className="flex-row justify-center items-center gap-2 h-48 bg-muted/20 dark:bg-slate-800/30 rounded-xl overflow-hidden relative">
+          <View
+            className="flex-row justify-center items-center gap-2 h-48 bg-muted/30 dark:bg-slate-800/30 overflow-hidden relative"
+            style={{ borderRadius: 20 }}
+          >
             <View
               pointerEvents="none"
               className="absolute w-full h-12 bg-primary/10 border-y border-primary/20 top-[72px] z-10"
@@ -194,16 +217,28 @@ export function DateTimePicker({
               className="flex-1"
               snapToInterval={isWeb ? undefined : 48}
               decelerationRate="normal"
+              onMomentumScrollEnd={(e) => handleScrollEnd(e, "hours")}
+              onScrollEndDrag={(e) => handleScrollEnd(e, "hours")}
             >
               {hoursArray.map((h) => (
                 <Pressable
                   key={h}
-                  onPress={() => handleTimeSelect(h, minutes)}
+                  onPress={() => {
+                    handleTimeSelect(h, minutes);
+                    hoursScrollRef.current?.scrollTo({
+                      y: h * 48,
+                      animated: true,
+                    });
+                  }}
                   style={itemStyle}
-                  className="h-12 items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
+                  className="h-12 items-center justify-center"
                 >
                   <Text
-                    className={`text-2xl font-bold ${h === hours ? "text-primary scale-110" : "text-muted-foreground opacity-50"}`}
+                    className={`text-2xl font-bold ${
+                      h === hours
+                        ? "text-primary scale-110"
+                        : "text-muted-foreground opacity-50"
+                    }`}
                   >
                     {String(h).padStart(2, "0")}
                   </Text>
@@ -220,16 +255,29 @@ export function DateTimePicker({
               className="flex-1"
               snapToInterval={isWeb ? undefined : 48}
               decelerationRate="normal"
+              onMomentumScrollEnd={(e) => handleScrollEnd(e, "minutes")}
+              onScrollEndDrag={(e) => handleScrollEnd(e, "minutes")}
             >
-              {minutesArray.map((m) => (
+              {minutesArray.map((m, index) => (
                 <Pressable
                   key={m}
-                  onPress={() => handleTimeSelect(hours, m)}
+                  onPress={() => {
+                    handleTimeSelect(hours, m);
+                    // Maintenant "index" est connu
+                    minutesScrollRef.current?.scrollTo({
+                      y: index * 48,
+                      animated: true,
+                    });
+                  }}
                   style={itemStyle}
-                  className="h-12 items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
+                  className="h-12 items-center justify-center"
                 >
                   <Text
-                    className={`text-2xl font-bold ${m === minutes ? "text-primary scale-110" : "text-muted-foreground opacity-50"}`}
+                    className={`text-2xl font-bold ${
+                      m === minutes
+                        ? "text-primary scale-110"
+                        : "text-muted-foreground opacity-50"
+                    }`}
                   >
                     {String(m).padStart(2, "0")}
                   </Text>
