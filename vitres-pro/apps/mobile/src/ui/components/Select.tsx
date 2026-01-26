@@ -13,6 +13,7 @@ export function Select<T extends { id: string; label: string }>({
   title = "Choisir",
   className,
   style,
+  containerStyle, // ✅ 1. On récupère la prop
   label,
 }: {
   value: T | null;
@@ -22,14 +23,15 @@ export function Select<T extends { id: string; label: string }>({
   title?: string;
   className?: string;
   style?: StyleProp<ViewStyle>;
+  containerStyle?: StyleProp<ViewStyle>; // ✅ 2. On la type
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <View className="gap-1.5 w-full">
+    // ✅ 3. On l'applique sur la View parente
+    <View className="gap-1.5 w-full" style={containerStyle}>
       {label && (
-        // ✅ SUPPRESSION de ml-1
         <Text className="text-sm font-semibold text-foreground dark:text-white">
           {label}
         </Text>
@@ -39,7 +41,6 @@ export function Select<T extends { id: string; label: string }>({
         onPress={() => setOpen(true)}
         style={[{ borderRadius: 16, overflow: "hidden" }, style]}
         className={cn(
-          // ✅ PASSAGE à h-12
           "h-12 flex-row items-center justify-between px-4 border",
           "bg-background border-border",
           "dark:bg-slate-900 dark:border-slate-700",

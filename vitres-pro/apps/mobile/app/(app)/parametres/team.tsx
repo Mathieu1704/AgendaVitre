@@ -5,16 +5,18 @@ import {
   Text,
   Pressable,
   ActivityIndicator,
+  Platform,
+  Keyboard,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, Clock, UserCog, Thermometer } from "lucide-react-native";
 import { Calendar } from "react-native-calendars";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "../../../src/lib/api";
 import { Card, CardContent } from "../../../src/ui/components/Card";
 import { Button } from "../../../src/ui/components/Button";
-import { Avatar } from "../../../src/ui/components/Avatar";
 import { Dialog } from "../../../src/ui/components/Dialog";
 import { Input } from "../../../src/ui/components/Input";
 import { Select } from "../../../src/ui/components/Select";
@@ -23,10 +25,22 @@ import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { toast } from "../../../src/ui/toast";
 import { toISODate } from "../../../src/lib/date";
 
+// Petit helper pour les initiales
+const getInitials = (name: string) => {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+};
+
 export default function TeamManagementScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets(); // ✅ Gestion Notch
+  const isWeb = Platform.OS === "web";
 
   const [editingEmp, setEditingEmp] = useState<any>(null);
   const [weeklyHours, setWeeklyHours] = useState("");
@@ -73,10 +87,14 @@ export default function TeamManagementScreen() {
 
   // Style commun pour les labels afin de garantir l'alignement et la typo
   const labelClass =
-    "text-sm font-semibold text-foreground dark:text-white ml-1 mb-1.5";
+    "text-sm font-semibold text-foreground dark:text-white mb-1.5";
 
   return (
-    <View className="flex-1 bg-background dark:bg-slate-950">
+    <View
+      className="flex-1 bg-background dark:bg-slate-950"
+      // ✅ Padding Top dynamique pour le Notch
+      style={{ paddingTop: isWeb ? 0 : insets.top }}
+    >
       {/* Header */}
       <View className="px-4 pt-4 pb-2 flex-row items-center border-b border-border dark:border-slate-800">
         <Button
@@ -96,9 +114,17 @@ export default function TeamManagementScreen() {
           <ActivityIndicator size="large" color="#3B82F6" className="mt-10" />
         ) : (
           employees?.map((emp: any) => (
-            <Card key={emp.id} className="mb-4">
+            <Card key={emp.id} className="mb-4 rounded-[32px] overflow-hidden">
               <CardContent className="p-4 flex-row items-center">
-                <Avatar name={emp.full_name || emp.email} size="md" />
+                <View
+                  className="w-12 h-12 rounded-full items-center justify-center border-2 border-white dark:border-slate-800 shadow-sm"
+                  style={{ backgroundColor: emp.color || "#3B82F6" }}
+                >
+                  <Text className="text-white font-bold text-lg">
+                    {getInitials(emp.full_name || emp.email || "?")}
+                  </Text>
+                </View>
+
                 <View className="flex-1 ml-4">
                   <Text className="text-lg font-bold text-foreground dark:text-white">
                     {emp.full_name || "Sans nom"}
@@ -108,7 +134,7 @@ export default function TeamManagementScreen() {
                   </Text>
                   <View className="flex-row items-center mt-2 gap-3">
                     <View
-                      className={`px-2 py-0.5 rounded ${emp.role === "admin" ? "bg-purple-100 dark:bg-purple-900/30" : "bg-gray-100 dark:bg-slate-800"}`}
+                      className={`px-2 py-0.5 rounded-full ${emp.role === "admin" ? "bg-purple-100 dark:bg-purple-900/30" : "bg-gray-100 dark:bg-slate-800"}`}
                     >
                       <Text
                         className={`text-xs font-bold uppercase ${emp.role === "admin" ? "text-purple-700 dark:text-purple-400" : "text-gray-600 dark:text-slate-400"}`}
@@ -124,10 +150,6 @@ export default function TeamManagementScreen() {
                     </View>
                   </View>
                 </View>
-                <View
-                  className="w-4 h-4 rounded-full"
-                  style={{ backgroundColor: emp.color }}
-                />
               </CardContent>
               <View className="flex-row border-t border-border dark:border-slate-800">
                 <Pressable
@@ -161,12 +183,18 @@ export default function TeamManagementScreen() {
       >
         <ScrollView
           showsVerticalScrollIndicator={false}
-          className="max-h-[85vh]"
-          contentContainerStyle={{ padding: 24 }}
+          nestedScrollEnabled={true}
+          keyboardShouldPersistTaps="handled"
+          className="max-h-[85vh] w-full"
+          contentContainerStyle={{ padding: 24, flexGrow: 1 }}
         >
-          <View className="gap-6 w-full">
-            {/* Header Modale */}
-            <View className="items-center">
+          <Pressable
+            onPress={() => Keyboard.dismiss()}
+            className="gap-6 w-full"
+            style={{ opacity: 1 }}
+          >
+            {/* Header Modale - Centré */}
+            <View className="w-full items-center justify-center">
               <View className="bg-primary/10 p-4 rounded-full mb-3">
                 <UserCog size={32} color="#3B82F6" />
               </View>
@@ -178,41 +206,41 @@ export default function TeamManagementScreen() {
               </Text>
             </View>
 
-            {/* Formulaire */}
-            <View className="gap-5 w-full px-1">
-              {/* Input Heures (Typo gérée par le composant Input lui-même) */}
+            {/* Formulaire : Suppression de px-1 pour alignement strict */}
+            <View className="w-full">
+              {/* Input Heures */}
               <Input
-                label="Heures hebdomadaires"
+                label="Heures par semaine"
                 keyboardType="numeric"
                 value={weeklyHours}
                 onChangeText={setWeeklyHours}
+                containerStyle={{ marginBottom: 8 }}
               />
 
-              {/* Select Rôle */}
-              <View className="w-full">
-                <Text className={labelClass}>Rôle de l'employé</Text>
-                <Select
-                  items={roleItems}
-                  value={selectedRole}
-                  onChange={setSelectedRole}
-                />
-              </View>
+              {/* Select Rôle : On utilise la prop label pour l'alignement parfait avec Input */}
+              <Select
+                label="Rôle de l'employé"
+                items={roleItems}
+                value={selectedRole}
+                onChange={setSelectedRole}
+                title="Choisir un rôle"
+                containerStyle={{ marginBottom: 8 }}
+              />
 
               {/* Color Picker */}
-              <View className="w-full">
-                <Text className={labelClass}>Couleur sur le planning</Text>
-                <ColorPicker
-                  selectedColor={selectedColor}
-                  onColorChange={setSelectedColor}
-                  label="" // On laisse vide car on affiche notre propre label au dessus
-                />
-              </View>
+              <ColorPicker
+                selectedColor={selectedColor}
+                onColorChange={setSelectedColor}
+                label="Couleur sur le planning"
+                containerStyle={{ marginBottom: 16 }}
+              />
 
               {/* Espace avant bouton */}
-              <View className="h-4" />
+              <View className="h-2" />
 
               <Button
-                className="w-full"
+                className="h-14 rounded-[28px]"
+                style={{ width: "90%", alignSelf: "center" }}
                 onPress={() =>
                   updateMutation.mutate({
                     weekly_hours: Number(weeklyHours),
@@ -226,25 +254,31 @@ export default function TeamManagementScreen() {
               </Button>
 
               {/* Section Absence */}
-              <View className="border-t border-border dark:border-slate-800 pt-6 mt-2">
+              <View className="border-t border-border dark:border-slate-800 pt-6 mt-2 w-full">
                 <Pressable
                   onPress={() => setShowAbsenceForm(!showAbsenceForm)}
-                  className="flex-row items-center justify-center bg-red-50 dark:bg-red-900/10 p-4 rounded-2xl border border-red-100 dark:border-red-900/20"
+                  style={{ width: "90%", alignSelf: "center" }}
+                  className="flex-row items-center justify-center bg-red-50 dark:bg-red-900/10 h-14 rounded-[28px] border border-red-100 dark:border-red-900/20 active:opacity-80"
                 >
                   <Thermometer size={18} color="#EF4444" />
-                  <Text className="ml-2 text-red-600 font-bold">
+                  <Text className="ml-2 text-red-600 font-bold text-base">
                     Déclarer une absence
                   </Text>
                 </Pressable>
 
                 {showAbsenceForm && (
-                  <View className="mt-4 gap-4 bg-muted/20 p-4 rounded-2xl">
-                    <View>
-                      <Text className="text-xs font-bold uppercase text-muted-foreground mb-2 ml-1">
+                  <View className="mt-4 gap-4 bg-muted/20 p-4 rounded-[32px] w-full">
+                    {/*  CALENDRIER 1  */}
+                    <View className="w-full items-center">
+                      <Text className="text-xs font-bold uppercase text-muted-foreground mb-2 text-center">
                         Date de début
                       </Text>
-                      <View className="rounded-xl overflow-hidden border border-border bg-white shadow-sm">
+                      <View
+                        className="overflow-hidden border border-border bg-white shadow-sm"
+                        style={{ borderRadius: 20, width: 300 }}
+                      >
                         <Calendar
+                          enableSwipeMonths={false}
                           current={absStart}
                           onDayPress={(day) => setAbsStart(day.dateString)}
                           markedDates={{
@@ -256,17 +290,24 @@ export default function TeamManagementScreen() {
                           theme={{
                             calendarBackground: "transparent",
                             textSectionTitleColor: "#64748b",
+                            arrowColor: "#EF4444",
+                            todayTextColor: "#EF4444",
                           }}
                         />
                       </View>
                     </View>
 
-                    <View>
-                      <Text className="text-xs font-bold uppercase text-muted-foreground mb-2 ml-1">
+                    {/* ✅ CALENDRIER 2 CENTRÉ */}
+                    <View className="w-full items-center">
+                      <Text className="text-xs font-bold uppercase text-muted-foreground mb-2 text-center">
                         Date de fin
                       </Text>
-                      <View className="rounded-xl overflow-hidden border border-border bg-white shadow-sm">
+                      <View
+                        className="overflow-hidden border border-border bg-white shadow-sm"
+                        style={{ borderRadius: 20, width: 300 }} // Largeur fixe pour centrage parfait
+                      >
                         <Calendar
+                          enableSwipeMonths={false}
                           current={absEnd}
                           onDayPress={(day) => setAbsEnd(day.dateString)}
                           markedDates={{
@@ -278,6 +319,8 @@ export default function TeamManagementScreen() {
                           theme={{
                             calendarBackground: "transparent",
                             textSectionTitleColor: "#64748b",
+                            arrowColor: "#EF4444",
+                            todayTextColor: "#EF4444",
                           }}
                         />
                       </View>
@@ -294,6 +337,7 @@ export default function TeamManagementScreen() {
                         })
                       }
                       loading={absenceMutation.isPending}
+                      className="rounded-[24px] h-12 w-full"
                     >
                       Confirmer l'absence
                     </Button>
@@ -303,13 +347,13 @@ export default function TeamManagementScreen() {
 
               <Button
                 variant="ghost"
-                className="w-full"
+                className="w-full rounded-[28px]"
                 onPress={() => setEditingEmp(null)}
               >
                 Annuler
               </Button>
             </View>
-          </View>
+          </Pressable>
         </ScrollView>
       </Dialog>
     </View>

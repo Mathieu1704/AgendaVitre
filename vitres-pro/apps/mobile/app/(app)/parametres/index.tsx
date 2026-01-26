@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -17,7 +17,7 @@ import {
   Briefcase,
   Info,
 } from "lucide-react-native";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
@@ -34,6 +34,8 @@ export default function ParametresScreen() {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
 
+  const scrollRef = useRef<ScrollView>(null);
+
   // États User
   const [profile, setProfile] = useState<any>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -42,6 +44,20 @@ export default function ParametresScreen() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loadingPass, setLoadingPass] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Force le scroll en haut dès l'arrivée
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({ y: 0, animated: false });
+      }
+
+      return () => {
+        setNewPassword("");
+        setConfirmPassword("");
+      };
+    }, []),
+  );
 
   // Charger le profil réel
   useEffect(() => {
@@ -100,10 +116,8 @@ export default function ParametresScreen() {
     icon: any;
     title: string;
   }) => (
-    <View className="flex-row items-center mb-4 mt-1">
-      <View className="bg-primary/10 p-2 rounded-lg mr-3">
-        <Icon size={20} color="#3B82F6" />
-      </View>
+    <View className="flex-row items-center mb-1 mt-1 gap-3">
+      <Icon size={24} color="#3B82F6" />
       <Text className="text-lg font-bold text-foreground dark:text-white">
         {title}
       </Text>
@@ -130,9 +144,12 @@ export default function ParametresScreen() {
           <ActivityIndicator color="#3B82F6" />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+        >
           {/* 2. PROFIL */}
-          <Card className="mb-6">
+          <Card className="mb-6 rounded-[32px] overflow-hidden">
             <CardHeader className="p-6 pb-4">
               <SectionTitle icon={User} title="Mon Profil" />
             </CardHeader>
@@ -155,7 +172,8 @@ export default function ParametresScreen() {
                 </View>
               </View>
 
-              <View className="bg-muted/50 p-3 rounded-lg">
+              {/* Bloc Email arrondi */}
+              <View className="bg-muted/50 p-4 rounded-[24px]">
                 <Text className="text-xs text-muted-foreground uppercase font-bold mb-1">
                   Email de connexion
                 </Text>
@@ -169,7 +187,7 @@ export default function ParametresScreen() {
           {/* === SECTION ADMIN (Visible seulement si Admin) === */}
           {isAdmin && (
             <View className="mb-8">
-              <Text className="text-xs font-bold uppercase text-muted-foreground mb-3 px-1">
+              <Text className="text-xs font-bold uppercase text-muted-foreground mb-3 px-4">
                 Administration
               </Text>
 
@@ -180,7 +198,8 @@ export default function ParametresScreen() {
                 }
                 className="mb-3"
               >
-                <Card className="bg-blue-500/5 border-blue-200 dark:border-blue-900 active:scale-[0.99] transition-transform">
+                {/* ✅ Card arrondie */}
+                <Card className="rounded-[32px] bg-blue-500/5 border-blue-200 dark:border-blue-900 active:scale-[0.99] transition-transform overflow-hidden">
                   <CardContent className="p-4 flex-row items-center justify-between">
                     <View className="flex-row items-center gap-4 flex-1">
                       {/* Icône Ronde */}
@@ -197,7 +216,6 @@ export default function ParametresScreen() {
                         </Text>
                       </View>
                     </View>
-                    {/* Flèche Droite */}
                     <ChevronRight
                       size={20}
                       color={isDark ? "white" : "black"}
@@ -210,14 +228,13 @@ export default function ParametresScreen() {
               <Pressable
                 onPress={() => router.push("/(app)/parametres/team" as any)}
               >
-                <Card className="bg-purple-500/5 border-purple-200 dark:border-purple-900 active:scale-[0.99] transition-transform">
+                {/* ✅ Card arrondie */}
+                <Card className="rounded-[32px] bg-purple-500/5 border-purple-200 dark:border-purple-900 active:scale-[0.99] transition-transform overflow-hidden">
                   <CardContent className="p-4 flex-row items-center justify-between">
                     <View className="flex-row items-center gap-4 flex-1">
-                      {/* Icône Ronde */}
                       <View className="bg-purple-500 rounded-full w-12 h-12 items-center justify-center">
                         <Users size={24} color="white" />
                       </View>
-                      {/* Textes Centrés */}
                       <View className="flex-1 justify-center">
                         <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
                           Gérer l'équipe
@@ -227,7 +244,6 @@ export default function ParametresScreen() {
                         </Text>
                       </View>
                     </View>
-                    {/* Flèche Droite */}
                     <ChevronRight
                       size={20}
                       color={isDark ? "white" : "black"}
@@ -239,7 +255,7 @@ export default function ParametresScreen() {
           )}
 
           {/* 3. SECURITÉ */}
-          <Card className="mb-8">
+          <Card className="mb-8 rounded-[32px] overflow-hidden">
             <CardHeader className="p-6 pb-4">
               <SectionTitle icon={Lock} title="Sécurité" />
             </CardHeader>
@@ -256,7 +272,7 @@ export default function ParametresScreen() {
                     secureTextEntry
                     value={newPassword}
                     onChangeText={setNewPassword}
-                    className="w-full" // Force width sur l'input interne
+                    className="w-full"
                   />
                   {newPassword.length > 0 && newPassword.length < 8 && (
                     <View className="flex-row items-center mt-2 ml-1">
@@ -288,9 +304,9 @@ export default function ParametresScreen() {
                     )}
                 </View>
 
-                <View className="h-8 w-full" />
+                <View className="h-4 w-full" />
 
-                {/* Bouton Mettre à jour */}
+                {/* Bouton Mettre à jour (Arrondi) */}
                 <Button
                   onPress={handleChangePassword}
                   loading={loadingPass}
@@ -299,8 +315,7 @@ export default function ParametresScreen() {
                     newPassword.length < 8 ||
                     newPassword !== confirmPassword
                   }
-                  // On retire le mt-8 d'ici car on a mis un Spacer
-                  className="w-full"
+                  className="w-full rounded-[28px] h-14"
                 >
                   <Save
                     size={18}
@@ -322,10 +337,10 @@ export default function ParametresScreen() {
             </CardContent>
           </Card>
 
-          {/* 4. DÉCONNEXION */}
+          {/* 4. DÉCONNEXION (Arrondi) */}
           <Pressable
             onPress={handleLogout}
-            className="flex-row items-center justify-center p-4 rounded-xl border border-destructive/30 bg-destructive/5 active:bg-destructive/10"
+            className="flex-row items-center justify-center p-4 rounded-[28px] border border-destructive/30 bg-destructive/5 active:bg-destructive/10 h-14"
           >
             <LogOut size={18} color="#EF4444" />
             <Text className="ml-2 text-destructive font-bold">
