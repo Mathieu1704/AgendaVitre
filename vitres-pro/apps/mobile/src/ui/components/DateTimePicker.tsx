@@ -100,7 +100,6 @@ export function DateTimePicker({
 
     if (type === "hours") {
       const val = hoursArray[index];
-      // On vérifie que la valeur existe et qu'elle est différente pour éviter les boucles
       if (val !== undefined && val !== hours) {
         handleTimeSelect(val, minutes);
       }
@@ -162,11 +161,12 @@ export function DateTimePicker({
         </Pressable>
       </View>
 
-      {/* DIALOGS */}
+      {/* DIALOG DATE (Calendrier) */}
       <Dialog
         open={showCalendar}
         onClose={() => setShowCalendar(false)}
-        position="center"
+        // ✅ FIX WEB : Centré sur Web, Bottom sur Mobile
+        position={isWeb ? "center" : "bottom"}
       >
         <View className="p-2">
           <Text className="text-lg font-bold mb-4 text-foreground dark:text-white text-center">
@@ -193,91 +193,150 @@ export function DateTimePicker({
         </View>
       </Dialog>
 
+      {/* DIALOG HEURE */}
       <Dialog
         open={showTimePicker}
         onClose={() => setShowTimePicker(false)}
-        position="bottom"
+        // ✅ WEB : Modale centrée. MOBILE : En bas.
+        position={isWeb ? "center" : "bottom"}
       >
-        <View className="p-4">
+        <View
+          className="p-4"
+          // ✅ FIX WEB : On limite la hauteur max sur PC pour éviter que ça dépasse de l'écran
+          style={
+            isWeb
+              ? ({ maxHeight: "80vh", width: 500, maxWidth: "100%" } as any)
+              : {}
+          }
+        >
           <Text className="text-lg font-bold mb-4 text-foreground dark:text-white text-center">
             Sélectionner l'heure
           </Text>
+
           <View
-            className="flex-row justify-center items-center gap-2 h-48 bg-muted/30 dark:bg-slate-800/30 overflow-hidden relative"
+            className={cn(
+              "flex-row justify-center gap-2 overflow-hidden relative",
+              // ✅ MOBILE : Hauteur fixe 48 (roulette). WEB : Hauteur flexible (liste)
+              isWeb
+                ? "h-64 bg-transparent"
+                : "h-48 bg-muted/30 dark:bg-slate-800/30 items-center",
+            )}
             style={{ borderRadius: 20 }}
           >
-            <View
-              pointerEvents="none"
-              className="absolute w-full h-12 bg-primary/10 border-y border-primary/20 top-[72px] z-10"
-            />
+            {/* Barre de sélection (Uniquement sur MOBILE) */}
+            {!isWeb && (
+              <View
+                pointerEvents="none"
+                className="absolute w-full h-12 bg-primary/10 border-y border-primary/20 top-[72px] z-10"
+              />
+            )}
+
+            {/* ScrollView HEURES */}
             <ScrollView
               ref={hoursScrollRef}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingVertical: 72 }}
-              className="flex-1"
-              snapToInterval={isWeb ? undefined : 48}
+              showsVerticalScrollIndicator={isWeb} // On affiche la barre sur Web
+              nestedScrollEnabled={true}
+              contentContainerStyle={{ paddingVertical: isWeb ? 0 : 72 }}
+              className={cn("flex-1", isWeb && "border-r border-border")} // Séparateur sur Web
+              snapToInterval={isWeb ? 0 : 48} // Pas de snap sur Web
               decelerationRate="normal"
-              onMomentumScrollEnd={(e) => handleScrollEnd(e, "hours")}
-              onScrollEndDrag={(e) => handleScrollEnd(e, "hours")}
+              onMomentumScrollEnd={(e) => !isWeb && handleScrollEnd(e, "hours")}
+              onScrollEndDrag={(e) => !isWeb && handleScrollEnd(e, "hours")}
             >
               {hoursArray.map((h) => (
                 <Pressable
                   key={h}
                   onPress={() => {
                     handleTimeSelect(h, minutes);
-                    hoursScrollRef.current?.scrollTo({
-                      y: h * 48,
-                      animated: true,
-                    });
+                    if (!isWeb) {
+                      hoursScrollRef.current?.scrollTo({
+                        y: h * 48,
+                        animated: true,
+                      });
+                    }
                   }}
                   style={itemStyle}
-                  className="h-12 items-center justify-center"
+                  className={cn(
+                    "h-12 items-center justify-center rounded-md mx-1",
+                    // ✅ WEB : Style bouton classique (fond bleu si sélectionné)
+                    isWeb && h === hours && "bg-primary",
+                    isWeb && h !== hours && "hover:bg-muted",
+                  )}
                 >
                   <Text
-                    className={`text-2xl font-bold ${
-                      h === hours
-                        ? "text-primary scale-110"
-                        : "text-muted-foreground opacity-50"
-                    }`}
+                    className={cn(
+                      "font-bold",
+                      // ✅ MOBILE : Gros texte + opacité. WEB : Texte normal + couleur selon sélection
+                      !isWeb && "text-2xl",
+                      !isWeb && h === hours && "text-primary scale-110",
+                      !isWeb &&
+                        h !== hours &&
+                        "text-muted-foreground opacity-50",
+                      isWeb && h === hours && "text-white",
+                      isWeb && h !== hours && "text-foreground dark:text-white",
+                    )}
                   >
                     {String(h).padStart(2, "0")}
                   </Text>
                 </Pressable>
               ))}
             </ScrollView>
-            <Text className="text-3xl font-bold text-foreground dark:text-white pb-1 z-0">
-              :
-            </Text>
+
+            {/* Séparateur (Uniquement sur MOBILE) */}
+            {!isWeb && (
+              <Text className="text-3xl font-bold text-foreground dark:text-white pb-1 z-0">
+                :
+              </Text>
+            )}
+
+            {/* ScrollView MINUTES */}
             <ScrollView
               ref={minutesScrollRef}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingVertical: 72 }}
+              showsVerticalScrollIndicator={isWeb}
+              nestedScrollEnabled={true}
+              contentContainerStyle={{ paddingVertical: isWeb ? 0 : 72 }}
               className="flex-1"
-              snapToInterval={isWeb ? undefined : 48}
+              snapToInterval={isWeb ? 0 : 48}
               decelerationRate="normal"
-              onMomentumScrollEnd={(e) => handleScrollEnd(e, "minutes")}
-              onScrollEndDrag={(e) => handleScrollEnd(e, "minutes")}
+              onMomentumScrollEnd={(e) =>
+                !isWeb && handleScrollEnd(e, "minutes")
+              }
+              onScrollEndDrag={(e) => !isWeb && handleScrollEnd(e, "minutes")}
             >
               {minutesArray.map((m, index) => (
                 <Pressable
                   key={m}
                   onPress={() => {
                     handleTimeSelect(hours, m);
-                    // Maintenant "index" est connu
-                    minutesScrollRef.current?.scrollTo({
-                      y: index * 48,
-                      animated: true,
-                    });
+                    if (!isWeb) {
+                      minutesScrollRef.current?.scrollTo({
+                        y: index * 48,
+                        animated: true,
+                      });
+                    }
                   }}
                   style={itemStyle}
-                  className="h-12 items-center justify-center"
+                  className={cn(
+                    "h-12 items-center justify-center rounded-md mx-1",
+                    // ✅ WEB : Style bouton classique
+                    isWeb && m === minutes && "bg-primary",
+                    isWeb && m !== minutes && "hover:bg-muted",
+                  )}
                 >
                   <Text
-                    className={`text-2xl font-bold ${
-                      m === minutes
-                        ? "text-primary scale-110"
-                        : "text-muted-foreground opacity-50"
-                    }`}
+                    className={cn(
+                      "font-bold",
+                      // ✅ Styles conditionnels Mobile vs Web
+                      !isWeb && "text-2xl",
+                      !isWeb && m === minutes && "text-primary scale-110",
+                      !isWeb &&
+                        m !== minutes &&
+                        "text-muted-foreground opacity-50",
+                      isWeb && m === minutes && "text-white",
+                      isWeb &&
+                        m !== minutes &&
+                        "text-foreground dark:text-white",
+                    )}
                   >
                     {String(m).padStart(2, "0")}
                   </Text>
@@ -285,6 +344,7 @@ export function DateTimePicker({
               ))}
             </ScrollView>
           </View>
+
           <View className="flex-row gap-3 mt-4">
             <Button
               variant="outline"

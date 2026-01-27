@@ -42,19 +42,27 @@ export default function ClientDetailScreen() {
   });
 
   const handleCall = () => {
-    if (client?.phone) Linking.openURL(`tel:${client.phone}`);
+    if (client?.phone) {
+      const cleanedPhone = client.phone.replace(/\s/g, "");
+      Linking.openURL(`tel:${cleanedPhone}`);
+    }
   };
 
   const handleEmail = () => {
-    if (client?.email) Linking.openURL(`mailto:${client.email}`);
+    if (client?.email) {
+      Linking.openURL(`mailto:${client.email.trim()}`);
+    }
   };
 
   const handleMaps = () => {
     if (client?.address) {
       const query = encodeURIComponent(client.address);
-      Linking.openURL(
-        `https://www.google.com/maps/search/?api=1&query=${query}`,
-      );
+      const url = Platform.select({
+        ios: `maps:0,0?q=${query}`,
+        android: `geo:0,0?q=${query}`,
+        web: `https://www.google.com/maps/search/?api=1&query=${query}`,
+      });
+      Linking.openURL(url!);
     }
   };
 

@@ -57,6 +57,9 @@ export function Input({
               height: "100%",
               paddingVertical: 0,
               fontSize: 16,
+              ...(Platform.OS === "web"
+                ? ({ outlineStyle: "none" } as any)
+                : {}),
             },
             inputStyle,
           ]}

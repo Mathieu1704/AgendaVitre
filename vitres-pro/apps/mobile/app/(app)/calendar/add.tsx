@@ -163,7 +163,12 @@ export default function AddInterventionScreen() {
 
             {/* DETAILS */}
             <View className="gap-4 mt-2">
-              <Input label="Titre" value={title} onChangeText={setTitle} />
+              <Input
+                label="Titre"
+                value={title}
+                onChangeText={setTitle}
+                containerStyle={{ marginBottom: isWeb ? 0 : 10 }}
+              />
 
               <DateTimePicker
                 value={startDateStr}
@@ -177,7 +182,11 @@ export default function AddInterventionScreen() {
                   value={durationHours}
                   onChangeText={setDurationHours}
                   keyboardType="numeric"
-                  containerStyle={{ flex: 1, marginLeft: -22, marginRight: 15 }}
+                  containerStyle={{
+                    flex: 1,
+                    marginLeft: isWeb ? 0 : -22,
+                    marginRight: isWeb ? 0 : 15,
+                  }}
                 />
 
                 <Input
@@ -185,29 +194,44 @@ export default function AddInterventionScreen() {
                   value={price}
                   onChangeText={setPrice}
                   keyboardType="numeric"
-                  containerStyle={{ flex: 1, marginRight: 7 }}
+                  containerStyle={{
+                    flex: 1,
+                    marginRight: isWeb ? 0 : 7,
+                  }}
                 />
               </View>
             </View>
 
             {/* ACTIONS */}
             <View className="mt-6 flex-row gap-3">
-              <View style={{ flex: 1, marginLeft: -22, marginRight: 15 }}>
+              <View
+                style={{
+                  flex: 1,
+
+                  marginLeft: isWeb ? 0 : -22,
+                  marginRight: isWeb ? 0 : 15,
+                }}
+              >
                 <Button
                   variant="outline"
                   onPress={() => router.push("/(app)/calendar")}
-                  className="w-full" // Force le bouton à remplir le wrapper
+                  className="w-full"
                   style={{ borderRadius: 20 }}
                 >
                   Annuler
                 </Button>
               </View>
 
-              <View style={{ flex: 1, marginRight: 16 }}>
+              <View
+                style={{
+                  flex: 1,
+                  marginRight: isWeb ? 0 : 16,
+                }}
+              >
                 <Button
                   onPress={handleSubmit}
                   disabled={mutation.isPending}
-                  className="w-full" // Force le bouton à remplir le wrapper
+                  className="w-full"
                   style={{ borderRadius: 20 }}
                 >
                   {mutation.isPending ? "Envoi..." : "Valider"}

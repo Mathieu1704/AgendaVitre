@@ -161,25 +161,38 @@ export default function AddClientScreen() {
               onChangeText={setStreet}
             />
 
-            <View className="flex-row w-full">
+            <View className="flex-row w-full" style={isWeb ? { gap: 16 } : {}}>
               {/* Colonne Code Postal avec marge à droite manuelle */}
-              <View style={{ flex: 1, marginRight: 16, marginLeft: -15 }}>
+              <View
+                style={{
+                  flex: 1,
+                  marginRight: isWeb ? 0 : 16,
+                  marginLeft: isWeb ? 0 : -15,
+                }}
+              >
                 <Input
                   label="Code Postal"
                   placeholder="7000"
                   keyboardType="numeric"
                   value={zipCode}
                   onChangeText={setZipCode}
+                  containerStyle={{ width: "100%" }}
                 />
               </View>
 
               {/* Colonne Ville */}
-              <View style={{ flex: 2, marginRight: 15 }}>
+              <View
+                style={{
+                  flex: 2,
+                  marginRight: isWeb ? 0 : 15,
+                }}
+              >
                 <Input
                   label="Ville *"
                   placeholder="Mons"
                   value={city}
                   onChangeText={setCity}
+                  containerStyle={{ width: "100%" }}
                 />
               </View>
             </View>

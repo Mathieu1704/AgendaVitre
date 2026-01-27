@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   Platform,
+  Linking,
 } from "react-native";
 import {
   Calendar as RNCalendar,
@@ -231,7 +232,7 @@ export default function CalendarScreen() {
     return d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
   }, [cursorDate, viewMode]);
 
-  // --- COMPOSANT CARTE INTERVENTION (CORRIGÉ AVEC STYLE EXPLICITE) ---
+  // --- COMPOSANT CARTE INTERVENTION (Mobile Optimisé) ---
   const InterventionCard = ({
     item,
     compact = false,
@@ -239,45 +240,89 @@ export default function CalendarScreen() {
     item: any;
     compact?: boolean;
   }) => {
-    const isMobile = width < 768;
-    // On force le radius via le style direct pour éviter les bugs CSS
-    const cardRadius = compact ? 16 : 24;
+    // Style différent selon compact ou normal
+    const cardPadding = compact ? "p-2" : "p-3";
+    const cardRadius = compact ? 12 : 20;
+
+    // Heure de début et fin
+    const startTime = new Date(item.start_time);
+    const endTime = item.end_time
+      ? new Date(item.end_time)
+      : new Date(startTime.getTime() + 60 * 60 * 1000);
 
     return (
       <Pressable
         onPress={() => router.push(`/(app)/calendar/${item.id}` as any)}
-        className={`bg-card dark:bg-slate-900 border border-border dark:border-slate-800 shadow-sm active:scale-[0.98] mb-2 ${compact ? "p-2" : "p-3"}`}
+        className={`bg-card dark:bg-slate-900 border border-border dark:border-slate-800 shadow-sm active:scale-[0.98] mb-3 ${cardPadding}`}
         style={{ borderRadius: cardRadius }}
       >
-        <View className="flex-row justify-between items-start mb-1">
-          <Text className="text-xs font-bold text-primary dark:text-blue-400">
-            {new Date(item.start_time).toLocaleTimeString("fr-FR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </Text>
-          {!compact && <StatusBadge status={item.status} />}
-        </View>
-
-        <Text
-          className={`font-bold text-foreground dark:text-white ${
-            compact ? "text-xs" : "text-sm mb-1"
-          }`}
-          numberOfLines={2}
-        >
-          {item.title}
-        </Text>
-
-        {!compact && (
-          <View className="flex-row items-center mt-1">
+        <View className="flex-row items-center gap-3">
+          {/* COLONNE GAUCHE : HEURE (Arrondie) */}
+          <View
+            className={`items-center justify-center ${compact ? "w-11" : "w-16"} bg-blue-50 dark:bg-blue-900/20 py-2.5`}
+            // ✅ ARRONDISSEMENT DU CARRÉ BLEU
+            style={{ borderRadius: 16 }}
+          >
             <Text
-              className="text-xs text-muted-foreground dark:text-slate-400"
-              numberOfLines={1}
+              className={`font-bold text-primary dark:text-blue-400 ${compact ? "text-xs" : "text-base"}`}
             >
-              {item.client?.name || "Client"}
+              {startTime.toLocaleTimeString("fr-FR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </Text>
+            {!compact && (
+              <Text className="text-[10px] text-muted-foreground mt-0.5 font-medium">
+                {endTime.toLocaleTimeString("fr-FR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </Text>
+            )}
           </View>
-        )}
+
+          {/* COLONNE DROITE : INFOS */}
+          <View className="flex-1 justify-center">
+            <View className="flex-row justify-between items-start">
+              {/* ✅ CLIENT EN PREMIER ET PLUS GRAND */}
+              <View className="flex-1 mr-2">
+                <Text
+                  className={`font-extrabold text-foreground dark:text-white ${
+                    compact ? "text-sm" : "text-xl"
+                  }`}
+                  numberOfLines={1}
+                >
+                  {item.client?.name || "Client Inconnu"}
+                </Text>
+
+                {/* Titre de l'intervention en dessous, un peu plus discret */}
+                <Text
+                  className={`text-muted-foreground dark:text-slate-400 font-medium ${
+                    compact ? "text-[10px]" : "text-sm"
+                  } mt-0.5`}
+                  numberOfLines={1}
+                >
+                  {item.title}
+                </Text>
+              </View>
+
+              {!compact && <StatusBadge status={item.status} />}
+            </View>
+
+            {/* Adresse (optionnel, si non compact) */}
+            {!compact && item.client?.address && (
+              <View className="flex-row items-center mt-1.5 opacity-80">
+                <MapPin size={12} color="#64748B" className="mr-1" />
+                <Text
+                  className="text-xs text-muted-foreground"
+                  numberOfLines={1}
+                >
+                  {item.client.address}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
       </Pressable>
     );
   };

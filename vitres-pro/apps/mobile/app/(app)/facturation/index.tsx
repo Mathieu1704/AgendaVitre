@@ -183,9 +183,8 @@ export default function FacturationScreen() {
         {/* On utilise gap-3 comme dans le dashboard */}
         <View className="flex-row flex-wrap gap-3 mb-8">
           {kpiStats.map((stat, index) => {
-            // Calcul exact de la largeur comme dans le dashboard
-            // width - 32 (padding container px-4*2) - 12 (gap-3) / 2
-            const cardWidth = (width - 32 - 12) / 2;
+            // ✅ FIX WEB : Sur Web on met 24% (pour en avoir 4 par ligne), sur Mobile on garde le calcul précis (2 par ligne)
+            const cardWidth = isWeb ? "24%" : (width - 32 - 12) / 2;
 
             return (
               <Animated.View

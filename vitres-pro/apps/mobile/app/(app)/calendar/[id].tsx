@@ -6,10 +6,15 @@ import {
   ActivityIndicator,
   Text,
   useWindowDimensions,
+  Platform,
+  Linking,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  Phone,
+  Mail,
+  Navigation,
   ChevronLeft,
   MapPin,
   Clock,
@@ -17,9 +22,9 @@ import {
   CheckCircle2,
   PlayCircle,
   AlertCircle,
-  User,
 } from "lucide-react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Imports internes
 import { api } from "../../../src/lib/api";
@@ -38,6 +43,7 @@ export default function InterventionDetailScreen() {
   const { width } = useWindowDimensions();
 
   const isDesktop = width >= 768;
+  const insets = useSafeAreaInsets();
 
   // --- DATA ---
   const { data: intervention, isLoading } = useQuery({
@@ -51,7 +57,6 @@ export default function InterventionDetailScreen() {
   // --- NAVIGATION RETOUR INTELLIGENTE ---
   const handleBack = () => {
     if (intervention?.start_time) {
-      // On retourne au planning MAIS en forçant la date de l'intervention
       router.push({
         pathname: "/(app)/calendar",
         params: { date: intervention.start_time },
@@ -115,7 +120,10 @@ export default function InterventionDetailScreen() {
   const startTime = new Date(intervention.start_time);
 
   return (
-    <View className="flex-1 bg-background dark:bg-slate-950">
+    <View
+      className="flex-1 bg-background dark:bg-slate-950"
+      style={{ paddingTop: isDesktop ? 0 : insets.top }}
+    >
       {/* --- HEADER --- */}
       <View className="flex-row items-center p-4 pt-12 pb-4 border-b border-border dark:border-slate-800 bg-background dark:bg-slate-950 z-10">
         <Pressable
@@ -158,74 +166,178 @@ export default function InterventionDetailScreen() {
         </View>
 
         {/* --- BLOCS D'INFORMATIONS --- */}
-        <View
-          className={`px-4 pb-32 gap-4 ${
-            isDesktop ? "flex-row flex-wrap" : ""
-          }`}
-        >
-          {/* 1. HORAIRE (Centré et équilibré) */}
-          <Animated.View
-            entering={FadeInDown.delay(200)}
-            className={isDesktop ? "w-[48%]" : "w-full"}
+        <View className="px-6 pb-20">
+          {/* LIGNE 1 : HORAIRE + CLIENT */}
+          <View
+            className={isDesktop ? "flex-row w-full gap-4" : "gap-4"}
+            style={{
+              marginRight: isDesktop ? 0 : 20,
+              marginBottom: 20,
+            }}
           >
-            <Card className="min-h-[110px] justify-center">
-              <CardContent className="p-5 flex-row items-center justify-between">
-                <View>
-                  <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                    Horaire prévu
-                  </Text>
-                  <Text className="text-3xl font-bold text-foreground dark:text-white">
-                    {startTime.toLocaleTimeString("fr-FR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </Text>
-                </View>
-                <View className="bg-blue-500/10 p-3 rounded-full">
-                  <Clock size={28} color="#3B82F6" />
-                </View>
-              </CardContent>
-            </Card>
-          </Animated.View>
-
-          {/* 2. CLIENT (Centré) */}
-          <Animated.View
-            entering={FadeInDown.delay(300)}
-            className={isDesktop ? "w-[48%]" : "w-full"}
-          >
-            <Card className="min-h-[110px] justify-center">
-              <CardContent className="p-5">
-                <View className="flex-row items-center">
-                  <Avatar name={intervention.client?.name || "?"} size="md" />
-                  <View className="ml-4 flex-1">
-                    <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
-                      Client
+            {/* 1. HORAIRE */}
+            <Animated.View
+              entering={FadeInDown.delay(200)}
+              className={isDesktop ? "flex-1" : "w-full"}
+            >
+              <Card className="min-h-[110px] justify-center rounded-3xl">
+                <CardContent className="p-5 flex-row items-center justify-between">
+                  <View>
+                    <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
+                      Horaire prévu
                     </Text>
-                    <Text className="text-lg font-bold text-foreground dark:text-white mb-0.5">
-                      {intervention.client?.name || "Client Inconnu"}
+                    <Text className="text-3xl font-bold text-foreground dark:text-white">
+                      {startTime.toLocaleTimeString("fr-FR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </Text>
-
-                    {intervention.client?.address && (
-                      <View className="flex-row items-center mt-1">
-                        <MapPin size={12} color="#64748B" />
-                        <Text
-                          className="ml-1 text-xs text-muted-foreground dark:text-slate-400"
-                          numberOfLines={1}
-                        >
-                          {intervention.client.address}
-                        </Text>
-                      </View>
-                    )}
                   </View>
-                </View>
-              </CardContent>
-            </Card>
+                  <View className="bg-blue-500/10 p-3 rounded-full">
+                    <Clock size={28} color="#3B82F6" />
+                  </View>
+                </CardContent>
+              </Card>
+            </Animated.View>
+
+            {/* 2. CLIENT */}
+            <Animated.View
+              entering={FadeInDown.delay(300)}
+              className={isDesktop ? "flex-1" : "w-full"}
+            >
+              <Card className="min-h-[110px] justify-center rounded-3xl">
+                <CardContent className="p-5">
+                  <View className="flex-row items-center">
+                    <Avatar name={intervention.client?.name || "?"} size="md" />
+                    <View className="ml-4 flex-1">
+                      <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
+                        Client
+                      </Text>
+                      <Text className="text-lg font-bold text-foreground dark:text-white mb-0.5">
+                        {intervention.client?.name || "Client Inconnu"}
+                      </Text>
+
+                      {intervention.client?.address && (
+                        <View className="flex-row items-center mt-1">
+                          <MapPin size={12} color="#64748B" />
+                          <Text
+                            className="ml-1 text-xs text-muted-foreground dark:text-slate-400"
+                            numberOfLines={1}
+                          >
+                            {intervention.client.address}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </CardContent>
+              </Card>
+            </Animated.View>
+          </View>
+
+          {/* LIGNE 2 : ACTIONS RAPIDES */}
+          <Animated.View
+            entering={FadeInDown.delay(350)}
+            className={`flex-row w-full ${isDesktop ? "gap-4" : "gap-2"}`}
+            style={{
+              marginBottom: isDesktop ? 0 : 20,
+            }}
+          >
+            {/* BOUTON GPS */}
+            <Pressable
+              className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
+              onPress={() => {
+                if (intervention.client?.address) {
+                  const query = encodeURIComponent(intervention.client.address);
+                  const url = Platform.select({
+                    ios: `maps:0,0?q=${query}`,
+                    android: `geo:0,0?q=${query}`,
+                    web: `https://www.google.com/maps/search/?api=1&query=${query}`,
+                  });
+                  Linking.openURL(url!);
+                } else {
+                  toast.error(
+                    "Pas d'adresse",
+                    "Aucune adresse pour ce client.",
+                  );
+                }
+              }}
+            >
+              <View className="bg-emerald-500/10 p-3 rounded-full mb-2">
+                <Navigation
+                  size={24}
+                  color="#10B981"
+                  fill="#10B981"
+                  fillOpacity={0.2}
+                />
+              </View>
+              <Text className="text-xs font-bold text-foreground dark:text-white">
+                Y aller
+              </Text>
+            </Pressable>
+
+            {/* BOUTON APPELER */}
+            <Pressable
+              className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
+              onPress={() => {
+                if (intervention.client?.phone) {
+                  const cleanedPhone = intervention.client.phone.replace(
+                    /\s/g,
+                    "",
+                  );
+                  Linking.openURL(`tel:${cleanedPhone}`);
+                } else {
+                  toast.error("Pas de téléphone", "Aucun numéro renseigné.");
+                }
+              }}
+            >
+              <View className="bg-blue-500/10 p-3 rounded-full mb-2">
+                <Phone
+                  size={24}
+                  color="#3B82F6"
+                  fill="#3B82F6"
+                  fillOpacity={0.2}
+                />
+              </View>
+              <Text className="text-xs font-bold text-foreground dark:text-white">
+                Appeler
+              </Text>
+            </Pressable>
+
+            {/* BOUTON MAIL */}
+            <Pressable
+              className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
+              onPress={() => {
+                if (intervention.client?.email) {
+                  Linking.openURL(`mailto:${intervention.client.email.trim()}`);
+                } else {
+                  toast.error("Pas d'email", "Aucun email renseigné.");
+                }
+              }}
+            >
+              <View className="bg-orange-500/10 p-3 rounded-full mb-2">
+                <Mail
+                  size={24}
+                  color="#F97316"
+                  fill="#F97316"
+                  fillOpacity={0.2}
+                />
+              </View>
+              <Text className="text-xs font-bold text-foreground dark:text-white">
+                Email
+              </Text>
+            </Pressable>
           </Animated.View>
 
           {/* 3. SUIVI TEMPS RÉEL (Si dispo) */}
           {(intervention.real_start_time || intervention.real_end_time) && (
-            <Animated.View entering={FadeInDown.delay(400)} className="w-full">
-              <Card className="border-l-4 border-l-primary bg-primary/5 border-y-0 border-r-0">
+            <Animated.View
+              entering={FadeInDown.delay(400)}
+              className="w-full"
+              // ✅ MODIF : Marge en bas UNIQUEMENT sur mobile
+              style={{ marginBottom: isDesktop ? 0 : 20 }}
+            >
+              <Card className="border-l-4 border-l-primary bg-primary/5 border-y-0 border-r-0 rounded-3xl">
                 <CardContent className="p-5">
                   <Text className="text-xs font-bold text-primary uppercase tracking-wider mb-3">
                     Suivi en direct
@@ -245,7 +357,7 @@ export default function InterventionDetailScreen() {
                           />
                           <Text className="font-bold text-foreground dark:text-white">
                             {new Date(
-                              intervention.real_start_time
+                              intervention.real_start_time,
                             ).toLocaleTimeString("fr-FR", {
                               hour: "2-digit",
                               minute: "2-digit",
@@ -267,7 +379,7 @@ export default function InterventionDetailScreen() {
                           />
                           <Text className="font-bold text-foreground dark:text-white">
                             {new Date(
-                              intervention.real_end_time
+                              intervention.real_end_time,
                             ).toLocaleTimeString("fr-FR", {
                               hour: "2-digit",
                               minute: "2-digit",
@@ -290,7 +402,7 @@ export default function InterventionDetailScreen() {
           <Button
             onPress={() => statusMutation.mutate("in_progress")}
             disabled={statusMutation.isPending}
-            className="w-full h-14 bg-orange-500 hover:bg-orange-600 rounded-xl"
+            className="w-full h-14 bg-orange-500 hover:bg-orange-600 rounded-full"
           >
             {statusMutation.isPending ? (
               <ActivityIndicator color="white" />
@@ -309,7 +421,7 @@ export default function InterventionDetailScreen() {
           <Button
             onPress={() => statusMutation.mutate("done")}
             disabled={statusMutation.isPending}
-            className="w-full h-14 bg-green-500 hover:bg-green-600 rounded-xl"
+            className="w-full h-14 bg-green-500 hover:bg-green-600 rounded-full"
           >
             {statusMutation.isPending ? (
               <ActivityIndicator color="white" />
@@ -325,7 +437,7 @@ export default function InterventionDetailScreen() {
         )}
 
         {intervention.status === "done" && (
-          <View className="w-full h-14 bg-green-500 rounded-xl items-center justify-center flex-row shadow-lg shadow-green-500/20">
+          <View className="w-full h-14 bg-green-500 rounded-full items-center justify-center flex-row shadow-lg shadow-green-500/20">
             <CheckCircle2 size={24} color="white" strokeWidth={3} />
             <Text className="ml-2 text-white text-lg font-extrabold tracking-wide">
               INTERVENTION CLÔTURÉE
