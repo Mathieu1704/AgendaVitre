@@ -7,10 +7,17 @@ import {
   ActivityIndicator,
   Platform,
   Keyboard,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Clock, UserCog, Thermometer } from "lucide-react-native";
+import {
+  ChevronLeft,
+  Clock,
+  UserCog,
+  Thermometer,
+  Trash2,
+} from "lucide-react-native";
 import { Calendar } from "react-native-calendars";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -77,12 +84,53 @@ export default function TeamManagementScreen() {
     },
   });
 
+  // SUPPRESSION
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/employees/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      toast.success("Supprimé", "L'employé a été supprimé définitivement.");
+      setEditingEmp(null);
+    },
+    onError: (err: any) => {
+      // ✅ MODIF ICI : On affiche le vrai message du serveur
+      console.log("Erreur suppression:", err.response?.data);
+      const message = err.response?.data?.detail || "Erreur inconnue";
+      toast.error("Erreur", message);
+    },
+  });
+
   const handleOpenEdit = (emp: any) => {
     setEditingEmp(emp);
     setWeeklyHours(emp.weekly_hours.toString());
     setSelectedColor(emp.color);
     setSelectedRole(roleItems.find((r) => r.id === emp.role));
     setShowAbsenceForm(false);
+  };
+
+  const handleDeletePress = () => {
+    if (Platform.OS === "web") {
+      if (
+        confirm(
+          "Êtes-vous sûr de vouloir supprimer cet employé ? Cette action est irréversible.",
+        )
+      ) {
+        deleteMutation.mutate(editingEmp.id);
+      }
+    } else {
+      Alert.alert(
+        "Supprimer l'employé",
+        "Êtes-vous sûr ? Cette action est irréversible et supprimera son accès.",
+        [
+          { text: "Annuler", style: "cancel" },
+          {
+            text: "Supprimer",
+            style: "destructive",
+            onPress: () => deleteMutation.mutate(editingEmp.id),
+          },
+        ],
+      );
+    }
   };
 
   // Style commun pour les labels afin de garantir l'alignement et la typo
@@ -343,6 +391,26 @@ export default function TeamManagementScreen() {
                     </Button>
                   </View>
                 )}
+              </View>
+
+              {/* BOUTON SUPPRIMER  */}
+              <View className="mt-4 pt-4 border-t border-border dark:border-slate-800 w-full items-center">
+                <Pressable
+                  onPress={handleDeletePress}
+                  disabled={deleteMutation.isPending}
+                  className="flex-row items-center p-3 opacity-80 active:opacity-100"
+                >
+                  {deleteMutation.isPending ? (
+                    <ActivityIndicator color="#EF4444" />
+                  ) : (
+                    <>
+                      <Trash2 size={18} color="#EF4444" />
+                      <Text className="text-red-500 font-bold ml-2">
+                        Supprimer ce compte
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
               </View>
 
               <Button

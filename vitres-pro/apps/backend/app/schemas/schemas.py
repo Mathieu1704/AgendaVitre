@@ -54,7 +54,10 @@ class AbsenceOut(AbsenceCreate):
 # --- CLIENT ---
 class ClientBase(BaseModel):
     name: str
-    address: str
+    street: Optional[str] = None
+    zip_code: Optional[str] = None
+    city: Optional[str] = None
+    address: Optional[str] = None # Fallback
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     notes: Optional[str] = None
@@ -68,17 +71,32 @@ class ClientOutLite(ClientBase):
     class Config:
         from_attributes = True
 
+class InterventionItemBase(BaseModel):
+    label: str  # Ex: "RDC", "Velux"
+    price: float # Ex: 35.0
+
+class InterventionItemCreate(InterventionItemBase):
+    pass
+
+class InterventionItemOut(InterventionItemBase):
+    id: UUID
+    class Config:
+        from_attributes = True
+
 # --- INTERVENTION ---
 class InterventionBase(BaseModel):
     title: str
-    description: Optional[str] = None
+    description: Optional[str] = None 
     start_time: datetime
     end_time: datetime
     status: str = "planned"
     price_estimated: Optional[float] = None
+    is_invoice: bool = False
     client_id: UUID
-    # On remplace employee_id par une liste d'IDs
     employee_ids: List[UUID] = [] 
+    
+
+    items: List[InterventionItemCreate] = []
 
 class InterventionCreate(InterventionBase):
     pass
@@ -101,8 +119,9 @@ class InterventionOut(BaseModel):
     status: str
     price_estimated: Optional[float]
     client: Optional[ClientOutLite] = None
-    # On renvoie la liste complète des employés assignés
     employees: List[EmployeeOut] = []
+    
+    items: List[InterventionItemOut] = []
 
     class Config:
         from_attributes = True

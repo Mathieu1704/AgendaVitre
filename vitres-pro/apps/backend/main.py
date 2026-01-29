@@ -28,6 +28,7 @@ app.include_router(employees.router, prefix="/api/employees", tags=["employees"]
 app.include_router(absences.router, prefix="/api/absences", tags=["absences"])
 
 
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "LVM Agenda API V2 (Prod Ready)"}

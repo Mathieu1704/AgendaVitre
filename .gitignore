@@ -70,3 +70,12 @@ dump_*.txt
 .pdf/
 .png/
 .jpg/
+
+# Ignore les scripts locaux et secrets
+**/apps/backend/scripts/token.json
+**/apps/backend/scripts/credentials.json
+**/apps/backend/scripts/export_planning.json
+**/apps/backend/scripts/export_planning.xlsx
+**/apps/backend/scripts/extract_to_file.py
+**/apps/backend/scripts/get_colors.py
+**/apps/backend/scripts/__init__.py

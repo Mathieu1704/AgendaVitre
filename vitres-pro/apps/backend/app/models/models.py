@@ -69,6 +69,11 @@ class Client(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, nullable=False)
+
+    street = Column(String, nullable=True)
+    zip_code = Column(String, nullable=True)
+    city = Column(String, nullable=True)
+
     address = Column(String, nullable=False)
     phone = Column(String, nullable=True)
     email = Column(String, nullable=True)
@@ -77,13 +82,23 @@ class Client(Base):
     
     interventions = relationship("Intervention", back_populates="client")
 
+class InterventionItem(Base):
+    __tablename__ = "intervention_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    intervention_id = Column(UUID(as_uuid=True), ForeignKey("interventions.id"))
+    
+    label = Column(String, nullable=False) # Ex: "RDC", "Velux"
+    price = Column(Numeric(10, 2), nullable=False, default=0)
+    
+    intervention = relationship("Intervention", back_populates="items")
+
 class Intervention(Base):
     __tablename__ = "interventions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id"))
     
-    # SUPPRIMÉ : employee_id (car maintenant c'est une liste via 'employees')
     
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
@@ -91,7 +106,10 @@ class Intervention(Base):
     end_time = Column(DateTime(timezone=True), nullable=False)
     status = Column(String, default="planned") 
     price_estimated = Column(Numeric(10, 2), nullable=True)
+    is_invoice = Column(Boolean, default=False)
     
     # Relations
     client = relationship("Client", back_populates="interventions")
     employees = relationship("Employee", secondary=intervention_employees, back_populates="interventions")
+
+    items = relationship("InterventionItem", back_populates="intervention", cascade="all, delete-orphan")

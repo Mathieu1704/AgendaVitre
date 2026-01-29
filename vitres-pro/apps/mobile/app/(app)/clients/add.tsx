@@ -97,11 +97,12 @@ export default function AddClientScreen() {
       return;
     }
 
-    const fullAddress = `${street}, ${zipCode} ${city}`;
-
     mutation.mutate({
       name,
-      address: fullAddress,
+      street,
+      zip_code: zipCode,
+      city,
+      address: `${street}, ${zipCode} ${city}`, // Fallback
       phone: phone || null,
       email: email || null,
       notes: notes || null,

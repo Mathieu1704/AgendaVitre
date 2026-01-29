@@ -128,3 +128,48 @@ def update_employee(
     db.commit()
     db.refresh(db_obj)
     return db_obj
+
+@router.delete("/{employee_id}")
+def delete_employee(
+    employee_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """
+    Supprime un employé.
+    1. Retire l'employé de toutes les interventions (Désassignation).
+    2. Supprime l'employé de la DB.
+    3. Supprime le compte de connexion Supabase Auth.
+    """
+    # 1. Sécurité : Seul l'admin peut supprimer
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Interdit : Seul l'admin peut supprimer.")
+
+    # 2. Récupérer l'employé
+    employee_to_delete = db.query(Employee).filter(Employee.id == employee_id).first()
+    
+    if not employee_to_delete:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+
+    try:
+        # ✅ CRUCIAL : On vide ses interventions avant de supprimer
+        # Cela supprime les liens dans la table 'intervention_employees'
+        # Les interventions redeviennent "Non assignées" (ou assignées aux autres collègues s'il y en a)
+        employee_to_delete.interventions = []
+        db.commit() # On valide la désassignation
+
+        # 3. Supprimer l'employé de la base de données
+        db.delete(employee_to_delete)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Erreur DB: {e}")
+        raise HTTPException(status_code=400, detail=f"Impossible de supprimer : {str(e)}")
+
+    # 4. Supprimer le compte Auth Supabase (Optionnel mais recommandé pour nettoyer)
+    try:
+        supabase_admin.auth.admin.delete_user(str(employee_id))
+    except Exception as e:
+        print(f"⚠️ Note: Le compte Auth n'a pas pu être supprimé (peut-être déjà fait) : {e}")
+
+    return {"message": "Employé supprimé et interventions libérées."}

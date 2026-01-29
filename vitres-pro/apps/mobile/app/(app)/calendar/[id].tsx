@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   PlayCircle,
   AlertCircle,
+  Wallet,
 } from "lucide-react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -147,9 +148,35 @@ export default function InterventionDetailScreen() {
         {/* --- TITRE --- */}
         <View className="px-6 pt-6 pb-2">
           <Animated.View entering={FadeInDown.delay(100).springify()}>
-            <Text className="text-3xl font-extrabold text-foreground dark:text-white mb-2 leading-tight">
+            <Text className="text-3xl font-extrabold text-foreground dark:text-white mb-4 leading-tight">
               {intervention.title}
             </Text>
+
+            {/* ✅ LOGIQUE FACTURATION vs ENCAISSEMENT */}
+            {intervention.is_invoice ? (
+              // CAS 1 : FACTURE (Admin gère, Employé tranquille)
+              <View className="self-start bg-blue-100 dark:bg-blue-900/30 px-3 py-1.5 rounded-full mb-6 border border-blue-200 dark:border-blue-800">
+                <Text className="text-blue-700 dark:text-blue-400 font-bold text-xs uppercase">
+                  📄 Facture à émettre
+                </Text>
+              </View>
+            ) : (
+              // CAS 2 : PAS DE FACTURE = ALERTE ROUGE
+              <View className="bg-red-100 dark:bg-red-900/20 p-4 rounded-2xl mb-6 border border-red-200 dark:border-red-900/50 flex-row gap-4 items-center">
+                <View className="bg-red-500 h-10 w-10 rounded-full items-center justify-center">
+                  <Wallet size={20} color="white" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-red-700 dark:text-red-400 font-extrabold text-sm uppercase mb-0.5">
+                    À ENCAISSER SUR PLACE
+                  </Text>
+                  <Text className="text-red-600/80 dark:text-red-300 text-xs font-medium leading-tight">
+                    Le client doit payer {intervention.price_estimated} €
+                    maintenant.
+                  </Text>
+                </View>
+              </View>
+            )}
 
             <View className="flex-row items-center gap-2 mb-6">
               <Calendar size={16} color={isDark ? "#94A3B8" : "#64748B"} />
@@ -393,6 +420,69 @@ export default function InterventionDetailScreen() {
               </Card>
             </Animated.View>
           )}
+
+          <Animated.View
+            entering={FadeInDown.delay(450)}
+            className="w-full mt-4"
+          >
+            <Card className="rounded-3xl">
+              <CardContent className="p-5">
+                <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
+                  Détail de la prestation
+                </Text>
+
+                {/* LISTE DES ITEMS */}
+                {intervention.items && intervention.items.length > 0 ? (
+                  <View className="gap-3 mb-4">
+                    {intervention.items.map((item: any, idx: number) => (
+                      <View
+                        key={idx}
+                        className="flex-row justify-between items-center pb-2 border-b border-border dark:border-slate-800 last:border-0"
+                      >
+                        <Text className="text-foreground dark:text-white font-medium flex-1 mr-4">
+                          {item.label}
+                        </Text>
+                        <Text className="text-foreground dark:text-white font-bold">
+                          {item.price} €
+                        </Text>
+                      </View>
+                    ))}
+                    {/* TOTAL */}
+                    <View className="flex-row justify-between items-center pt-2 mt-1">
+                      <Text className="text-lg font-bold text-foreground dark:text-white">
+                        Total
+                      </Text>
+                      <Text className="text-xl font-extrabold text-primary">
+                        {intervention.price_estimated} €
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  // Fallback si pas d'items (anciennes données)
+                  <View className="flex-row justify-between items-center mb-4">
+                    <Text className="text-muted-foreground">
+                      Prix global estimé
+                    </Text>
+                    <Text className="text-xl font-extrabold text-primary">
+                      {intervention.price_estimated} €
+                    </Text>
+                  </View>
+                )}
+
+                {/* DESCRIPTION / NOTES */}
+                {intervention.description && (
+                  <View className="bg-muted/50 dark:bg-slate-900/50 p-4 rounded-xl mt-2">
+                    <Text className="text-xs font-bold text-muted-foreground mb-1">
+                      NOTES
+                    </Text>
+                    <Text className="text-foreground dark:text-slate-300 leading-relaxed">
+                      {intervention.description}
+                    </Text>
+                  </View>
+                )}
+              </CardContent>
+            </Card>
+          </Animated.View>
         </View>
       </ScrollView>
 

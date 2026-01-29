@@ -1,8 +1,16 @@
 import React, { useMemo, useState } from "react";
-import { View, ScrollView, Text, Platform } from "react-native";
+import {
+  View,
+  ScrollView,
+  Text,
+  Platform,
+  Pressable,
+  Switch,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../src/lib/api";
+import { PlusCircle, Trash2, Check, FileText } from "lucide-react-native";
 
 import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
 import { Input } from "../../../src/ui/components/Input";
@@ -18,11 +26,15 @@ import {
   toLocalDateTimeString,
 } from "../../../src/lib/date";
 import { useEmployees } from "../../../src/hooks/useEmployees";
+import { useTheme } from "../../../src/ui/components/ThemeToggle";
+import { useAuth } from "../../../src/hooks/useAuth";
 
 type Client = { id: string; name: string; address: string };
+type Item = { label: string; price: string };
 
 export default function AddInterventionScreen() {
   const router = useRouter();
+  const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
@@ -39,7 +51,10 @@ export default function AddInterventionScreen() {
   const [title, setTitle] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
-  const [price, setPrice] = useState("");
+
+  const [items, setItems] = useState<Item[]>([{ label: "", price: "" }]);
+  const [description, setDescription] = useState(""); // Notes globales
+  const [isInvoice, setIsInvoice] = useState(false);
 
   const defaultStart = useMemo(() => {
     const d = new Date();
@@ -50,11 +65,24 @@ export default function AddInterventionScreen() {
   const [startDateStr, setStartDateStr] = useState(defaultStart);
   const [durationHours, setDurationHours] = useState("");
 
+  const totalPrice = useMemo(() => {
+    return items.reduce((acc, item) => acc + (parseFloat(item.price) || 0), 0);
+  }, [items]);
+
+  // Fonctions pour gérer les lignes
+  const addItem = () => setItems([...items, { label: "", price: "" }]);
+  const removeItem = (index: number) =>
+    setItems(items.filter((_, i) => i !== index));
+  const updateItem = (index: number, field: keyof Item, value: string) => {
+    const newItems = [...items];
+    newItems[index][field] = value;
+    setItems(newItems);
+  };
+
   const clientItems = useMemo(
     () => (clients ?? []).map((c) => ({ id: c.id, label: c.name })),
     [clients],
   );
-
   const employeeItems = useMemo(
     () =>
       (employees ?? []).map((e) => ({
@@ -84,32 +112,31 @@ export default function AddInterventionScreen() {
   });
 
   const handleSubmit = () => {
-    if (!selectedClient)
-      return toast.error("Manquant", "Sélectionne un client.");
-    if (selectedEmployeeIds.length === 0)
-      return toast.error("Manquant", "Assigne au moins un employé.");
+    if (!selectedClient) return toast.error("Client", "Sélectionne un client.");
+    if (!title) return toast.error("Titre", "Titre requis.");
 
     const start = parseLocalDateTimeString(startDateStr);
-    if (!start || Number.isNaN(start.getTime()))
-      return toast.error("Date invalide", "Format YYYY-MM-DDTHH:MM");
-
     const dur = Number(durationHours);
-    if (!dur || dur <= 0)
-      return toast.error("Durée invalide", "Mets une durée correcte.");
+    if (!start || !dur) return toast.error("Date", "Vérifie la date et durée.");
+    const end = new Date(start.getTime() + dur * 3600000);
 
-    const end = new Date(start.getTime() + dur * 60 * 60 * 1000);
+    // On nettoie les items vides
+    const cleanItems = items.filter((i) => i.label.trim() !== "");
 
-    const payload = {
+    mutation.mutate({
       title,
+      description,
       client_id: selectedClient.id,
       employee_ids: selectedEmployeeIds,
       start_time: start.toISOString(),
       end_time: end.toISOString(),
-      price_estimated: Number(price) || 0,
-      status: "planned",
-    };
-
-    mutation.mutate(payload);
+      price_estimated: totalPrice,
+      is_invoice: isInvoice,
+      items: cleanItems.map((i) => ({
+        label: i.label,
+        price: Number(i.price) || 0,
+      })), // Envoi au backend
+    });
   };
 
   return (
@@ -176,31 +203,118 @@ export default function AddInterventionScreen() {
                 label="Début de l'intervention"
               />
 
-              <View className="flex-row gap-3">
-                <Input
-                  label="Durée (heures)"
-                  value={durationHours}
-                  onChangeText={setDurationHours}
-                  keyboardType="numeric"
-                  containerStyle={{
-                    flex: 1,
-                    marginLeft: isWeb ? 0 : -22,
-                    marginRight: isWeb ? 0 : 15,
-                  }}
-                />
+              <Input
+                label="Durée (heures)"
+                value={durationHours}
+                onChangeText={setDurationHours}
+                keyboardType="numeric"
+              />
+            </View>
 
-                <Input
-                  label="Prix estimé (€)"
-                  value={price}
-                  onChangeText={setPrice}
-                  keyboardType="numeric"
-                  containerStyle={{
-                    flex: 1,
-                    marginRight: isWeb ? 0 : 7,
-                  }}
-                />
+            {/* Section Prestations Détaillées */}
+            <View className="mt-2 pt-4 border-t border-border dark:border-slate-800">
+              <View className="flex-row justify-between items-center mb-3">
+                <Text className="text-sm font-semibold text-foreground dark:text-white">
+                  Prestations
+                </Text>
+                <Pressable
+                  onPress={addItem}
+                  className="flex-row items-center bg-primary/10 px-3 py-1.5 rounded-full"
+                >
+                  <PlusCircle size={16} color="#3B82F6" />
+                  <Text className="text-primary font-bold ml-1.5 text-xs">
+                    Ajouter
+                  </Text>
+                </Pressable>
+              </View>
+
+              {items.map((item, index) => (
+                <View key={index} className="flex-row gap-2 items-center mb-2">
+                  <View className="flex-[2]">
+                    <Input
+                      placeholder="Ex: RDC, Velux..."
+                      value={item.label}
+                      onChangeText={(t) => updateItem(index, "label", t)}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Input
+                      placeholder="Prix"
+                      keyboardType="numeric"
+                      value={item.price}
+                      onChangeText={(t) => updateItem(index, "price", t)}
+                    />
+                  </View>
+                  {items.length > 1 && (
+                    <Pressable
+                      onPress={() => removeItem(index)}
+                      className="p-2"
+                    >
+                      <Trash2 size={20} color="#EF4444" />
+                    </Pressable>
+                  )}
+                </View>
+              ))}
+
+              <View className="flex-row justify-between items-center mt-2">
+                <Text className="font-bold text-lg text-foreground dark:text-white">
+                  Total Estimé
+                </Text>
+                <Text className="font-extrabold text-2xl text-primary">
+                  {totalPrice.toFixed(2)} €
+                </Text>
               </View>
             </View>
+
+            {/* Section Description */}
+            <View>
+              <Input
+                label="Notes"
+                placeholder="Infos supplémentaires..."
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={3}
+                className="h-20 py-2"
+              />
+            </View>
+
+            {/* SWITCH FACTURATION */}
+            {isAdmin && (
+              <View className="flex-row items-center justify-between pt-4 mt-4 border-t border-border dark:border-slate-800">
+                <View className="flex-1 pr-4 flex-row items-center gap-3">
+                  <View
+                    className={`p-2 rounded-full ${isInvoice ? "bg-green-100 dark:bg-green-900/30" : "bg-muted/50"}`}
+                  >
+                    <FileText
+                      size={20}
+                      color={isInvoice ? "#22C55E" : "#64748B"}
+                    />
+                  </View>
+
+                  <View>
+                    <Text className="text-base font-medium text-foreground dark:text-white">
+                      Facturation
+                    </Text>
+                    <Text className="text-xs text-muted-foreground mt-0.5">
+                      Cocher si une facture doit être émise
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={isInvoice}
+                  onValueChange={setIsInvoice}
+                  trackColor={{ false: "#767577", true: "#22C55E" }}
+                  thumbColor={
+                    Platform.OS === "ios"
+                      ? "#fff"
+                      : isInvoice
+                        ? "#fff"
+                        : "#f4f3f4"
+                  }
+                />
+              </View>
+            )}
 
             {/* ACTIONS */}
             <View className="mt-6 flex-row gap-3">
