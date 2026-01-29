@@ -53,6 +53,8 @@ def create_employee(
         })
         new_user_id = UUID(user_response.user.id)
     except Exception as e:
+        # ✅ AJOUT : Log l'erreur exacte dans la console serveur
+        print(f"❌ ERREUR SUPABASE AUTH: {str(e)}") 
         raise HTTPException(status_code=400, detail=f"Erreur Auth: {str(e)}")
 
     # 3. Création dans la DB SQL
