@@ -36,12 +36,11 @@ def read_employees(
 def create_employee(
     emp_data: EmployeeCreateRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user: Employee = Depends(get_current_user) # ✅ current_user est un objet Employee
 ):
-    # 1. Vérification Admin
-    admin_id = UUID(current_user["sub"])
-    admin = db.query(Employee).filter(Employee.id == admin_id).first()
-    if not admin or admin.role != "admin":
+    # 1. Vérification Admin (CORRIGÉ)
+    # On vérifie directement l'attribut .role de l'objet, plus besoin de ["sub"]
+    if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Accès refusé. Admin requis.")
 
     # 2. Création dans Supabase Auth
@@ -54,7 +53,6 @@ def create_employee(
         })
         new_user_id = UUID(user_response.user.id)
     except Exception as e:
-        # Souvent : email déjà pris
         raise HTTPException(status_code=400, detail=f"Erreur Auth: {str(e)}")
 
     # 3. Création dans la DB SQL
@@ -72,7 +70,11 @@ def create_employee(
         db.commit()
         db.refresh(new_employee)
     except Exception as e:
-        # En cas d'échec SQL, on devrait nettoyer Supabase Auth, mais restons simple pour l'instant
+        # Nettoyage si échec DB
+        try:
+            supabase_admin.auth.admin.delete_user(str(new_user_id))
+        except:
+            pass
         raise HTTPException(status_code=400, detail=f"Erreur DB: {str(e)}")
 
     return new_employee
@@ -81,23 +83,20 @@ def create_employee(
 def sync_profile(
     profile: EmployeeBase,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user: Employee = Depends(get_current_user) # ✅ Objet Employee
 ):
-    user_id = UUID(current_user["sub"])
-    email = current_user.get("email") 
-
-    emp = db.query(Employee).filter(Employee.id == user_id).first()
+    # Plus besoin de chercher en DB, current_user EST l'employé
+    # Mais sync_profile sert souvent à créer le profil la première fois...
+    # Si get_current_user échoue car l'employé n'existe pas encore en DB,
+    # il faudra peut-être adapter deps.py ou gérer ce cas spécifique.
     
-    if not emp:
-        emp = Employee(id=user_id, email=email, **profile.model_dump())
-        db.add(emp)
-    else:
-        for k, v in profile.model_dump().items():
-            setattr(emp, k, v)
+    # Pour l'instant, si tu utilises sync_profile juste pour mettre à jour :
+    for k, v in profile.model_dump().items():
+        setattr(current_user, k, v)
     
     db.commit()
-    db.refresh(emp)
-    return emp
+    db.refresh(current_user)
+    return current_user
 
 @router.patch("/{employee_id}", response_model=EmployeeOut)
 def update_employee(
