@@ -1,4 +1,5 @@
 import React from "react";
+import { useState } from "react";
 import {
   View,
   ScrollView,
@@ -8,6 +9,7 @@ import {
   useWindowDimensions,
   Platform,
   Linking,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -23,6 +25,7 @@ import {
   PlayCircle,
   AlertCircle,
   Wallet,
+  MoreVertical,
 } from "lucide-react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -35,6 +38,9 @@ import { Card, CardContent } from "../../../src/ui/components/Card";
 import { StatusBadge } from "../../../src/ui/components/StatusBadge";
 import { Avatar } from "../../../src/ui/components/Avatar";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
+import { useAuth } from "../../../src/hooks/useAuth";
+import { OptionsModal } from "../../../src/ui/components/OptionsModal";
+import { ConfirmModal } from "../../../src/ui/components/ConfirmModal";
 
 export default function InterventionDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -45,6 +51,9 @@ export default function InterventionDetailScreen() {
 
   const isDesktop = width >= 768;
   const insets = useSafeAreaInsets();
+  const { isAdmin } = useAuth();
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // --- DATA ---
   const { data: intervention, isLoading } = useQuery({
@@ -118,6 +127,27 @@ export default function InterventionDetailScreen() {
     );
   }
 
+  // --- ACTION DELETE ---
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return await api.delete(`/api/interventions/${id}`);
+    },
+    onSuccess: () => {
+      toast.success("Supprimé", "Intervention supprimée.");
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      router.back();
+    },
+    onError: () => toast.error("Erreur", "Impossible de supprimer."),
+  });
+
+  // Fonction appelée par le menu "3 points"
+  const handleDeleteRequest = () => {
+    // On ferme d'abord le menu des options
+    setMenuVisible(false);
+    // Petit délai pour laisser le menu se fermer proprement avant d'ouvrir la confirm
+    setTimeout(() => setShowDeleteConfirm(true), 200);
+  };
+
   const startTime = new Date(intervention.start_time);
 
   return (
@@ -141,6 +171,18 @@ export default function InterventionDetailScreen() {
           Détails
         </Text>
         <View className="flex-1" />
+        {/* BOUTON MENU ADMIN */}
+        {isAdmin && (
+          <Pressable
+            onPress={() => setMenuVisible(true)}
+            className="p-2 rounded-full hover:bg-muted mr-2"
+          >
+            <MoreVertical
+              size={24}
+              className="text-foreground dark:text-white"
+            />
+          </Pressable>
+        )}
         <StatusBadge status={intervention.status} />
       </View>
 
@@ -535,6 +577,32 @@ export default function InterventionDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* 1. LE MENU 3 POINTS */}
+      <OptionsModal
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        onEdit={() => {
+          setMenuVisible(false);
+          router.push(`/(app)/calendar/add?id=${id}`);
+        }}
+        onDelete={handleDeleteRequest}
+      />
+
+      {/* 2. LA CONFIRMATION CUSTOM */}
+      <ConfirmModal
+        visible={showDeleteConfirm}
+        title="Supprimer l'intervention ?"
+        message="Cette action est irréversible. L'intervention sera définitivement effacée du planning."
+        confirmText="Supprimer"
+        cancelText="Annuler"
+        isDestructive={true} // Bouton rouge
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={() => {
+          setShowDeleteConfirm(false);
+          deleteMutation.mutate(); // L'action réelle
+        }}
+      />
     </View>
   );
 }

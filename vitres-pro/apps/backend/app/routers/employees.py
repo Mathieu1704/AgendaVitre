@@ -36,7 +36,7 @@ def read_employees(
 def create_employee(
     emp_data: EmployeeCreateRequest,
     db: Session = Depends(get_db),
-    current_user: Employee = Depends(get_current_user) # ✅ current_user est un objet Employee
+    current_user: Employee = Depends(get_current_user) # current_user est un objet Employee
 ):
     # 1. Vérification Admin (CORRIGÉ)
     # On vérifie directement l'attribut .role de l'objet, plus besoin de ["sub"]
@@ -53,7 +53,7 @@ def create_employee(
         })
         new_user_id = UUID(user_response.user.id)
     except Exception as e:
-        # ✅ AJOUT : Log l'erreur exacte dans la console serveur
+        # AJOUT : Log l'erreur exacte dans la console serveur
         print(f"❌ ERREUR SUPABASE AUTH: {str(e)}") 
         raise HTTPException(status_code=400, detail=f"Erreur Auth: {str(e)}")
 

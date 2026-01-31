@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   View,
   ScrollView,
@@ -6,12 +6,18 @@ import {
   Platform,
   Pressable,
   Switch,
+  ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../src/lib/api";
-import { PlusCircle, Trash2, Check, FileText } from "lucide-react-native";
-
+import {
+  PlusCircle,
+  Trash2,
+  Check,
+  FileText,
+  ChevronLeft,
+} from "lucide-react-native";
 import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
 import { Input } from "../../../src/ui/components/Input";
 import { Button } from "../../../src/ui/components/Button";
@@ -34,12 +40,16 @@ type Item = { label: string; price: string };
 
 export default function AddInterventionScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams();
+  const isEditMode = !!id;
+
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
 
   const { employees } = useEmployees();
+  // 1. Charger les Clients
   const { data: clients } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -47,6 +57,19 @@ export default function AddInterventionScreen() {
       return res.data as Client[];
     },
   });
+
+  // 2. Charger l'Intervention (SI mode Edit)
+  const { data: interventionData, isLoading: isLoadingIntervention } = useQuery(
+    {
+      queryKey: ["intervention", id],
+      queryFn: async () => {
+        if (!id) return null;
+        const res = await api.get(`/api/interventions/${id}`);
+        return res.data;
+      },
+      enabled: isEditMode, // Ne se déclenche que si on a un ID
+    },
+  );
 
   const [title, setTitle] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -64,6 +87,53 @@ export default function AddInterventionScreen() {
   }, []);
   const [startDateStr, setStartDateStr] = useState(defaultStart);
   const [durationHours, setDurationHours] = useState("");
+
+  useEffect(() => {
+    // On ne remplit que si on est en mode Edit, qu'on a reçu les données de l'intervention ET les clients
+    if (isEditMode && interventionData && clients) {
+      setTitle(interventionData.title);
+      setDescription(interventionData.description || "");
+      setIsInvoice(interventionData.is_invoice);
+
+      // Gestion des Dates
+      const start = new Date(interventionData.start_time);
+      const end = new Date(interventionData.end_time);
+      setStartDateStr(toLocalDateTimeString(start).replace(" ", "T"));
+
+      const diffHours = (end.getTime() - start.getTime()) / 3600000;
+      setDurationHours(parseFloat(diffHours.toFixed(2)).toString());
+
+      // Gestion du Client
+      const foundClient = clients.find(
+        (c) => c.id === interventionData.client_id,
+      );
+      if (foundClient) {
+        setSelectedClient(foundClient);
+      } else {
+        // Fallback si le client n'est pas dans la liste chargée (rare mais possible)
+        if (interventionData.client) {
+          setSelectedClient(interventionData.client);
+        }
+      }
+
+      // Gestion des Employés
+      if (interventionData.employees) {
+        setSelectedEmployeeIds(
+          interventionData.employees.map((e: any) => e.id),
+        );
+      }
+
+      // Gestion des Prestations (Items)
+      if (interventionData.items && interventionData.items.length > 0) {
+        setItems(
+          interventionData.items.map((i: any) => ({
+            label: i.label,
+            price: i.price.toString(),
+          })),
+        );
+      }
+    }
+  }, [isEditMode, interventionData, clients]);
 
   const totalPrice = useMemo(() => {
     return items.reduce((acc, item) => acc + (parseFloat(item.price) || 0), 0);
@@ -95,16 +165,27 @@ export default function AddInterventionScreen() {
 
   const mutation = useMutation({
     mutationFn: async (payload: any) => {
-      return await api.post("/api/interventions", payload);
+      if (isEditMode) {
+        return await api.patch(`/api/interventions/${id}`, payload);
+      } else {
+        return await api.post("/api/interventions", payload);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
       queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
-      toast.success("Succès", "Intervention enregistrée ✅");
-      router.push({
-        pathname: "/(app)/calendar",
-        params: { date: startDateStr },
-      });
+
+      if (isEditMode) {
+        queryClient.invalidateQueries({ queryKey: ["intervention", id] }); // Rafraîchir le détail
+        toast.success("Succès", "Intervention modifiée !");
+        router.back(); // Retour à la page détail
+      } else {
+        toast.success("Succès", "Intervention créée !");
+        router.push({
+          pathname: "/(app)/calendar",
+          params: { date: startDateStr },
+        });
+      }
     },
     onError: (err: any) => {
       toast.error("Erreur", err.response?.data?.detail || "Erreur inconnue");
@@ -118,9 +199,8 @@ export default function AddInterventionScreen() {
     const start = parseLocalDateTimeString(startDateStr);
     const dur = Number(durationHours);
     if (!start || !dur) return toast.error("Date", "Vérifie la date et durée.");
-    const end = new Date(start.getTime() + dur * 3600000);
 
-    // On nettoie les items vides
+    const end = new Date(start.getTime() + dur * 3600000);
     const cleanItems = items.filter((i) => i.label.trim() !== "");
 
     mutation.mutate({
@@ -135,23 +215,54 @@ export default function AddInterventionScreen() {
       items: cleanItems.map((i) => ({
         label: i.label,
         price: Number(i.price) || 0,
-      })), // Envoi au backend
+      })),
     });
   };
+
+  // Afficher un loader pendant le chargement des données d'édition
+  if (isEditMode && isLoadingIntervention) {
+    return (
+      <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950">
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
 
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
       style={{ paddingTop: isWeb ? 0 : insets.top }}
     >
+      <View className="px-4 py-2 flex-row items-center">
+        <Pressable
+          onPress={() => {
+            if (isEditMode) {
+              // Si on modifie, on force le retour à la fiche détail
+              router.push(`/(app)/calendar/${id}`);
+            } else {
+              // Si on crée, on revient simplement au calendrier
+              router.back();
+            }
+          }}
+          className="p-2 rounded-full hover:bg-muted active:bg-muted"
+        >
+          <ChevronLeft size={24} className="text-foreground dark:text-white" />
+        </Pressable>
+        <Text className="text-lg font-bold ml-2 text-foreground dark:text-white">
+          {isEditMode ? "Modifier l'intervention" : "Nouvelle intervention"}
+        </Text>
+      </View>
+
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <Card className="max-w-2xl w-full self-center rounded-[40px] overflow-hidden">
           <CardHeader className="p-6 pb-2">
             <Text className="text-2xl font-extrabold text-foreground dark:text-white text-center">
-              Planifier
+              {isEditMode ? "Modifier" : "Planifier"}
             </Text>
             <Text className="mt-1 text-muted-foreground text-center font-medium">
-              Nouvelle intervention
+              {isEditMode
+                ? "Mise à jour intervention"
+                : "Nouvelle intervention"}
             </Text>
           </CardHeader>
 
@@ -348,7 +459,11 @@ export default function AddInterventionScreen() {
                   className="w-full"
                   style={{ borderRadius: 20 }}
                 >
-                  {mutation.isPending ? "Envoi..." : "Valider"}
+                  {mutation.isPending
+                    ? "Envoi..."
+                    : isEditMode
+                      ? "Mettre à jour"
+                      : "Valider"}
                 </Button>
               </View>
             </View>

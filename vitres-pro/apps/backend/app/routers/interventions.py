@@ -98,7 +98,7 @@ def update_intervention(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
-    # TODO: Ajouter une sécurité ici ? Seul l'admin peut modifier ?
+    # Sécurité : Vérifier si Admin (conseillé)
     # if current_user.role != 'admin': raise HTTPException(403, "Interdit")
 
     db_intervention = db.query(Intervention).filter(Intervention.id == intervention_id).first()
@@ -109,9 +109,39 @@ def update_intervention(
         if key == "employee_ids":
              employees = db.query(Employee).filter(Employee.id.in_(value)).all()
              db_intervention.employees = employees
+        elif key == "items":
+            # ⚠️ GESTION SPÉCIALE POUR LES ITEMS (Prestations)
+            # 1. On supprime les anciens items
+            db.query(InterventionItem).filter(InterventionItem.intervention_id == intervention_id).delete()
+            # 2. On recrée les nouveaux
+            for item_data in value:
+                new_item = InterventionItem(
+                    intervention_id=intervention_id,
+                    label=item_data["label"],
+                    price=item_data["price"]
+                )
+                db.add(new_item)
         elif hasattr(db_intervention, key):
             setattr(db_intervention, key, value)
 
     db.commit()
     db.refresh(db_intervention)
     return db_intervention
+
+@router.delete("/{intervention_id}")
+def delete_intervention(
+    intervention_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    # Sécurité : Seul admin peut supprimer
+    if current_user.role != 'admin': 
+        raise HTTPException(status_code=403, detail="Seul un admin peut supprimer.")
+
+    db_intervention = db.query(Intervention).filter(Intervention.id == intervention_id).first()
+    if not db_intervention:
+        raise HTTPException(status_code=404, detail="Introuvable")
+
+    db.delete(db_intervention)
+    db.commit()
+    return {"message": "Intervention supprimée"}
