@@ -52,10 +52,12 @@ export default function InterventionDetailScreen() {
   const isDesktop = width >= 768;
   const insets = useSafeAreaInsets();
   const { isAdmin } = useAuth();
+
+  // 1. TOUS LES STATES
   const [menuVisible, setMenuVisible] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // --- DATA ---
+  // 2. QUERY (Chargement données)
   const { data: intervention, isLoading } = useQuery({
     queryKey: ["intervention", id],
     queryFn: async () => {
@@ -64,19 +66,7 @@ export default function InterventionDetailScreen() {
     },
   });
 
-  // --- NAVIGATION RETOUR INTELLIGENTE ---
-  const handleBack = () => {
-    if (intervention?.start_time) {
-      router.push({
-        pathname: "/(app)/calendar",
-        params: { date: intervention.start_time },
-      });
-    } else {
-      router.back();
-    }
-  };
-
-  // --- MUTATION STATUS ---
+  // 3. MUTATIONS (Doivent être déclarées AVANT les returns conditionnels)
   const statusMutation = useMutation({
     mutationFn: async (newStatus: string) => {
       const now = new Date().toISOString();
@@ -97,7 +87,39 @@ export default function InterventionDetailScreen() {
     },
   });
 
-  // --- LOADING ---
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return await api.delete(`/api/interventions/${id}`);
+    },
+    onSuccess: () => {
+      toast.success("Supprimé", "Intervention supprimée.");
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      queryClient.invalidateQueries({ queryKey: ["planning-stats"] }); // Important pour le badge planning
+      router.back();
+    },
+    onError: () => toast.error("Erreur", "Impossible de supprimer."),
+  });
+
+  // 4. HELPER FUNCTIONS
+  const handleBack = () => {
+    if (intervention?.start_time) {
+      router.push({
+        pathname: "/(app)/calendar",
+        params: { date: intervention.start_time },
+      });
+    } else {
+      router.back();
+    }
+  };
+
+  const handleDeleteRequest = () => {
+    setMenuVisible(false);
+    // Petit délai pour l'UX
+    setTimeout(() => setShowDeleteConfirm(true), 200);
+  };
+
+  // 5. RENDU CONDITIONNEL (Loading / Error)
+  // C'est SEULEMENT ICI qu'on a le droit de faire des returns anticipés
   if (isLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950">
@@ -106,7 +128,6 @@ export default function InterventionDetailScreen() {
     );
   }
 
-  // --- NOT FOUND ---
   if (!intervention) {
     return (
       <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950 px-6">
@@ -126,27 +147,6 @@ export default function InterventionDetailScreen() {
       </View>
     );
   }
-
-  // --- ACTION DELETE ---
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      return await api.delete(`/api/interventions/${id}`);
-    },
-    onSuccess: () => {
-      toast.success("Supprimé", "Intervention supprimée.");
-      queryClient.invalidateQueries({ queryKey: ["interventions"] });
-      router.back();
-    },
-    onError: () => toast.error("Erreur", "Impossible de supprimer."),
-  });
-
-  // Fonction appelée par le menu "3 points"
-  const handleDeleteRequest = () => {
-    // On ferme d'abord le menu des options
-    setMenuVisible(false);
-    // Petit délai pour laisser le menu se fermer proprement avant d'ouvrir la confirm
-    setTimeout(() => setShowDeleteConfirm(true), 200);
-  };
 
   const startTime = new Date(intervention.start_time);
 
@@ -195,15 +195,7 @@ export default function InterventionDetailScreen() {
             </Text>
 
             {/* ✅ LOGIQUE FACTURATION vs ENCAISSEMENT */}
-            {intervention.is_invoice ? (
-              // CAS 1 : FACTURE (Admin gère, Employé tranquille)
-              <View className="self-start bg-blue-100 dark:bg-blue-900/30 px-3 py-1.5 rounded-full mb-6 border border-blue-200 dark:border-blue-800">
-                <Text className="text-blue-700 dark:text-blue-400 font-bold text-xs uppercase">
-                  📄 Facture à émettre
-                </Text>
-              </View>
-            ) : (
-              // CAS 2 : PAS DE FACTURE = ALERTE ROUGE
+            {!intervention.is_invoice && (
               <View className="bg-red-100 dark:bg-red-900/20 p-4 rounded-2xl mb-6 border border-red-200 dark:border-red-900/50 flex-row gap-4 items-center">
                 <View className="bg-red-500 h-10 w-10 rounded-full items-center justify-center">
                   <Wallet size={20} color="white" />

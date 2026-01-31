@@ -118,6 +118,9 @@ class InterventionOut(BaseModel):
     end_time: datetime
     status: str
     price_estimated: Optional[float]
+    
+    is_invoice: bool = False 
+
     client: Optional[ClientOutLite] = None
     employees: List[EmployeeOut] = []
     
