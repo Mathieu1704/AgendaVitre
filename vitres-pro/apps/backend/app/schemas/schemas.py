@@ -59,7 +59,7 @@ class ClientBase(BaseModel):
     city: Optional[str] = None
     address: Optional[str] = None # Fallback
     phone: Optional[str] = None
-    email: Optional[EmailStr] = None
+    mail: Optional[str] = None
     notes: Optional[str] = None
 
 class ClientCreate(ClientBase):
