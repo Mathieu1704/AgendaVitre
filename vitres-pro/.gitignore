@@ -1,1 +1,4 @@
-apps/backend/scripts/
+# Scripts : ignorer les JSON (exports, dumps, secrets) mais pas les .py
+apps/backend/scripts/*.json
+apps/backend/scripts/token.json
+apps/backend/scripts/credentials.json
