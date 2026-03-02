@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str
     JWT_SECRET: str
     RESEND_API_KEY: str = ""
+    ANTHROPIC_API_KEY: str = ""
 
     class Config:
         # On dit à Pydantic de chercher dans le dossier courant OU dans apps/backend

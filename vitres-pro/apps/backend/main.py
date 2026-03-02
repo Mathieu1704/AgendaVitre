@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import interventions, clients, planning, employees, absences
+from app.routers import interventions, clients, planning, employees, absences, raw_events
 
 app = FastAPI(title="LVM Agenda API")
 
@@ -26,6 +26,7 @@ app.include_router(interventions.router, prefix="/api/interventions", tags=["int
 app.include_router(planning.router, prefix="/api/planning", tags=["planning"])
 app.include_router(employees.router, prefix="/api/employees", tags=["employees"])
 app.include_router(absences.router, prefix="/api/absences", tags=["absences"])
+app.include_router(raw_events.router, prefix="/api/raw-events", tags=["raw-events"])
 
 
 

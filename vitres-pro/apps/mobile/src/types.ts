@@ -25,6 +25,26 @@ export interface Intervention {
   employees: Employee[]; // Liste d'employés maintenant
 }
 
+export interface RawCalendarEvent {
+  id: string;
+  source: string;
+  external_id: string;
+  calendar_id: string;
+  summary: string;
+  description?: string;
+  location?: string;
+  start_time: string;
+  end_time: string;
+  all_day: boolean;
+  status: "raw" | "assigned" | "converted" | "ignored";
+  employee_id?: string;
+  linked_intervention_id?: string;
+  employee?: Pick<Employee, "id" | "full_name" | "color">;
+  assigned_employees: Array<{ id: string; full_name: string | null; color: string }>;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface DailyStats {
   date: string;
   capacity_hours: number;

@@ -37,9 +37,10 @@ export function DateTimePicker({
   const hoursScrollRef = useRef<ScrollView>(null);
   const minutesScrollRef = useRef<ScrollView>(null);
   const [datePart, timePart = "09:00"] = value.split("T");
-  const currentDate = new Date(value);
   const [hours, minutes] = timePart.split(":").map(Number);
-  const displayDate = currentDate.toLocaleDateString("fr-FR", {
+  // Parse les parties date directement (évite tout décalage de fuseau)
+  const [dpY, dpM, dpD] = datePart.split("-").map(Number);
+  const displayDate = new Date(dpY, dpM - 1, dpD).toLocaleDateString("fr-FR", {
     weekday: "long",
     day: "numeric",
     month: "long",

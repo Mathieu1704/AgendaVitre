@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, Text, Numeric, create_engine, Table, Float, Date
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from sqlalchemy.sql import func
 import uuid
@@ -16,12 +16,17 @@ def get_db():
     finally:
         db.close()
 
-# --- TABLE D'ASSOCIATION (Many-to-Many) ---
-# Permet de dire : L'intervention X est assignée à l'employé A ET l'employé B
+# --- TABLES D'ASSOCIATION (Many-to-Many) ---
 intervention_employees = Table(
     'intervention_employees', Base.metadata,
     Column('intervention_id', UUID(as_uuid=True), ForeignKey('interventions.id'), primary_key=True),
     Column('employee_id', UUID(as_uuid=True), ForeignKey('employees.id'), primary_key=True)
+)
+
+raw_event_employees = Table(
+    'raw_event_employees', Base.metadata,
+    Column('raw_event_id', UUID(as_uuid=True), ForeignKey('raw_calendar_events.id', ondelete='CASCADE'), primary_key=True),
+    Column('employee_id', UUID(as_uuid=True), ForeignKey('employees.id', ondelete='CASCADE'), primary_key=True)
 )
 
 # --- TABLES ---
@@ -68,13 +73,13 @@ class Client(Base):
     __tablename__ = "clients"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=True)
 
     street = Column(String, nullable=True)
     zip_code = Column(String, nullable=True)
     city = Column(String, nullable=True)
 
-    address = Column(String, nullable=False)
+    address = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     email = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
@@ -97,14 +102,14 @@ class Intervention(Base):
     __tablename__ = "interventions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id"))
-    
-    
+    client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id"), nullable=True)
+
+    type = Column(String(20), default="intervention", nullable=False)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     start_time = Column(DateTime(timezone=True), nullable=False)
     end_time = Column(DateTime(timezone=True), nullable=False)
-    status = Column(String, default="planned") 
+    status = Column(String, default="planned")
     price_estimated = Column(Numeric(10, 2), nullable=True)
     is_invoice = Column(Boolean, default=False)
     
@@ -113,3 +118,36 @@ class Intervention(Base):
     employees = relationship("Employee", secondary=intervention_employees, back_populates="interventions")
 
     items = relationship("InterventionItem", back_populates="intervention", cascade="all, delete-orphan")
+
+
+class RawCalendarEvent(Base):
+    """Événement brut importé depuis Google Calendar, non encore structuré."""
+    __tablename__ = "raw_calendar_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source = Column(String, default="google", nullable=False)
+    external_id = Column(String, nullable=False)
+    calendar_id = Column(String, nullable=False)
+
+    summary = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+    location = Column(Text, nullable=True)
+
+    start_time = Column(DateTime(timezone=True), nullable=False)
+    end_time = Column(DateTime(timezone=True), nullable=False)
+    all_day = Column(Boolean, default=False)
+
+    # "raw" | "assigned" | "converted" | "ignored"
+    status = Column(String, default="raw", nullable=False)
+
+    employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id"), nullable=True)
+    linked_intervention_id = Column(UUID(as_uuid=True), ForeignKey("interventions.id"), nullable=True)
+
+    raw_payload = Column(JSONB, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    linked_intervention = relationship("Intervention")
+    assigned_employees = relationship("Employee", secondary="raw_event_employees")

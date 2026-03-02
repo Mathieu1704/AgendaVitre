@@ -98,13 +98,15 @@ export default function ClientDetailScreen() {
       <ScrollView contentContainerStyle={{ padding: 20 }}>
         {/* Profil Header */}
         <View className="items-center mb-8 pt-4">
-          <Avatar name={client.name} size="lg" className="h-24 w-24 mb-4" />
+          <Avatar name={client.name || client.address || "?"} size="lg" className="h-24 w-24 mb-4" />
           <Text className="text-2xl font-bold text-foreground dark:text-white text-center">
-            {client.name}
+            {client.name || "Client anonyme"}
           </Text>
-          <Text className="text-muted-foreground text-center mt-1 px-8">
-            {client.address}
-          </Text>
+          {client.address && (
+            <Text className="text-muted-foreground text-center mt-1 px-8">
+              {client.address}
+            </Text>
+          )}
         </View>
 
         {/* Actions Rapides */}

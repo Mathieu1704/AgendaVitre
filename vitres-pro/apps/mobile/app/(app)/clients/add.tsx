@@ -96,6 +96,10 @@ export default function AddClientScreen() {
       toast.error("Erreur", "Nom, rue et ville sont obligatoires.");
       return;
     }
+    if (!phone) {
+      toast.error("Erreur", "Le numéro de téléphone est obligatoire.");
+      return;
+    }
 
     mutation.mutate({
       name,
@@ -212,7 +216,7 @@ export default function AddClientScreen() {
           {/* Content ajusté : pt-4 */}
           <CardContent className="px-6 pb-6 pt-4 gap-4">
             <Input
-              label="Téléphone"
+              label="Téléphone *"
               placeholder="0487 12 34 56"
               value={phone}
               onChangeText={(text) => setPhone(formatPhoneNumber(text))}

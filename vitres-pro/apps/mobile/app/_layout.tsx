@@ -6,7 +6,15 @@ import { useColorScheme } from "react-native";
 import { ToastHost } from "../src/ui/toast";
 import "../app.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30 * 1000,        // 30s : évite les refetch inutiles à chaque navigation
+      refetchOnWindowFocus: false,  // évite le reload au clic dans la fenêtre (surtout agaçant en dev)
+      retry: 1,                     // 1 seule tentative en cas d'erreur réseau
+    },
+  },
+});
 
 // 🎨 Thème Paper Moderne (Surchargé)
 const lightTheme = {

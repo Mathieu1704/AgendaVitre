@@ -28,10 +28,11 @@ import { useTheme } from "../../../src/ui/components/ThemeToggle";
 
 type Client = {
   id: string;
-  name: string;
-  address: string;
-  phone?: string;
-  email?: string;
+  name: string | null;
+  address: string | null;
+  city?: string | null;
+  phone?: string | null;
+  email?: string | null;
 };
 
 export default function ClientsListScreen() {
@@ -53,8 +54,8 @@ export default function ClientsListScreen() {
   const filteredClients =
     clients?.filter(
       (c) =>
-        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.address.toLowerCase().includes(searchQuery.toLowerCase()),
+        (c.name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (c.address ?? "").toLowerCase().includes(searchQuery.toLowerCase()),
     ) || [];
 
   const renderItem = ({ item }: { item: Client }) => (
@@ -65,22 +66,24 @@ export default function ClientsListScreen() {
       <Card className="active:scale-[0.99] transition-transform rounded-[32px] overflow-hidden">
         <View className="p-5">
           <View className="flex-row items-center">
-            <Avatar name={item.name} size="md" />
+            <Avatar name={item.name || item.address || "?"} size="md" />
 
             <View className="ml-4 flex-1">
               <Text className="text-base font-bold text-foreground dark:text-white mb-1">
-                {item.name}
+                {item.name || item.city || "Client anonyme"}
               </Text>
 
-              <View className="flex-row items-center">
-                <MapPin size={12} color={isDark ? "#94A3B8" : "#64748B"} />
-                <Text
-                  className="ml-1.5 text-xs text-muted-foreground dark:text-slate-400"
-                  numberOfLines={1}
-                >
-                  {item.address}
-                </Text>
-              </View>
+              {item.address && (
+                <View className="flex-row items-center">
+                  <MapPin size={12} color={isDark ? "#94A3B8" : "#64748B"} />
+                  <Text
+                    className="ml-1.5 text-xs text-muted-foreground dark:text-slate-400"
+                    numberOfLines={1}
+                  >
+                    {item.address}
+                  </Text>
+                </View>
+              )}
             </View>
 
             <ChevronRight size={18} color={isDark ? "#475569" : "#CBD5E1"} />

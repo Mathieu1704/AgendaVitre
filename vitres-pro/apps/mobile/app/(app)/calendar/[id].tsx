@@ -91,13 +91,23 @@ export default function InterventionDetailScreen() {
     mutationFn: async () => {
       return await api.delete(`/api/interventions/${id}`);
     },
+    onMutate: () => {
+      // Suppression optimiste : retire l'item du cache immédiatement
+      queryClient.setQueryData(["interventions"], (old: any[]) =>
+        Array.isArray(old) ? old.filter((i) => i.id !== id) : old,
+      );
+    },
     onSuccess: () => {
       toast.success("Supprimé", "Intervention supprimée.");
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
-      queryClient.invalidateQueries({ queryKey: ["planning-stats"] }); // Important pour le badge planning
+      queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
       router.back();
     },
-    onError: () => toast.error("Erreur", "Impossible de supprimer."),
+    onError: () => {
+      // En cas d'erreur, on recharge pour restaurer l'état correct
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      toast.error("Erreur", "Impossible de supprimer.");
+    },
   });
 
   // 4. HELPER FUNCTIONS
@@ -150,6 +160,16 @@ export default function InterventionDetailScreen() {
 
   const startTime = new Date(intervention.start_time);
 
+  const intervType: string = intervention.type ?? "intervention";
+  const hasClient = ["intervention", "devis"].includes(intervType);
+  const TYPE_BADGE: Record<string, { label: string; color: string; bg: string }> = {
+    intervention: { label: "Intervention", color: "#3B82F6", bg: "#EFF6FF" },
+    devis:        { label: "Devis",         color: "#8B5CF6", bg: "#F5F3FF" },
+    tournee:      { label: "Tournée",       color: "#F97316", bg: "#FFF7ED" },
+    note:         { label: "Note",          color: "#64748B", bg: "#F8FAFC" },
+  };
+  const typeBadge = TYPE_BADGE[intervType] ?? TYPE_BADGE["intervention"];
+
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
@@ -183,6 +203,20 @@ export default function InterventionDetailScreen() {
             />
           </Pressable>
         )}
+        {/* Badge type */}
+        <View
+          style={{
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            borderRadius: 20,
+            backgroundColor: typeBadge.bg,
+            marginRight: 6,
+          }}
+        >
+          <Text style={{ fontSize: 11, fontWeight: "700", color: typeBadge.color }}>
+            {typeBadge.label.toUpperCase()}
+          </Text>
+        </View>
         <StatusBadge status={intervention.status} />
       </View>
 
@@ -194,8 +228,8 @@ export default function InterventionDetailScreen() {
               {intervention.title}
             </Text>
 
-            {/* ✅ LOGIQUE FACTURATION vs ENCAISSEMENT */}
-            {!intervention.is_invoice && (
+            {/* ✅ LOGIQUE FACTURATION vs ENCAISSEMENT — uniquement pour intervention/devis avec client */}
+            {hasClient && !intervention.is_invoice && (
               <View className="bg-red-100 dark:bg-red-900/20 p-4 rounded-2xl mb-6 border border-red-200 dark:border-red-900/50 flex-row gap-4 items-center">
                 <View className="bg-red-500 h-10 w-10 rounded-full items-center justify-center">
                   <Wallet size={20} color="white" />
@@ -220,6 +254,7 @@ export default function InterventionDetailScreen() {
                   day: "numeric",
                   month: "long",
                   year: "numeric",
+                  timeZone: "Europe/Brussels",
                 })}
               </Text>
             </View>
@@ -251,6 +286,7 @@ export default function InterventionDetailScreen() {
                       {startTime.toLocaleTimeString("fr-FR", {
                         hour: "2-digit",
                         minute: "2-digit",
+                        timeZone: "Europe/Brussels",
                       })}
                     </Text>
                   </View>
@@ -261,42 +297,49 @@ export default function InterventionDetailScreen() {
               </Card>
             </Animated.View>
 
-            {/* 2. CLIENT */}
-            <Animated.View
-              entering={FadeInDown.delay(300)}
-              className={isDesktop ? "flex-1" : "w-full"}
-            >
-              <Card className="min-h-[110px] justify-center rounded-3xl">
-                <CardContent className="p-5">
-                  <View className="flex-row items-center">
-                    <Avatar name={intervention.client?.name || "?"} size="md" />
-                    <View className="ml-4 flex-1">
-                      <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
-                        Client
-                      </Text>
-                      <Text className="text-lg font-bold text-foreground dark:text-white mb-0.5">
-                        {intervention.client?.name || "Client Inconnu"}
-                      </Text>
-
-                      {intervention.client?.address && (
-                        <View className="flex-row items-center mt-1">
-                          <MapPin size={12} color="#64748B" />
-                          <Text
-                            className="ml-1 text-xs text-muted-foreground dark:text-slate-400"
-                            numberOfLines={1}
-                          >
-                            {intervention.client.address}
+            {/* 2. CLIENT (seulement pour intervention/devis avec un client lié) */}
+            {hasClient && intervention.client && (
+              <Animated.View
+                entering={FadeInDown.delay(300)}
+                className={isDesktop ? "flex-1" : "w-full"}
+              >
+                <Card className="min-h-[110px] justify-center rounded-3xl">
+                  <CardContent className="p-5">
+                    <View className="flex-row items-center">
+                      <Avatar
+                        name={intervention.client?.name || "?"}
+                        size="md"
+                      />
+                      <View className="ml-4 flex-1">
+                        <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
+                          Client
+                        </Text>
+                        {intervention.client?.name && (
+                          <Text className="text-lg font-bold text-foreground dark:text-white mb-0.5">
+                            {intervention.client.name}
                           </Text>
-                        </View>
-                      )}
+                        )}
+                        {intervention.client?.address && (
+                          <View className="flex-row items-center mt-1">
+                            <MapPin size={12} color="#64748B" />
+                            <Text
+                              className="ml-1 text-xs text-muted-foreground dark:text-slate-400"
+                              numberOfLines={1}
+                            >
+                              {intervention.client.address}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                </CardContent>
-              </Card>
-            </Animated.View>
+                  </CardContent>
+                </Card>
+              </Animated.View>
+            )}
           </View>
 
-          {/* LIGNE 2 : ACTIONS RAPIDES */}
+          {/* LIGNE 2 : ACTIONS RAPIDES (seulement si client lié) */}
+          {hasClient && intervention.client && (
           <Animated.View
             entering={FadeInDown.delay(350)}
             className={`flex-row w-full ${isDesktop ? "gap-4" : "gap-2"}`}
@@ -389,6 +432,7 @@ export default function InterventionDetailScreen() {
               </Text>
             </Pressable>
           </Animated.View>
+          )}
 
           {/* 3. SUIVI TEMPS RÉEL (Si dispo) */}
           {(intervention.real_start_time || intervention.real_end_time) && (
@@ -422,6 +466,7 @@ export default function InterventionDetailScreen() {
                             ).toLocaleTimeString("fr-FR", {
                               hour: "2-digit",
                               minute: "2-digit",
+                              timeZone: "Europe/Brussels",
                             })}
                           </Text>
                         </View>
@@ -444,6 +489,7 @@ export default function InterventionDetailScreen() {
                             ).toLocaleTimeString("fr-FR", {
                               hour: "2-digit",
                               minute: "2-digit",
+                              timeZone: "Europe/Brussels",
                             })}
                           </Text>
                         </View>

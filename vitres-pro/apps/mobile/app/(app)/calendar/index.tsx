@@ -40,6 +40,7 @@ import {
   datesRange,
   startOfMonth,
   endOfMonth,
+  toBrusselsDateTimeString,
 } from "../../../src/lib/date";
 import { Card } from "../../../src/ui/components/Card";
 import { StatusBadge } from "../../../src/ui/components/StatusBadge";
@@ -50,6 +51,8 @@ import {
   usePlanningRangeStats,
   usePlanningStats,
 } from "../../../src/hooks/usePlanning";
+import { useRawEventsByDate, useRawEventsByRange } from "../../../src/hooks/useRawEvents";
+import { RawCalendarEvent } from "../../../src/types";
 
 // --- CONFIGURATION LOCALE ---
 LocaleConfig.locales["fr"] = {
@@ -157,11 +160,16 @@ export default function CalendarScreen() {
       const res = await api.get("/api/interventions");
       return Array.isArray(res.data) ? res.data : [];
     },
+    staleTime: 30 * 1000,
   });
 
   // --- HELPERS ---
   const dayKeyFromDateTime = useCallback((isoDateTime: string) => {
-    return isoDateTime.split("T")[0];
+    try {
+      return toBrusselsDateTimeString(new Date(isoDateTime)).split("T")[0];
+    } catch {
+      return isoDateTime.split("T")[0];
+    }
   }, []);
 
   const itemsByDate = useMemo(() => {
@@ -250,6 +258,15 @@ export default function CalendarScreen() {
       ? new Date(item.end_time)
       : new Date(startTime.getTime() + 60 * 60 * 1000);
 
+    const TYPE_STYLE: Record<string, { bg: string; text: string }> = {
+      intervention: { bg: "#EFF6FF", text: "#3B82F6" },
+      devis:        { bg: "#F5F3FF", text: "#8B5CF6" },
+      tournee:      { bg: "#FFF7ED", text: "#F97316" },
+      note:         { bg: "#F8FAFC", text: "#64748B" },
+    };
+    const typeStyle = TYPE_STYLE[item.type ?? "intervention"] ?? TYPE_STYLE["intervention"];
+    const hasClient = ["intervention", "devis"].includes(item.type ?? "intervention");
+
     return (
       <Pressable
         onPress={() => router.push(`/(app)/calendar/${item.id}` as any)}
@@ -257,18 +274,19 @@ export default function CalendarScreen() {
         style={{ borderRadius: cardRadius }}
       >
         <View className="flex-row items-center gap-3">
-          {/* COLONNE GAUCHE : HEURE (Arrondie) */}
+          {/* COLONNE GAUCHE : HEURE */}
           <View
-            className={`items-center justify-center ${compact ? "w-11" : "w-16"} bg-blue-50 dark:bg-blue-900/20 py-2.5`}
-            // ✅ ARRONDISSEMENT DU CARRÉ BLEU
-            style={{ borderRadius: 16 }}
+            className={`items-center justify-center ${compact ? "w-11" : "w-16"} py-2.5`}
+            style={{ borderRadius: 16, backgroundColor: typeStyle.bg }}
           >
             <Text
-              className={`font-bold text-primary dark:text-blue-400 ${compact ? "text-xs" : "text-base"}`}
+              style={{ color: typeStyle.text }}
+              className={`font-bold ${compact ? "text-xs" : "text-base"}`}
             >
               {startTime.toLocaleTimeString("fr-FR", {
                 hour: "2-digit",
                 minute: "2-digit",
+                timeZone: "Europe/Brussels",
               })}
             </Text>
             {!compact && (
@@ -276,6 +294,7 @@ export default function CalendarScreen() {
                 {endTime.toLocaleTimeString("fr-FR", {
                   hour: "2-digit",
                   minute: "2-digit",
+                  timeZone: "Europe/Brussels",
                 })}
               </Text>
             )}
@@ -284,7 +303,6 @@ export default function CalendarScreen() {
           {/* COLONNE DROITE : INFOS */}
           <View className="flex-1 justify-center">
             <View className="flex-row justify-between items-start">
-              {/* ✅ CLIENT EN PREMIER ET PLUS GRAND */}
               <View className="flex-1 mr-2">
                 <Text
                   className={`font-extrabold text-foreground dark:text-white ${
@@ -292,25 +310,29 @@ export default function CalendarScreen() {
                   }`}
                   numberOfLines={1}
                 >
-                  {item.client?.name || "Client Inconnu"}
+                  {hasClient && item.client?.name
+                    ? item.client.name
+                    : item.title}
                 </Text>
 
-                {/* Titre de l'intervention en dessous, un peu plus discret */}
-                <Text
-                  className={`text-muted-foreground dark:text-slate-400 font-medium ${
-                    compact ? "text-[10px]" : "text-sm"
-                  } mt-0.5`}
-                  numberOfLines={1}
-                >
-                  {item.title}
-                </Text>
+                {/* Sous-titre : titre seulement si un vrai nom client est affiché */}
+                {hasClient && item.client?.name && (
+                  <Text
+                    className={`text-muted-foreground dark:text-slate-400 font-medium ${
+                      compact ? "text-[10px]" : "text-sm"
+                    } mt-0.5`}
+                    numberOfLines={1}
+                  >
+                    {item.title}
+                  </Text>
+                )}
               </View>
 
               {!compact && <StatusBadge status={item.status} />}
             </View>
 
-            {/* Adresse (optionnel, si non compact) */}
-            {!compact && item.client?.address && (
+            {/* Adresse (si client avec adresse, même anonyme) */}
+            {!compact && hasClient && item.client?.address && (
               <View className="flex-row items-center mt-1.5 opacity-80">
                 <MapPin size={12} color="#64748B" className="mr-1" />
                 <Text
@@ -319,6 +341,108 @@ export default function CalendarScreen() {
                 >
                   {item.client.address}
                 </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
+
+  // --- COMPOSANT CARTE RAW EVENT (partagé entre toutes les vues) ---
+  const RawEventCard = ({
+    item,
+    compact = false,
+    date,
+  }: {
+    item: RawCalendarEvent;
+    compact?: boolean;
+    date: string;
+  }) => {
+    const startTime = new Date(item.start_time);
+    const endTime = new Date(item.end_time);
+    const firstEmp = item.assigned_employees?.[0] ?? item.employee;
+    const employeeColor = firstEmp?.color ?? "#94A3B8";
+
+    return (
+      <Pressable
+        onPress={() =>
+          router.push(
+            `/(app)/calendar/raw-event/${item.id}?date=${date}` as any,
+          )
+        }
+        className="mb-2 active:scale-[0.98]"
+        style={{
+          borderRadius: compact ? 10 : 18,
+          borderWidth: 1.5,
+          borderColor: employeeColor + "55",
+          backgroundColor: employeeColor + "11",
+          padding: compact ? 7 : 12,
+        }}
+      >
+        <View className="flex-row items-center gap-2">
+          <View
+            className={`items-center justify-center ${compact ? "w-9" : "w-16"} py-2 rounded-xl`}
+            style={{ backgroundColor: employeeColor + "22" }}
+          >
+            <Text
+              className={`font-bold ${compact ? "text-[9px]" : "text-sm"}`}
+              style={{ color: employeeColor }}
+            >
+              {startTime.toLocaleTimeString("fr-FR", {
+                hour: "2-digit",
+                minute: "2-digit",
+                timeZone: "Europe/Brussels",
+              })}
+            </Text>
+            {!compact && (
+              <Text className="text-[9px] text-muted-foreground mt-0.5 font-medium">
+                {endTime.toLocaleTimeString("fr-FR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  timeZone: "Europe/Brussels",
+                })}
+              </Text>
+            )}
+          </View>
+          <View className="flex-1">
+            <View className="flex-row items-center gap-1.5">
+              <Text
+                className={`font-bold text-foreground dark:text-white flex-1 ${compact ? "text-[10px]" : "text-sm"}`}
+                numberOfLines={1}
+              >
+                {item.summary}
+              </Text>
+              <View className="bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">
+                <Text className="text-[7px] font-bold text-slate-500 dark:text-slate-300 uppercase">
+                  RAW
+                </Text>
+              </View>
+            </View>
+            {!compact && (item.location || item.description) ? (
+              <View className="flex-row items-center gap-1 mt-0.5 opacity-70">
+                {item.location && <MapPin size={10} color="#64748B" />}
+                <Text
+                  className="text-xs text-muted-foreground"
+                  numberOfLines={1}
+                >
+                  {item.location || item.description}
+                </Text>
+              </View>
+            ) : null}
+            {item.assigned_employees && item.assigned_employees.length > 1 && (
+              <View className="flex-row mt-1">
+                {item.assigned_employees.slice(0, 4).map((emp) => (
+                  <View
+                    key={emp.id}
+                    className="w-4 h-4 rounded-full items-center justify-center border border-white"
+                    style={{ backgroundColor: emp.color, marginRight: -4 }}
+                  >
+                    <Text className="text-[6px] text-white font-bold">
+                      {emp.full_name?.[0] ?? "?"}
+                    </Text>
+                  </View>
+                ))}
               </View>
             )}
           </View>
@@ -358,12 +482,23 @@ export default function CalendarScreen() {
       };
     }, [isDark]);
 
+    const monthStart = toISODate(startOfMonth(cursorDate));
+    const monthEnd = toISODate(endOfMonth(cursorDate));
+    const { rawEvents: monthRawEvents } = useRawEventsByRange(monthStart, monthEnd);
+
     const markedDates = useMemo(() => {
       const marks: any = {};
       const today = toISODate(new Date());
+      // Points orange pour les raw events
+      monthRawEvents?.forEach((ev) => {
+        const dateKey = ev.start_time.split("T")[0];
+        if (dateKey !== selectedDate)
+          marks[dateKey] = { marked: true, dotColor: "#F59E0B" };
+      });
+      // Points bleus pour les interventions (priorité sur orange)
       interventions?.forEach((item: any) => {
         if (item.start_time) {
-          const dateKey = item.start_time.split("T")[0];
+          const dateKey = dayKeyFromDateTime(item.start_time);
           if (dateKey !== selectedDate)
             marks[dateKey] = { marked: true, dotColor: "#3B82F6" };
         }
@@ -376,9 +511,12 @@ export default function CalendarScreen() {
       if (today !== selectedDate)
         marks[today] = { ...(marks[today] || {}), textColor: "#3B82F6" };
       return marks;
-    }, [interventions, selectedDate]);
+    }, [interventions, monthRawEvents, selectedDate]);
 
     const dayList = itemsByDate[selectedDate] || [];
+    const dayRawEvents = monthRawEvents.filter(
+      (e) => e.start_time.split("T")[0] === selectedDate,
+    );
 
     return (
       <View>
@@ -419,7 +557,24 @@ export default function CalendarScreen() {
           </View>
 
           <View className="px-4">
-            {dayList.length === 0 ? (
+            {dayRawEvents.length > 0 && (
+              <View className="mb-3">
+                <View className="flex-row items-center gap-2 mb-2">
+                  <View className="w-2 h-2 rounded-full bg-amber-400" />
+                  <Text className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                    Non structuré ({dayRawEvents.length})
+                  </Text>
+                </View>
+                {dayRawEvents.map((item) => (
+                  <RawEventCard
+                    key={item.id}
+                    item={item}
+                    date={selectedDate}
+                  />
+                ))}
+              </View>
+            )}
+            {dayList.length === 0 && dayRawEvents.length === 0 ? (
               <Text className="text-muted-foreground dark:text-slate-500 text-center py-8">
                 Rien de prévu.
               </Text>
@@ -444,12 +599,25 @@ export default function CalendarScreen() {
       toISODate(start),
       toISODate(end),
     );
+    const { rawEvents: weekRawEvents } = useRawEventsByRange(
+      toISODate(start),
+      toISODate(end),
+    );
+    const rawByDate = useMemo(() => {
+      const map: Record<string, RawCalendarEvent[]> = {};
+      for (const ev of weekRawEvents) {
+        const k = ev.start_time.split("T")[0];
+        (map[k] ||= []).push(ev);
+      }
+      return map;
+    }, [weekRawEvents]);
 
     const WeekContent = () => (
       <>
         {weekDays.map((date) => {
           const iso = toISODate(date);
           const list = itemsByDate[iso] || [];
+          const rawList = rawByDate[iso] || [];
           const isToday = iso === toISODate(new Date());
           const stat = rangeStats ? rangeStats[iso] : null;
 
@@ -502,10 +670,13 @@ export default function CalendarScreen() {
                 )}
               </View>
               <View className="bg-muted/30 dark:bg-slate-900/50 min-h-[400px] border-b border-x border-border dark:border-slate-800 rounded-b-3xl p-3">
+                {rawList.map((item) => (
+                  <RawEventCard key={item.id} item={item} compact date={iso} />
+                ))}
                 {list.map((item) => (
                   <InterventionCard key={item.id} item={item} compact />
                 ))}
-                {list.length === 0 && (
+                {list.length === 0 && rawList.length === 0 && (
                   <Text className="text-xs text-muted-foreground text-center mt-4 opacity-50">
                     -
                   </Text>
@@ -540,19 +711,73 @@ export default function CalendarScreen() {
   const RenderDay = () => {
     const iso = toISODate(cursorDate);
     const list = itemsByDate[iso] || [];
+    const { rawEvents } = useRawEventsByDate(iso);
+
+    const unassigned = rawEvents.filter((e) => !e.employee_id);
+    const assigned = rawEvents.filter((e) => !!e.employee_id);
+
+    const hasAnything = list.length > 0 || rawEvents.length > 0;
 
     return (
       <View className="px-4 w-full">
         <PlanningHeader dateStr={iso} />
-        {list.length === 0 ? (
+
+        {/* Lane : Non assigné (raw events sans employé) */}
+        {unassigned.length > 0 && (
+          <View className="mb-4">
+            <View className="flex-row items-center gap-2 mb-2">
+              <View className="w-2 h-2 rounded-full bg-slate-400" />
+              <Text className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Non assigné ({unassigned.length})
+              </Text>
+            </View>
+            <View className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-3 border border-dashed border-slate-200 dark:border-slate-700">
+              {unassigned.map((item) => (
+                <RawEventCard key={item.id} item={item} date={iso} />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Interventions structurées */}
+        {list.length > 0 && (
+          <View className="mb-4">
+            {assigned.length > 0 || unassigned.length > 0 ? (
+              <View className="flex-row items-center gap-2 mb-2">
+                <View className="w-2 h-2 rounded-full bg-blue-500" />
+                <Text className="text-xs font-bold text-blue-500 uppercase tracking-wider">
+                  Interventions
+                </Text>
+              </View>
+            ) : null}
+            {list.map((item) => (
+              <InterventionCard key={item.id} item={item} />
+            ))}
+          </View>
+        )}
+
+        {/* Raw events assignés (dans la lane de leur employé) */}
+        {assigned.length > 0 && (
+          <View className="mb-4">
+            <View className="flex-row items-center gap-2 mb-2">
+              <View className="w-2 h-2 rounded-full bg-green-500" />
+              <Text className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wider">
+                Assignés ({assigned.length})
+              </Text>
+            </View>
+            {assigned.map((item) => (
+              <RawEventCard key={item.id} item={item} date={iso} />
+            ))}
+          </View>
+        )}
+
+        {!hasAnything && (
           <View className="items-center justify-center py-20 bg-muted/20 dark:bg-slate-900/30 rounded-2xl border border-dashed border-border dark:border-slate-800">
             <Clock size={48} color="#94A3B8" />
             <Text className="text-muted-foreground mt-4">
               Aucune intervention ce jour.
             </Text>
           </View>
-        ) : (
-          list.map((item) => <InterventionCard key={item.id} item={item} />)
         )}
       </View>
     );
@@ -571,16 +796,25 @@ export default function CalendarScreen() {
 
     const itemWidth = (width - padding - gap * (cols - 1)) / cols;
 
+    const { rawEvents: yearRawEvents } = useRawEventsByRange(
+      `${year}-01-01`,
+      `${year}-12-31`,
+    );
+
     const yearMarkers = useMemo(() => {
       const marks: any = {};
+      yearRawEvents?.forEach((ev) => {
+        const dateKey = ev.start_time.split("T")[0];
+        marks[dateKey] = { marked: true, dotColor: "#F59E0B" };
+      });
       interventions?.forEach((item: any) => {
         if (item.start_time) {
-          const dateKey = item.start_time.split("T")[0];
+          const dateKey = dayKeyFromDateTime(item.start_time);
           marks[dateKey] = { marked: true, dotColor: "#3B82F6" };
         }
       });
       return marks;
-    }, [interventions]);
+    }, [interventions, yearRawEvents]);
 
     const miniTheme = useMemo(
       () => ({

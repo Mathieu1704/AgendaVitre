@@ -53,13 +53,13 @@ class AbsenceOut(AbsenceCreate):
 
 # --- CLIENT ---
 class ClientBase(BaseModel):
-    name: str
+    name: Optional[str] = None
     street: Optional[str] = None
     zip_code: Optional[str] = None
     city: Optional[str] = None
-    address: Optional[str] = None # Fallback
+    address: Optional[str] = None
     phone: Optional[str] = None
-    mail: Optional[str] = None
+    email: Optional[str] = None
     notes: Optional[str] = None
 
 class ClientCreate(ClientBase):
@@ -85,17 +85,16 @@ class InterventionItemOut(InterventionItemBase):
 
 # --- INTERVENTION ---
 class InterventionBase(BaseModel):
+    type: str = "intervention"
     title: str
-    description: Optional[str] = None 
+    description: Optional[str] = None
     start_time: datetime
     end_time: datetime
     status: str = "planned"
     price_estimated: Optional[float] = None
     is_invoice: bool = False
-    client_id: UUID
-    employee_ids: List[UUID] = [] 
-    
-
+    client_id: Optional[UUID] = None
+    employee_ids: List[UUID] = []
     items: List[InterventionItemCreate] = []
 
 class InterventionCreate(InterventionBase):
@@ -103,6 +102,7 @@ class InterventionCreate(InterventionBase):
 
 class InterventionOutLite(BaseModel):
     id: UUID
+    type: str = "intervention"
     title: str
     start_time: datetime
     end_time: datetime
@@ -112,18 +112,16 @@ class InterventionOutLite(BaseModel):
 
 class InterventionOut(BaseModel):
     id: UUID
+    type: str = "intervention"
     title: str
     description: Optional[str]
     start_time: datetime
     end_time: datetime
     status: str
     price_estimated: Optional[float]
-    
-    is_invoice: bool = False 
-
+    is_invoice: bool = False
     client: Optional[ClientOutLite] = None
     employees: List[EmployeeOut] = []
-    
     items: List[InterventionItemOut] = []
 
     class Config:

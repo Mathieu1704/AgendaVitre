@@ -1,9 +1,9 @@
-import React, { useState } from "react";
-import { Pressable, Text, View, ViewStyle, StyleProp } from "react-native";
+import React, { useState, useMemo } from "react";
+import { Pressable, Text, View, ViewStyle, StyleProp, ScrollView, TextInput, Platform } from "react-native";
 import { Dialog } from "./Dialog";
 import { Button } from "./Button";
 import { cn } from "../cn";
-import { ChevronDown } from "lucide-react-native";
+import { ChevronDown, Search } from "lucide-react-native";
 
 export function Select<T extends { id: string; label: string }>({
   value,
@@ -27,6 +27,19 @@ export function Select<T extends { id: string; label: string }>({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  const filteredItems = useMemo(() => {
+    if (!search.trim()) return items;
+    const q = search.toLowerCase();
+    return items.filter((it) => it.label.toLowerCase().includes(q));
+  }, [items, search]);
+
+  const handleClose = () => {
+    setOpen(false);
+    setSearch("");
+  };
 
   return (
     // ✅ 3. On l'applique sur la View parente
@@ -62,46 +75,86 @@ export function Select<T extends { id: string; label: string }>({
         <ChevronDown size={18} color="#94A3B8" />
       </Pressable>
 
-      <Dialog open={open} onClose={() => setOpen(false)} position="center">
+      <Dialog open={open} onClose={handleClose} position="center">
         <View className="p-5">
-          <Text className="text-lg font-bold mb-4 text-foreground dark:text-white text-center">
+          <Text className="text-lg font-bold mb-3 text-foreground dark:text-white text-center">
             {title}
           </Text>
 
-          <View className="gap-2 mb-4">
-            {items.map((it) => {
-              const active = value?.id === it.id;
-              return (
-                <Pressable
-                  key={it.id}
-                  onPress={() => {
-                    onChange(it);
-                    setOpen(false);
-                  }}
-                  style={{ borderRadius: 12 }}
-                  className={cn(
-                    "px-4 py-3 border",
-                    active
-                      ? "border-primary bg-primary/10"
-                      : "border-border dark:border-slate-700 bg-background dark:bg-slate-800",
-                  )}
-                >
-                  <Text
-                    className={cn(
-                      "font-medium text-base",
-                      active
-                        ? "text-primary"
-                        : "text-foreground dark:text-white",
-                    )}
-                  >
-                    {it.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+          {/* Champ de recherche */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              borderWidth: 1.5,
+              borderColor: searchFocused ? "#3B82F6" : "#E2E8F0",
+              borderRadius: 12,
+              paddingHorizontal: 12,
+              marginBottom: 12,
+              backgroundColor: "#F8FAFC",
+            }}
+          >
+            <Search size={16} color={searchFocused ? "#3B82F6" : "#94A3B8"} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              placeholder="Rechercher..."
+              placeholderTextColor="#94A3B8"
+              style={[
+                { flex: 1, height: 40, paddingHorizontal: 8, color: "#0f172a", fontSize: 15 },
+                Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {},
+              ]}
+            />
           </View>
 
-          <Button variant="ghost" onPress={() => setOpen(false)}>
+          <ScrollView
+            style={{ maxHeight: 320 }}
+            showsVerticalScrollIndicator={true}
+            persistentScrollbar={true}
+            contentContainerStyle={{ paddingRight: 10 }}
+          >
+            <View className="gap-2 pb-1">
+              {filteredItems.map((it) => {
+                const active = value?.id === it.id;
+                return (
+                  <Pressable
+                    key={it.id}
+                    onPress={() => {
+                      onChange(it);
+                      handleClose();
+                    }}
+                    style={{ borderRadius: 12 }}
+                    className={cn(
+                      "px-4 py-3 border",
+                      active
+                        ? "border-primary bg-primary/10"
+                        : "border-border dark:border-slate-700 bg-background dark:bg-slate-800",
+                    )}
+                  >
+                    <Text
+                      className={cn(
+                        "font-medium text-base",
+                        active
+                          ? "text-primary"
+                          : "text-foreground dark:text-white",
+                      )}
+                    >
+                      {it.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+              {filteredItems.length === 0 && (
+                <Text className="text-center text-muted-foreground py-4">
+                  Aucun résultat
+                </Text>
+              )}
+            </View>
+          </ScrollView>
+
+          <Button variant="ghost" onPress={handleClose} style={{ marginTop: 8 }}>
             Fermer
           </Button>
         </View>

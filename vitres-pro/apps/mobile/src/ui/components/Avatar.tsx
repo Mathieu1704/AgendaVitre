@@ -7,11 +7,11 @@ export function Avatar({
   size = "md",
   className,
 }: {
-  name: string;
+  name: string | null | undefined;
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
-  const initials = name
+  const initials = (name || "?")
     .split(" ")
     .map((n) => n[0])
     .join("")

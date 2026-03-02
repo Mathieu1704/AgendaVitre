@@ -61,7 +61,49 @@ export function datesRange(start: Date, count: number): Date[] {
   return Array.from({ length: count }, (_, i) => addDays(start, i));
 }
 
-/** ✅ Format local: "YYYY-MM-DD HH:MM" (pas UTC, évite les décalages) */
+// ─── FONCTIONS FUSEAU EUROPE/BRUSSELS ──────────────────────────────────────
+
+/** Convertit une Date (UTC) en "YYYY-MM-DDTHH:MM" dans le fuseau Brussels */
+export function toBrusselsDateTimeString(d: Date): string {
+  const fmt = new Intl.DateTimeFormat("fr-CA", {
+    timeZone: "Europe/Brussels",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  const h = get("hour");
+  return `${get("year")}-${get("month")}-${get("day")}T${h === "24" ? "00" : h}:${get("minute")}`;
+}
+
+/**
+ * Parse "YYYY-MM-DDTHH:MM" interprété comme heure Brussels → Date UTC.
+ * Calcule l'offset DST exact sans l'hardcoder.
+ */
+export function parseBrusselsDateTimeString(s: string): Date {
+  const [datePart, timePart = "00:00"] = (s || "").replace("T", " ").split(" ");
+  const [y, mo, d] = datePart.split("-").map(Number);
+  const [h, mi] = timePart.split(":").map(Number);
+  if (!y || !mo || !d) return new Date(s);
+  // 1. Approximation UTC
+  const utcMs = Date.UTC(y, mo - 1, d, h, mi);
+  // 2. Ce que Brussels lit pour ce UTC
+  const br = toBrusselsDateTimeString(new Date(utcMs));
+  const [bd, bt = "00:00"] = br.split("T");
+  const [by, bmo, bday] = bd.split("-").map(Number);
+  const [bh, bmi] = bt.split(":").map(Number);
+  const brMs = Date.UTC(by, bmo - 1, bday, bh, bmi);
+  // 3. Offset et correction
+  return new Date(utcMs + (utcMs - brMs));
+}
+
+// ─── FONCTIONS LOCALES (conservées) ─────────────────────────────────────────
+
+/** Format local: "YYYY-MM-DD HH:MM" (pas UTC, évite les décalages) */
 export function toLocalDateTimeString(d: Date): string {
   const yyyy = d.getFullYear();
   const mm = pad2(d.getMonth() + 1);

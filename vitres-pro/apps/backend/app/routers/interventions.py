@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from typing import List, Optional
 from uuid import UUID
 import uuid
 
-from app.models.models import get_db, Intervention, Client, Employee, InterventionItem, intervention_employees
+from app.models.models import get_db, Intervention, Client, Employee, InterventionItem, intervention_employees, RawCalendarEvent
 from app.schemas.schemas import InterventionCreate, InterventionOut
 from app.core.deps import get_current_user
 
@@ -22,20 +22,20 @@ def read_interventions(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user), 
 ):
-    query = db.query(Intervention)
+    query = db.query(Intervention).options(
+        selectinload(Intervention.client),
+        selectinload(Intervention.employees),
+        selectinload(Intervention.items),
+    )
 
     # 1. FILTRAGE PAR RÔLE
     if current_user.role == 'admin':
-        # Admin : Voit tout, on ne fait rien de spécial
-        pass 
+        pass
     else:
-        # Employé : Ne voit que SES assignations
-        # On filtre les interventions où l'employé courant est dans la liste 'employees'
         query = query.filter(Intervention.employees.any(id=current_user.id))
 
-    # 2. FILTRAGE PAR DATE (Optionnel, si tu l'utilises plus tard)
+    # 2. FILTRAGE PAR DATE (Optionnel)
     if start and end:
-        # Ex: query = query.filter(Intervention.start_time >= start, ...)
         pass
 
     # On trie par date décroissante (le plus récent en haut)
@@ -47,7 +47,11 @@ def read_intervention(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
-    intervention = db.query(Intervention).filter(Intervention.id == intervention_id).first()
+    intervention = db.query(Intervention).options(
+        selectinload(Intervention.client),
+        selectinload(Intervention.employees),
+        selectinload(Intervention.items),
+    ).filter(Intervention.id == intervention_id).first()
     if not intervention:
         raise HTTPException(status_code=404, detail="Non trouvé")
     return intervention
@@ -58,10 +62,11 @@ def create_intervention(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
-    # 1. Vérif Client
-    client = db.query(Client).filter(Client.id == intervention.client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client introuvable")
+    # 1. Vérif Client (optionnel pour tournee/note)
+    if intervention.client_id:
+        client = db.query(Client).filter(Client.id == intervention.client_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client introuvable")
 
     # 2. Création de l'Intervention
     data = intervention.model_dump(exclude={"employee_ids", "items"})
@@ -141,6 +146,11 @@ def delete_intervention(
     db_intervention = db.query(Intervention).filter(Intervention.id == intervention_id).first()
     if not db_intervention:
         raise HTTPException(status_code=404, detail="Introuvable")
+
+    # Détacher les raw events qui pointent vers cette intervention avant suppression
+    db.query(RawCalendarEvent).filter(
+        RawCalendarEvent.linked_intervention_id == intervention_id
+    ).update({"linked_intervention_id": None, "status": "pending"})
 
     db.delete(db_intervention)
     db.commit()

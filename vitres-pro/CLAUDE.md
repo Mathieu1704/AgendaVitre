@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture
 
 Monorepo with two applications:
+
 - `apps/backend/` — FastAPI (Python) REST API
 - `apps/mobile/` — React Native (Expo) cross-platform app (iOS, Android, Web)
 
@@ -17,12 +18,15 @@ Monorepo with two applications:
 ## Development Commands
 
 ### Start all services (recommended)
+
 ```bash
 npm run dev
 ```
+
 Runs concurrently: local Supabase, FastAPI backend on port 8000, and Expo dev server.
 
 ### Backend only
+
 ```bash
 cd apps/backend
 source venv/bin/activate
@@ -30,6 +34,7 @@ uvicorn main:app --reload --port 8000
 ```
 
 ### Mobile only
+
 ```bash
 cd apps/mobile
 npx expo start
@@ -37,6 +42,7 @@ npx expo start
 ```
 
 ### Backend setup (first time)
+
 ```bash
 cd apps/backend
 python -m venv venv
@@ -46,6 +52,7 @@ python init_db.py  # Initialize/migrate database schema
 ```
 
 ### Mobile setup (first time)
+
 ```bash
 cd apps/mobile
 npm install
@@ -88,3 +95,20 @@ Production API URL: `https://api.lvmagenda.be`
 ## Role-Based Access
 
 Two roles: `admin` and `employee`. Role is stored on the `Employee` model (synced with Supabase Auth user ID). Admins can manage team, access all planning stats; employees see their own schedule. Role checks happen both in backend route guards and in mobile UI conditional rendering.
+
+## Working rules (performance & scope)
+
+- Do NOT scan the whole repository.
+- Only read files I mention, or the minimal entrypoints needed.
+- Prefer scoped searches within:
+  - apps/backend/app/\*\*
+  - apps/mobile/app/\*\*
+  - apps/mobile/src/\*\*
+- Ignore unless explicitly asked:
+  - apps/mobile/node_modules/\*\*
+  - apps/backend/venv/\*\*
+  - **/**pycache**/**
+  - **/.expo/**
+  - **/dist/**, **/build/**
+  - apps/backend/scripts/\*.json (exports/dumps)
+  - \*.log
