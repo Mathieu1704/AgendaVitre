@@ -49,14 +49,42 @@ class Employee(Base):
     full_name = Column(String, nullable=True)
     role = Column(String, default="employee") # 'admin' ou 'employee'
     color = Column(String, default="#3B82F6") # Couleur pour le planning admin
-    
+    phone = Column(String, nullable=True) # Téléphone de l'employé
+
     # Gestion du temps
     weekly_hours = Column(Float, default=38.0) # Contrat hebdo
     daily_capacity = Column(Float, default=7.6) # Capacité journalière par défaut (38/5)
-    
+    # Heures par jour de semaine: {"1":10,"2":8,"3":8,"4":8,"5":7} (1=lun, 5=ven)
+    hours_per_weekday = Column(JSONB, nullable=True)
+
     # Relations
     interventions = relationship("Intervention", secondary=intervention_employees, back_populates="employees")
     absences = relationship("Absence", back_populates="employee")
+    progressive_hours = relationship("ProgressiveHours", back_populates="employee", cascade="all, delete-orphan")
+
+class ProgressiveHours(Base):
+    """Montée en charge progressive d'un employé sur une plage de dates."""
+    __tablename__ = "progressive_hours"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    # Heures par jour pendant cette période: {"1":3,"2":3,"3":3,"4":3,"5":3}
+    hours_per_weekday = Column(JSONB, nullable=False)
+
+    employee = relationship("Employee", back_populates="progressive_hours")
+
+
+class CompanyClosure(Base):
+    """Fermetures globales de l'entreprise (ex: 21/12 – 3/01)."""
+    __tablename__ = "company_closures"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    reason = Column(String, nullable=True)
+
 
 class Absence(Base):
     __tablename__ = "absences"

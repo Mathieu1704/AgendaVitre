@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict
 from uuid import UUID
 from pydantic import BaseModel
 
@@ -19,6 +19,8 @@ class EmployeeCreateRequest(BaseModel):
     color: str = "#3B82F6"
     weekly_hours: float = 38.0
     role: str = "employee"
+    phone: Optional[str] = None
+    hours_per_weekday: Optional[Dict[str, float]] = None
 
 class PasswordResetRequest(BaseModel):
     password: str
@@ -64,7 +66,10 @@ def create_employee(
         full_name=emp_data.full_name,
         color=emp_data.color,
         role=emp_data.role,
-        weekly_hours=emp_data.weekly_hours
+        phone=emp_data.phone,
+        weekly_hours=emp_data.weekly_hours,
+        daily_capacity=round(emp_data.weekly_hours / 5, 2),
+        hours_per_weekday=emp_data.hours_per_weekday,
     )
     
     try:

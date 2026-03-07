@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 from uuid import UUID
 
@@ -9,8 +9,10 @@ class EmployeeBase(BaseModel):
     full_name: Optional[str] = None
     role: str = "employee"
     color: str = "#3B82F6"
+    phone: Optional[str] = None
     weekly_hours: float = 38.0
     daily_capacity: float = 7.6
+    hours_per_weekday: Optional[Dict[str, float]] = None
 
 class EmployeeOut(EmployeeBase):
     id: UUID
@@ -21,8 +23,10 @@ class EmployeeUpdate(BaseModel):
     full_name: Optional[str] = None
     color: Optional[str] = None
     role: Optional[str] = None
+    phone: Optional[str] = None
     weekly_hours: Optional[float] = None
     daily_capacity: Optional[float] = None
+    hours_per_weekday: Optional[Dict[str, float]] = None
 
 # --- ABSENCE ---
 class AbsenceBase(BaseModel):
