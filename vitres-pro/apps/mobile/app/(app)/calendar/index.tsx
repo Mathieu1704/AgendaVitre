@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from "react";
+import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Pressable,
@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
   Platform,
   Linking,
+  LayoutChangeEvent,
 } from "react-native";
 import {
   Calendar as RNCalendar,
@@ -24,7 +25,15 @@ import {
   MapPin,
   CalendarCheck,
 } from "lucide-react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, {
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  interpolateColor,
+  runOnJS,
+} from "react-native-reanimated";
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -52,6 +61,7 @@ import {
   usePlanningStats,
 } from "../../../src/hooks/usePlanning";
 import { useRawEventsByDate, useRawEventsByRange } from "../../../src/hooks/useRawEvents";
+import { useAuth } from "../../../src/hooks/useAuth";
 import { RawCalendarEvent } from "../../../src/types";
 
 // --- CONFIGURATION LOCALE ---
@@ -100,8 +110,138 @@ LocaleConfig.defaultLocale = "fr";
 
 type ViewMode = "day" | "week" | "month" | "year";
 
-const DailyStatsBadge = ({ dateStr }: { dateStr: string }) => {
-  const { stats, isLoading } = usePlanningStats(dateStr);
+// ─── Animated Sliding Pill Selector (style iOS segmented control) ──────────
+type PillOption = {
+  id: string;
+  label: string;
+  pillColor?: string;   // override pill bg for this option
+  activeTextColor?: string; // override active text color for this option
+};
+
+type SlidingPillSelectorProps = {
+  options: PillOption[];
+  selected: string;
+  onSelect: (id: string) => void;
+  pillColor: string;       // default pill bg
+  bgColor: string;         // track background
+  activeTextColor: string; // default active text
+  inactiveTextColor: string;
+  containerStyle?: object;
+  itemPy?: number;
+  itemPx?: number;
+  fontSize?: number;
+};
+
+function SlidingPillSelector({
+  options,
+  selected,
+  onSelect,
+  pillColor,
+  bgColor,
+  activeTextColor,
+  inactiveTextColor,
+  containerStyle,
+  itemPy = 8,
+  itemPx = 0,
+  fontSize = 13,
+}: SlidingPillSelectorProps) {
+  const [containerWidth, setContainerWidth] = useState(0);
+  const selectedIndex = options.findIndex((o) => o.id === selected);
+  const itemWidth = containerWidth > 0 ? containerWidth / options.length : 0;
+
+  const translateX = useSharedValue(0);
+
+  useEffect(() => {
+    if (itemWidth > 0) {
+      translateX.value = withSpring(selectedIndex * itemWidth, {
+        mass: 0.5,
+        stiffness: 280,
+        damping: 28,
+      });
+    }
+  }, [selectedIndex, itemWidth]);
+
+  const pillStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+    width: itemWidth,
+    backgroundColor:
+      options[selectedIndex]?.pillColor ?? pillColor,
+  }));
+
+  return (
+    <View
+      style={[
+        {
+          flexDirection: "row",
+          backgroundColor: bgColor,
+          borderRadius: 100,
+          padding: 3,
+          position: "relative",
+        },
+        containerStyle,
+      ]}
+      onLayout={(e: LayoutChangeEvent) =>
+        setContainerWidth(e.nativeEvent.layout.width - 6) // subtract 2*padding
+      }
+    >
+      {/* Sliding pill */}
+      {containerWidth > 0 && (
+        <Animated.View
+          style={[
+            {
+              position: "absolute",
+              top: 3,
+              left: 3,
+              bottom: 3,
+              borderRadius: 100,
+              shadowColor: "#000",
+              shadowOpacity: 0.12,
+              shadowRadius: 4,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 3,
+            },
+            pillStyle,
+          ]}
+        />
+      )}
+
+      {/* Options */}
+      {options.map((opt, idx) => {
+        const isActive = opt.id === selected;
+        const textColor = isActive
+          ? (opt.activeTextColor ?? activeTextColor)
+          : inactiveTextColor;
+        return (
+          <Pressable
+            key={opt.id}
+            onPress={() => onSelect(opt.id)}
+            style={{
+              flex: 1,
+              alignItems: "center",
+              paddingVertical: itemPy,
+              paddingHorizontal: itemPx,
+              borderRadius: 100,
+              zIndex: 1,
+            }}
+          >
+            <Animated.Text
+              style={{
+                fontSize,
+                fontWeight: "600",
+                color: textColor,
+              }}
+            >
+              {opt.label}
+            </Animated.Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const DailyStatsBadge = ({ dateStr, zone }: { dateStr: string; zone?: string }) => {
+  const { stats, isLoading } = usePlanningStats(dateStr, zone);
 
   if (isLoading || !stats) return null;
 
@@ -130,6 +270,7 @@ export default function CalendarScreen() {
   const params = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const { isDark } = useTheme();
+  const { isAdmin, userZone } = useAuth();
 
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
@@ -141,6 +282,8 @@ export default function CalendarScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [cursorDate, setCursorDate] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState(toISODate(new Date()));
+  // Admin : toggle Toutes/Hainaut/Ardennes. Employé : fixé à sa zone.
+  const [selectedZone, setSelectedZone] = useState<"all" | "hainaut" | "ardennes">("all");
 
   useEffect(() => {
     if (params.date) {
@@ -172,12 +315,16 @@ export default function CalendarScreen() {
     }
   }, []);
 
+  // Zone effective : admin peut choisir, employé est verrouillé sur sa zone
+  const effectiveZone = isAdmin ? selectedZone : userZone;
+
   const itemsByDate = useMemo(() => {
     const map: Record<string, any[]> = {};
     if (!interventions) return map;
 
     for (const it of interventions) {
       if (!it?.start_time) continue;
+      if (effectiveZone !== "all" && it.zone !== effectiveZone) continue;
       const k = dayKeyFromDateTime(it.start_time);
       (map[k] ||= []).push(it);
     }
@@ -185,7 +332,7 @@ export default function CalendarScreen() {
       map[k].sort((a, b) => a.start_time.localeCompare(b.start_time));
     }
     return map;
-  }, [interventions, dayKeyFromDateTime]);
+  }, [interventions, dayKeyFromDateTime, effectiveZone]);
 
   // --- NAVIGATION ---
   const handlePrev = () => {
@@ -495,13 +642,10 @@ export default function CalendarScreen() {
         if (dateKey !== selectedDate)
           marks[dateKey] = { marked: true, dotColor: "#F59E0B" };
       });
-      // Points bleus pour les interventions (priorité sur orange)
-      interventions?.forEach((item: any) => {
-        if (item.start_time) {
-          const dateKey = dayKeyFromDateTime(item.start_time);
-          if (dateKey !== selectedDate)
-            marks[dateKey] = { marked: true, dotColor: "#3B82F6" };
-        }
+      // Points bleus pour les interventions filtrées par zone (priorité sur orange)
+      Object.keys(itemsByDate).forEach((dateKey) => {
+        if (itemsByDate[dateKey].length > 0 && dateKey !== selectedDate)
+          marks[dateKey] = { marked: true, dotColor: "#3B82F6" };
       });
       marks[selectedDate] = {
         selected: true,
@@ -511,7 +655,7 @@ export default function CalendarScreen() {
       if (today !== selectedDate)
         marks[today] = { ...(marks[today] || {}), textColor: "#3B82F6" };
       return marks;
-    }, [interventions, monthRawEvents, selectedDate]);
+    }, [itemsByDate, monthRawEvents, selectedDate]);
 
     const dayList = itemsByDate[selectedDate] || [];
     const dayRawEvents = monthRawEvents.filter(
@@ -553,7 +697,7 @@ export default function CalendarScreen() {
             </Text>
 
             {/* Badge aligné juste à droite */}
-            <DailyStatsBadge dateStr={selectedDate} />
+            <DailyStatsBadge dateStr={selectedDate} zone={effectiveZone} />
           </View>
 
           <View className="px-4">
@@ -598,6 +742,7 @@ export default function CalendarScreen() {
     const { rangeStats } = usePlanningRangeStats(
       toISODate(start),
       toISODate(end),
+      effectiveZone,
     );
     const { rawEvents: weekRawEvents } = useRawEventsByRange(
       toISODate(start),
@@ -720,7 +865,7 @@ export default function CalendarScreen() {
 
     return (
       <View className="px-4 w-full">
-        <PlanningHeader dateStr={iso} />
+        <PlanningHeader dateStr={iso} zone={effectiveZone} />
 
         {/* Lane : Non assigné (raw events sans employé) */}
         {unassigned.length > 0 && (
@@ -919,40 +1064,25 @@ export default function CalendarScreen() {
           </Pressable>
         </View>
 
-        {/* Slider (View Selector) */}
-        {/* ✅ Parent : rounded-full pour un effet "pilule" parfait */}
-        <View className="flex-row bg-muted dark:bg-slate-800 p-1 rounded-full mb-4">
-          {[
-            { id: "day", label: "Jour" },
-            { id: "week", label: "Semaine" },
+        {/* Slider (View Selector) — animated pill */}
+        <SlidingPillSelector
+          options={[
+            { id: "day",   label: "Jour" },
+            { id: "week",  label: "Semaine" },
             { id: "month", label: "Mois" },
-            { id: "year", label: "Année" },
-          ].map((mode) => (
-            <Pressable
-              key={mode.id}
-              onPress={() => setViewMode(mode.id as ViewMode)}
-              // ✅ Enfant : rounded-full aussi pour épouser la forme du parent
-              className={`flex-1 py-1.5 items-center rounded-full ${
-                viewMode === mode.id
-                  ? "bg-background dark:bg-slate-600 shadow-sm"
-                  : "bg-transparent"
-              }`}
-            >
-              <Text
-                className={`text-xs font-semibold ${
-                  viewMode === mode.id
-                    ? "text-foreground dark:text-white"
-                    : "text-muted-foreground dark:text-slate-400"
-                }`}
-              >
-                {mode.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+            { id: "year",  label: "Année" },
+          ]}
+          selected={viewMode}
+          onSelect={(id) => setViewMode(id as ViewMode)}
+          pillColor={isDark ? "#475569" : "#FFFFFF"}
+          bgColor={isDark ? "#1E293B" : "#E2E8F0"}
+          activeTextColor={isDark ? "#FFFFFF" : "#09090B"}
+          inactiveTextColor={isDark ? "#94A3B8" : "#64748B"}
+          containerStyle={{ marginBottom: 12 }}
+          itemPy={8}
+        />
 
-        {/* Barre de Navigation (Flèches + Titre) */}
-        {/* ✅ Modification : rounded-3xl pour plus de rondeur */}
+        {/* Barre de Navigation (Flèches + Titre + Zone selector) */}
         <View className="flex-row items-center justify-between bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-3 rounded-3xl shadow-sm mb-4">
           <Pressable
             onPress={handlePrev}
@@ -960,14 +1090,48 @@ export default function CalendarScreen() {
           >
             <ChevronLeft
               size={24}
-              className="text-foreground dark:text-white"
               color={isDark ? "#FFF" : "#09090B"}
             />
           </Pressable>
 
-          <Text className="text-lg font-bold text-foreground dark:text-white capitalize">
-            {headerTitle}
-          </Text>
+          <View className="items-center flex-1">
+            <Text className="text-lg font-bold text-foreground dark:text-white capitalize">
+              {headerTitle}
+            </Text>
+            {/* Zone selector — admins seulement */}
+            {isAdmin ? (
+              <SlidingPillSelector
+                options={[
+                  { id: "all",      label: "Toutes" },
+                  { id: "hainaut",  label: "Hainaut",  pillColor: "#3B82F6", activeTextColor: "#FFFFFF" },
+                  { id: "ardennes", label: "Ardennes", pillColor: "#10B981", activeTextColor: "#FFFFFF" },
+                ]}
+                selected={selectedZone}
+                onSelect={(id) => setSelectedZone(id as "all" | "hainaut" | "ardennes")}
+                pillColor={isDark ? "#475569" : "#FFFFFF"}
+                bgColor={isDark ? "#0F172A" : "#F1F5F9"}
+                activeTextColor={isDark ? "#FFFFFF" : "#09090B"}
+                inactiveTextColor={isDark ? "#94A3B8" : "#64748B"}
+                containerStyle={{ marginTop: 8 }}
+                itemPy={5}
+                itemPx={14}
+                fontSize={12}
+              />
+            ) : (
+              /* Badge zone fixe pour les employés */
+              <View
+                className="mt-1.5 px-3 py-0.5 rounded-full"
+                style={{ backgroundColor: userZone === "ardennes" ? "#D1FAE5" : "#DBEAFE" }}
+              >
+                <Text
+                  className="text-xs font-semibold"
+                  style={{ color: userZone === "ardennes" ? "#059669" : "#2563EB" }}
+                >
+                  {userZone === "ardennes" ? "Ardennes" : "Hainaut"}
+                </Text>
+              </View>
+            )}
+          </View>
 
           <Pressable
             onPress={handleNext}
@@ -975,7 +1139,6 @@ export default function CalendarScreen() {
           >
             <ChevronRight
               size={24}
-              className="text-foreground dark:text-white"
               color={isDark ? "#FFF" : "#09090B"}
             />
           </Pressable>

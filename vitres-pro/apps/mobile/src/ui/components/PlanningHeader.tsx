@@ -3,8 +3,8 @@ import { View, Text, ActivityIndicator } from "react-native";
 import { usePlanningStats } from "../../hooks/usePlanning";
 import { cn } from "../cn";
 
-export function PlanningHeader({ dateStr }: { dateStr: string }) {
-  const { stats, isLoading } = usePlanningStats(dateStr);
+export function PlanningHeader({ dateStr, zone }: { dateStr: string; zone?: string }) {
+  const { stats, isLoading } = usePlanningStats(dateStr, zone);
 
   if (isLoading) {
     return (

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from datetime import date, datetime, timedelta
-from typing import List, Dict
+from typing import List, Dict, Optional
 from sqlalchemy.sql import func
 
 from app.models.models import get_db, Intervention, Employee, Absence, CompanySettings, ProgressiveHours, CompanyClosure
@@ -27,7 +27,7 @@ def _get_employee_hours_for_day(emp: Employee, target_date: date, progressive: l
     return emp.daily_capacity
 
 
-def calculate_day_stats(target_date: date, db: Session):
+def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = None):
     settings = db.query(CompanySettings).first()
     tolerance = settings.overtime_tolerance_hours if settings else 3.0
 
@@ -46,7 +46,10 @@ def calculate_day_stats(target_date: date, db: Session):
             "status": "closed"
         }
 
-    all_employees = db.query(Employee).all()
+    emp_query = db.query(Employee)
+    if zone:
+        emp_query = emp_query.filter(Employee.zone == zone)
+    all_employees = emp_query.all()
 
     absences = db.query(Absence).filter(
         func.date(Absence.start_date) <= target_date,
@@ -68,9 +71,12 @@ def calculate_day_stats(target_date: date, db: Session):
             if hours > 0:
                 present_count += 1
 
-    interventions = db.query(Intervention).filter(
+    int_query = db.query(Intervention).filter(
         func.date(Intervention.start_time) == target_date
-    ).all()
+    )
+    if zone:
+        int_query = int_query.filter(Intervention.zone == zone)
+    interventions = int_query.all()
 
     total_planned = 0
     for inter in interventions:
@@ -101,27 +107,29 @@ def calculate_day_stats(target_date: date, db: Session):
 @router.get("/daily-stats")
 def get_daily_stats_endpoint(
     date_str: str,
+    zone: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user) 
+    current_user=Depends(get_current_user)
 ):
     d = datetime.strptime(date_str, "%Y-%m-%d").date()
-    return calculate_day_stats(d, db)
+    return calculate_day_stats(d, db, zone=zone)
 
 @router.get("/range-stats")
 def get_range_stats_endpoint(
     start_str: str,
     end_str: str,
+    zone: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user) 
+    current_user=Depends(get_current_user)
 ):
     start = datetime.strptime(start_str, "%Y-%m-%d").date()
     end = datetime.strptime(end_str, "%Y-%m-%d").date()
-    
+
     results = {}
     current = start
     while current <= end:
-        stats = calculate_day_stats(current, db)
+        stats = calculate_day_stats(current, db, zone=zone)
         results[stats["date"]] = stats
         current += timedelta(days=1)
-        
+
     return results

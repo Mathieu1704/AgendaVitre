@@ -51,6 +51,8 @@ class Employee(Base):
     color = Column(String, default="#3B82F6") # Couleur pour le planning admin
     phone = Column(String, nullable=True) # Téléphone de l'employé
 
+    zone = Column(String(20), default="hainaut", nullable=False)  # "hainaut" ou "ardennes"
+
     # Gestion du temps
     weekly_hours = Column(Float, default=38.0) # Contrat hebdo
     daily_capacity = Column(Float, default=7.6) # Capacité journalière par défaut (38/5)
@@ -140,7 +142,9 @@ class Intervention(Base):
     status = Column(String, default="planned")
     price_estimated = Column(Numeric(10, 2), nullable=True)
     is_invoice = Column(Boolean, default=False)
-    
+    google_event_id = Column(String, nullable=True, unique=True, index=True)
+    zone = Column(String(20), nullable=True)  # "hainaut" ou "ardennes"
+
     # Relations
     client = relationship("Client", back_populates="interventions")
     employees = relationship("Employee", secondary=intervention_employees, back_populates="interventions")

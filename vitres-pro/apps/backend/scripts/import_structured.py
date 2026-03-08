@@ -1,31 +1,62 @@
 """
-Importe des événements structurés (JSON ChatGPT/Claude) dans la DB.
+Importe des événements structurés (JSON export_done/) dans la DB.
 
-- Déduplique automatiquement les événements identiques (même date + summary + start_time)
-  causés par la duplication Google Agenda (1 event par employé)
+- Étend les événements récurrents (RRULE) jusqu'à leur date UNTIL
+- Déduplique par (date, original_summary, start_time)
 - Trouve ou crée le client par nom
 - Crée l'Intervention + InterventionItems
-- Assigne les employés depuis les raw events correspondants
-- Marque tous les raw events du groupe comme "converted"
 
 Usage:
-    python scripts/import_structured.py scripts/export_2026-02-26.json
-    python scripts/import_structured.py scripts/export_2026-02-26.json scripts/export_2026-02-27.json
+    python scripts/import_structured.py scripts/export_done/*.json
 """
 import sys
 import json
 import os
-from datetime import datetime
+from datetime import datetime, date as date_type
 from collections import defaultdict
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app.models.models import get_db, RawCalendarEvent, Client, Intervention, InterventionItem
+from app.models.models import get_db, Client, Intervention, InterventionItem
 from sqlalchemy.sql import func as sqlfunc
 import pytz
 import uuid
 
+from dateutil.rrule import rrulestr
+
 BRUSSELS_TZ = pytz.timezone("Europe/Brussels")
+FALLBACK_UNTIL = date_type(2026, 12, 31)
+
+
+def normalize_event(ev: dict) -> dict:
+    """Normalise le format brut Google Calendar vers le format structuré."""
+    if "date" in ev:
+        return ev  # Déjà structuré
+    import re
+    # Format brut : summary, start (ISO datetime), end, google_event_id, recurrence_rule
+    start_str = ev.get("start", "")
+    end_str   = ev.get("end", "")
+    sm = re.match(r"(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})", start_str)
+    em = re.match(r"(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})", end_str)
+    return {
+        "original_summary": ev.get("summary", ""),
+        "date":             sm.group(1) if sm else "",
+        "client_name":      "",
+        "client_street":    "",
+        "client_zip":       "",
+        "client_city":      "",
+        "client_phone":     "",
+        "client_email":     "",
+        "client_notes":     "",
+        "start_time":       sm.group(2) if sm else "00:00",
+        "end_time":         em.group(2) if em else "00:00",
+        "is_invoice":       False,
+        "total_price":      0.0,
+        "full_description": ev.get("description", ""),
+        "services_json":    [],
+        "google_event_id":  ev.get("google_event_id", ""),
+        "recurrence_rule":  ev.get("recurrence_rule"),
+    }
 
 
 def load_events(file_paths: list[str]) -> list[dict]:
@@ -33,70 +64,89 @@ def load_events(file_paths: list[str]) -> list[dict]:
     for fp in file_paths:
         with open(fp, encoding="utf-8") as f:
             events = json.load(f)
-        all_events.extend(events)
-        print(f"📂 {fp} : {len(events)} événements chargés")
+        zone = "ardennes" if "ardennes" in os.path.basename(fp) else "hainaut"
+        normalized = [normalize_event(ev) for ev in events]
+        for ev in normalized:
+            ev["_zone"] = zone
+        all_events.extend(normalized)
+        print(f"  📂 {os.path.basename(fp)} : {len(events)} événements [{zone}]")
     return all_events
 
 
-def deduplicate(events: list[dict]) -> list[dict]:
-    """
-    Groupe les événements par (date, original_summary, start_time).
-    Pour chaque groupe, garde un seul event mais accumule tous les google_ids.
-    """
-    groups: dict[tuple, dict] = {}
-    google_ids_map: dict[tuple, list[str]] = defaultdict(list)
+def expand_recurrences(events: list[dict]) -> list[dict]:
+    """Expand recurring events (RRULE) into individual occurrences."""
+    result = []
+    expanded_count = 0
 
+    for ev in events:
+        rule_str = ev.get("recurrence_rule")
+        if not rule_str:
+            result.append(ev)
+            continue
+
+        orig_start = datetime.strptime(f"{ev['date']} {ev['start_time']}", "%Y-%m-%d %H:%M")
+        orig_end   = datetime.strptime(f"{ev['date']} {ev['end_time']}",   "%Y-%m-%d %H:%M")
+        duration   = orig_end - orig_start
+
+        try:
+            rule = rrulestr(rule_str, dtstart=orig_start, ignoretz=True)
+            occurrences = []
+            for i, occ in enumerate(rule):
+                if occ.date() > FALLBACK_UNTIL:
+                    break
+                new_ev = dict(ev)
+                new_ev["date"]       = occ.strftime("%Y-%m-%d")
+                new_ev["start_time"] = occ.strftime("%H:%M")
+                new_ev["end_time"]   = (occ + duration).strftime("%H:%M")
+                # Seule la première occurrence garde le google_event_id (contrainte UNIQUE)
+                if i > 0:
+                    new_ev["google_event_id"] = None
+                occurrences.append(new_ev)
+
+            if occurrences:
+                expanded_count += len(occurrences) - 1
+                result.extend(occurrences)
+            else:
+                result.append(ev)
+
+        except Exception as e:
+            print(f"  ⚠️  RRULE invalide pour '{ev.get('original_summary', '')}': {e}")
+            result.append(ev)
+
+    if expanded_count > 0:
+        print(f"  🔄 {expanded_count} occurrences supplémentaires générées depuis les récurrences")
+
+    return result
+
+
+def deduplicate(events: list[dict]) -> list[dict]:
+    """Déduplique par (date, original_summary, start_time)."""
+    groups: dict[tuple, dict] = {}
     for ev in events:
         key = (ev["date"], ev["original_summary"], ev["start_time"])
         if key not in groups:
             groups[key] = ev
-        google_ids_map[key].append(ev["google_id"])
-
-    result = []
-    for key, ev in groups.items():
-        ev = dict(ev)
-        ev["_all_google_ids"] = google_ids_map[key]
-        result.append(ev)
-
+    result = list(groups.values())
     n_dupes = len(events) - len(result)
     if n_dupes > 0:
-        print(f"🔄 {n_dupes} doublon(s) fusionné(s) → {len(result)} événements uniques")
+        print(f"  🔄 {n_dupes} doublon(s) fusionné(s) → {len(result)} événements uniques")
     return result
 
 
 def import_event(db, ev: dict) -> str:
-    """
-    Importe un événement structuré. Retourne "created", "skipped" ou "error".
-    """
-    all_ids = ev.get("_all_google_ids", [ev["google_id"]])
+    """Importe un événement structuré. Retourne 'created', 'skipped' ou 'error'."""
 
-    # Vérifier si déjà converti (au moins un des raw events)
-    already_converted = (
-        db.query(RawCalendarEvent)
-        .filter(
-            RawCalendarEvent.id.in_([uuid.UUID(gid) for gid in all_ids]),
-            RawCalendarEvent.status == "converted",
-        )
-        .first()
-    )
-    if already_converted:
+    # Vérifier si déjà importé — même clé que la déduplication : (titre, date Brussels, heure début)
+    _date_str  = ev["date"]
+    _start_utc = BRUSSELS_TZ.localize(
+        datetime.strptime(f"{_date_str} {ev['start_time']}", "%Y-%m-%d %H:%M")
+    ).astimezone(pytz.utc)
+    already_exists = db.query(Intervention).filter(
+        Intervention.title == ev.get("original_summary", ""),
+        Intervention.start_time == _start_utc,
+    ).first()
+    if already_exists:
         return "skipped"
-
-    # Récupérer les raw events correspondants pour leurs employés assignés
-    raw_events = (
-        db.query(RawCalendarEvent)
-        .filter(RawCalendarEvent.id.in_([uuid.UUID(gid) for gid in all_ids]))
-        .all()
-    )
-
-    # Collecter tous les employés uniques de tous les raw events du groupe
-    employees = []
-    seen_emp_ids = set()
-    for raw_ev in raw_events:
-        for emp in raw_ev.assigned_employees:
-            if emp.id not in seen_emp_ids:
-                employees.append(emp)
-                seen_emp_ids.add(emp.id)
 
     # Trouver ou créer le client
     client_name = (ev.get("client_name") or "").strip()
@@ -143,9 +193,9 @@ def import_event(db, ev: dict) -> str:
     # Construire les datetimes Bruxelles → UTC
     date_str = ev["date"]
     start_naive = datetime.strptime(f"{date_str} {ev['start_time']}", "%Y-%m-%d %H:%M")
-    end_naive = datetime.strptime(f"{date_str} {ev['end_time']}", "%Y-%m-%d %H:%M")
+    end_naive   = datetime.strptime(f"{date_str} {ev['end_time']}",   "%Y-%m-%d %H:%M")
     start_dt = BRUSSELS_TZ.localize(start_naive).astimezone(pytz.utc)
-    end_dt = BRUSSELS_TZ.localize(end_naive).astimezone(pytz.utc)
+    end_dt   = BRUSSELS_TZ.localize(end_naive).astimezone(pytz.utc)
 
     # Créer l'intervention
     total = ev.get("total_price") or 0.0
@@ -158,9 +208,9 @@ def import_event(db, ev: dict) -> str:
         status="planned",
         is_invoice=ev.get("is_invoice", False),
         price_estimated=total if total else None,
+        zone=ev.get("_zone") or "hainaut",
+        google_event_id=ev.get("google_event_id") or None,
     )
-    for emp in employees:
-        intervention.employees.append(emp)
     db.add(intervention)
     db.flush()
 
@@ -171,11 +221,6 @@ def import_event(db, ev: dict) -> str:
             label=svc.get("description", ""),
             price=svc.get("price", 0.0),
         ))
-
-    # Marquer tous les raw events comme convertis
-    for raw_ev in raw_events:
-        raw_ev.status = "converted"
-        raw_ev.linked_intervention_id = intervention.id
 
     db.commit()
     return "created"
@@ -188,45 +233,53 @@ def main():
 
     file_paths = sys.argv[1:]
 
-    # Résoudre les chemins relatifs par rapport à ce script
+    # Résoudre les chemins
     script_dir = os.path.dirname(__file__)
     resolved = []
     for fp in file_paths:
-        if not os.path.isabs(fp):
+        if os.path.exists(fp):
+            resolved.append(fp)
+        else:
             candidate = os.path.join(script_dir, os.path.basename(fp))
             if os.path.exists(candidate):
                 resolved.append(candidate)
-            elif os.path.exists(fp):
-                resolved.append(fp)
             else:
                 print(f"❌ Fichier introuvable : {fp}")
                 sys.exit(1)
-        else:
-            resolved.append(fp)
 
+    print(f"\n📂 Chargement de {len(resolved)} fichier(s)...\n")
     events = load_events(resolved)
+    print(f"\n  Total brut : {len(events)} événements")
+
+    print("\n🔄 Expansion des récurrences...")
+    events = expand_recurrences(events)
+
+    print("\n🔄 Déduplication...")
     events = deduplicate(events)
+    print(f"  → {len(events)} événements à importer\n")
 
     db = next(get_db())
     created = skipped = errors = 0
 
+    print("⬆️  Import en cours...\n")
     for ev in events:
         try:
             result = import_event(db, ev)
             if result == "created":
                 created += 1
-                print(f"  ✅ {ev['date']} | {ev['original_summary'][:50]}")
+                print(f"  ✅ {ev['date']} | {ev['original_summary'][:60]}")
             else:
                 skipped += 1
-                print(f"  ⏭️  {ev['date']} | {ev['original_summary'][:50]} (déjà converti)")
         except Exception as e:
             errors += 1
             db.rollback()
-            print(f"  ❌ {ev.get('date')} | {ev.get('original_summary', '')[:50]} → {e}")
+            print(f"  ❌ {ev.get('date')} | {ev.get('original_summary', '')[:60]} → {e}")
 
     db.close()
 
-    print(f"\n📊 Résultat : {created} créé(s), {skipped} ignoré(s), {errors} erreur(s)")
+    print(f"\n{'='*60}")
+    print(f"  ✅ {created} créé(s)   ⏭  {skipped} ignoré(s)   ❌ {errors} erreur(s)")
+    print(f"{'='*60}\n")
 
 
 if __name__ == "__main__":

@@ -32,7 +32,11 @@ def read_interventions(
     if current_user.role == 'admin':
         pass
     else:
-        query = query.filter(Intervention.employees.any(id=current_user.id))
+        # Employé : uniquement les interventions de sa zone qui lui sont assignées
+        query = query.filter(
+            Intervention.zone == current_user.zone,
+            Intervention.employees.any(id=current_user.id),
+        )
 
     # 2. FILTRAGE PAR DATE (Optionnel)
     if start and end:
@@ -70,6 +74,9 @@ def create_intervention(
 
     # 2. Création de l'Intervention
     data = intervention.model_dump(exclude={"employee_ids", "items"})
+    # Non-admin : zone forcée à celle de l'employé
+    if current_user.role != 'admin':
+        data["zone"] = current_user.zone
     new_intervention = Intervention(**data)
     
     # 3. Assignations Employés

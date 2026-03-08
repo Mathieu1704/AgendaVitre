@@ -10,6 +10,7 @@ class EmployeeBase(BaseModel):
     role: str = "employee"
     color: str = "#3B82F6"
     phone: Optional[str] = None
+    zone: str = "hainaut"  # "hainaut" ou "ardennes"
     weekly_hours: float = 38.0
     daily_capacity: float = 7.6
     hours_per_weekday: Optional[Dict[str, float]] = None
@@ -24,6 +25,7 @@ class EmployeeUpdate(BaseModel):
     color: Optional[str] = None
     role: Optional[str] = None
     phone: Optional[str] = None
+    zone: Optional[str] = None
     weekly_hours: Optional[float] = None
     daily_capacity: Optional[float] = None
     hours_per_weekday: Optional[Dict[str, float]] = None
@@ -97,6 +99,7 @@ class InterventionBase(BaseModel):
     status: str = "planned"
     price_estimated: Optional[float] = None
     is_invoice: bool = False
+    zone: str = "hainaut"  # "hainaut" ou "ardennes"
     client_id: Optional[UUID] = None
     employee_ids: List[UUID] = []
     items: List[InterventionItemCreate] = []
@@ -124,6 +127,7 @@ class InterventionOut(BaseModel):
     status: str
     price_estimated: Optional[float]
     is_invoice: bool = False
+    zone: Optional[str] = None
     client: Optional[ClientOutLite] = None
     employees: List[EmployeeOut] = []
     items: List[InterventionItemOut] = []

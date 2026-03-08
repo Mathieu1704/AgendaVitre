@@ -6,10 +6,10 @@ import { api } from "../lib/api";
 export const useAuth = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userZone, setUserZone] = useState<"hainaut" | "ardennes">("hainaut");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fonction pour vérifier le rôle via ton API (table employees)
     const checkRole = async (email: string | undefined) => {
       if (!email) {
         setIsAdmin(false);
@@ -17,12 +17,10 @@ export const useAuth = () => {
         return;
       }
       try {
-        // On récupère la liste des employés pour trouver le nôtre
-        // (Idéalement on ferait un endpoint /me, mais ça marche avec ta structure actuelle)
         const res = await api.get("/api/employees");
         const me = res.data.find((e: any) => e.email === email);
-
         setIsAdmin(me?.role === "admin");
+        setUserZone(me?.zone === "ardennes" ? "ardennes" : "hainaut");
       } catch (e) {
         console.log("Erreur rôle:", e);
         setIsAdmin(false);
@@ -53,5 +51,5 @@ export const useAuth = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  return { session, isAdmin, loading };
+  return { session, isAdmin, userZone, loading };
 };

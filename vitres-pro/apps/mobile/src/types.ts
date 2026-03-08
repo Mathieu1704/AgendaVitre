@@ -4,7 +4,10 @@ export interface Employee {
   full_name?: string;
   color: string; // Ex: "#3B82F6"
   role: "admin" | "employee";
+  phone?: string;
+  zone: "hainaut" | "ardennes";
   weekly_hours: number;
+  hours_per_weekday?: Record<string, number>; // {"1":10,"2":8,...,"5":7}
 }
 
 export interface Client {
@@ -21,6 +24,7 @@ export interface Intervention {
   end_time: string; // ISO String
   status: "planned" | "in_progress" | "done" | string;
   price_estimated?: number;
+  zone: "hainaut" | "ardennes";
   client?: Client;
   employees: Employee[]; // Liste d'employés maintenant
 }

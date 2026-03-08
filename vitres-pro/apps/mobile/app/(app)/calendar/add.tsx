@@ -58,7 +58,7 @@ export default function AddInterventionScreen() {
   const { id } = useLocalSearchParams();
   const isEditMode = !!id;
 
-  const { isAdmin } = useAuth();
+  const { isAdmin, userZone } = useAuth();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
@@ -85,6 +85,7 @@ export default function AddInterventionScreen() {
 
   // --- States ---
   const [intervType, setIntervType] = useState<IntervType>("intervention");
+  const [zone, setZone] = useState<"hainaut" | "ardennes">("hainaut");
   const [title, setTitle] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
@@ -153,6 +154,7 @@ export default function AddInterventionScreen() {
       setDescription(interventionData.description || "");
       setIsInvoice(interventionData.is_invoice);
       if (interventionData.type) setIntervType(interventionData.type as IntervType);
+      if (interventionData.zone) setZone(interventionData.zone as "hainaut" | "ardennes");
 
       const start = new Date(interventionData.start_time);
       const end = new Date(interventionData.end_time);
@@ -230,6 +232,7 @@ export default function AddInterventionScreen() {
       type: intervType,
       title,
       description,
+      zone: isAdmin ? zone : userZone,
       client_id: selectedClient?.id ?? null,
       employee_ids: selectedEmployeeIds,
       start_time: start.toISOString(),
@@ -315,6 +318,41 @@ export default function AddInterventionScreen() {
                           }}
                         >
                           {cfg.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* ZONE (admin seulement) */}
+            {isAdmin && (
+              <View className="gap-1">
+                <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">
+                  Zone
+                </Text>
+                <View className="flex-row gap-2">
+                  {(["hainaut", "ardennes"] as const).map((z) => {
+                    const active = zone === z;
+                    const color = z === "ardennes" ? "#10B981" : "#3B82F6";
+                    const bg    = z === "ardennes" ? "#D1FAE5" : "#DBEAFE";
+                    return (
+                      <Pressable
+                        key={z}
+                        onPress={() => setZone(z)}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 10,
+                          borderRadius: 16,
+                          borderWidth: 1.5,
+                          borderColor: active ? color : "#E2E8F0",
+                          backgroundColor: active ? bg : "transparent",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text style={{ fontWeight: "600", fontSize: 14, color: active ? color : "#94A3B8" }}>
+                          {z === "ardennes" ? "Ardennes" : "Hainaut"}
                         </Text>
                       </Pressable>
                     );

@@ -17,6 +17,7 @@ import {
   UserCog,
   Thermometer,
   Trash2,
+  Phone,
 } from "lucide-react-native";
 import { Calendar } from "react-native-calendars";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -53,6 +54,7 @@ export default function TeamManagementScreen() {
   const [weeklyHours, setWeeklyHours] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedRole, setSelectedRole] = useState<any>(null);
+  const [editPhone, setEditPhone] = useState("");
   const [showAbsenceForm, setShowAbsenceForm] = useState(false);
   const [absStart, setAbsStart] = useState(toISODate(new Date()));
   const [absEnd, setAbsEnd] = useState(toISODate(new Date()));
@@ -105,6 +107,7 @@ export default function TeamManagementScreen() {
     setWeeklyHours(emp.weekly_hours.toString());
     setSelectedColor(emp.color);
     setSelectedRole(roleItems.find((r) => r.id === emp.role));
+    setEditPhone(emp.phone || "");
     setShowAbsenceForm(false);
   };
 
@@ -180,6 +183,14 @@ export default function TeamManagementScreen() {
                   <Text className="text-xs text-muted-foreground">
                     {emp.email}
                   </Text>
+                  {emp.phone ? (
+                    <View className="flex-row items-center mt-0.5">
+                      <Phone size={11} color="#94A3B8" />
+                      <Text className="text-xs text-muted-foreground ml-1">
+                        {emp.phone}
+                      </Text>
+                    </View>
+                  ) : null}
                   <View className="flex-row items-center mt-2 gap-3">
                     <View
                       className={`px-2 py-0.5 rounded-full ${emp.role === "admin" ? "bg-purple-100 dark:bg-purple-900/30" : "bg-gray-100 dark:bg-slate-800"}`}
@@ -256,6 +267,15 @@ export default function TeamManagementScreen() {
 
             {/* Formulaire : Suppression de px-1 pour alignement strict */}
             <View className="w-full">
+              {/* Input Téléphone */}
+              <Input
+                label="Téléphone"
+                keyboardType="phone-pad"
+                value={editPhone}
+                onChangeText={setEditPhone}
+                containerStyle={{ marginBottom: 8 }}
+              />
+
               {/* Input Heures */}
               <Input
                 label="Heures par semaine"
@@ -294,6 +314,7 @@ export default function TeamManagementScreen() {
                     weekly_hours: Number(weeklyHours),
                     color: selectedColor,
                     role: selectedRole.id,
+                    phone: editPhone || null,
                   })
                 }
                 loading={updateMutation.isPending}
