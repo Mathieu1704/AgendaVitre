@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { Pressable, Text, View, ScrollView, Animated } from "react-native";
+import { Pressable, Text, View, Animated } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import {
   LayoutDashboard,
@@ -111,24 +111,28 @@ export function Sidebar() {
       ]}
     >
       {/* Logo Header */}
-      <View style={{ height: 64, flexDirection: "row", alignItems: "center", paddingHorizontal: 24, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <View style={{ height: 44, width: 44, backgroundColor: "#3B82F6", borderRadius: 10, alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ color: "white", fontWeight: "700", fontSize: 17 }}>LVM</Text>
+      <View style={{
+        height: 64,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: collapsed ? "center" : "flex-start",
+        paddingHorizontal: collapsed ? 0 : 20,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+      }}>
+        <View style={{ height: 36, width: 36, backgroundColor: "#3B82F6", borderRadius: 8, alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: "white", fontWeight: "700", fontSize: 13 }}>LVM</Text>
         </View>
         {!collapsed && (
-          <Text style={{ marginLeft: 12, fontSize: 17, fontWeight: "700", color: colors.logoText }} numberOfLines={1}>
+          <Text style={{ marginLeft: 10, fontSize: 16, fontWeight: "700", color: colors.logoText }} numberOfLines={1}>
             LVM Agenda
           </Text>
         )}
       </View>
 
       {/* Navigation Items */}
-      <ScrollView
-        style={{ flex: 1, paddingTop: ITEMS_OFFSET, paddingBottom: ITEMS_OFFSET }}
-        contentContainerStyle={{ paddingHorizontal: 12 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Sliding pill indicator */}
+      <View style={{ flex: 1, paddingVertical: ITEMS_OFFSET }}>
+        {/* Sliding pill indicator — left/right: 12 pour matcher exactement la largeur des items */}
         {activeIndex >= 0 && (
           <Animated.View
             style={{
@@ -155,8 +159,10 @@ export function Sidebar() {
               style={{
                 flexDirection: "row",
                 alignItems: "center",
+                justifyContent: collapsed ? "center" : "flex-start",
                 borderRadius: 12,
-                paddingHorizontal: 12,
+                marginHorizontal: 12,
+                paddingHorizontal: collapsed ? 0 : 12,
                 paddingVertical: 12,
                 marginBottom: ITEM_MARGIN,
                 height: ITEM_HEIGHT,
@@ -195,7 +201,7 @@ export function Sidebar() {
             </Pressable>
           );
         })}
-      </ScrollView>
+      </View>
 
       {/* Bottom: Collapse + Logout */}
       <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 4 }}>
@@ -227,6 +233,7 @@ export function Sidebar() {
           style={({ pressed }) => ({
             flexDirection: "row",
             alignItems: "center",
+            justifyContent: collapsed ? "center" : "flex-start",
             padding: 12,
             borderRadius: 10,
             backgroundColor: pressed ? colors.logoutHover : "transparent",
