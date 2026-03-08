@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import {
   View,
   ScrollView,
@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   TextInput,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../src/lib/api";
 import {
@@ -20,9 +20,8 @@ import {
   ChevronLeft,
   UserPlus,
   X,
-  Repeat,
+  ChevronDown,
   AlertTriangle,
-  RefreshCw,
 } from "lucide-react-native";
 import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
 import { Input } from "../../../src/ui/components/Input";
@@ -56,44 +55,90 @@ const TYPE_CONFIG: Record<IntervType, { label: string; color: string; bg: string
 const NEEDS_CLIENT: IntervType[] = ["intervention", "devis"];
 const NEEDS_ITEMS: IntervType[] = ["intervention", "devis"];
 
-type RecurrenceType = "none" | "weekly" | "biweekly" | "monthly" | "custom";
-type RecurrenceUnit = "day" | "week" | "month";
+type RecurrenceFreq = "none" | "daily" | "weekly" | "monthly" | "yearly" | "weekdays" | "custom";
+type RecurrenceUnit = "day" | "week" | "month" | "year";
+type EndType = "count" | "date" | "never";
 
 interface Recurrence {
-  type: RecurrenceType;
-  interval: number;     // pour custom
-  unit: RecurrenceUnit; // pour custom
-  count: number;        // nombre d'occurrences total
+  freq: RecurrenceFreq;
+  interval: number;
+  unit: RecurrenceUnit;
+  daysOfWeek: number[];
+  endType: EndType;
+  count: number;
+  endDate: string;
 }
 
-const DEFAULT_RECURRENCE: Recurrence = { type: "none", interval: 1, unit: "week", count: 1 };
-
-const RECURRENCE_LABELS: Record<RecurrenceType, string> = {
-  none:     "Une seule fois",
-  weekly:   "Toutes les semaines",
-  biweekly: "Toutes les 2 semaines",
-  monthly:  "Tous les mois",
-  custom:   "Personnaliser...",
+const DEFAULT_RECURRENCE: Recurrence = {
+  freq: "none", interval: 1, unit: "week",
+  daysOfWeek: [], endType: "count", count: 4, endDate: "",
 };
+
+const FR_DAYS_FULL = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+const FR_MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+function getContextualOptions(startStr: string): Array<{ freq: RecurrenceFreq; label: string }> {
+  const date = parseBrusselsDateTimeString(startStr);
+  if (!date) return [{ freq: "none", label: "Ne se répète pas" }];
+  const dow = date.getDay();
+  const dom = date.getDate();
+  const nth = Math.ceil(dom / 7);
+  const nthStr = nth === 1 ? "1er" : `${nth}e`;
+  return [
+    { freq: "none",     label: "Ne se répète pas" },
+    { freq: "daily",    label: "Chaque jour" },
+    { freq: "weekly",   label: `Chaque semaine le ${FR_DAYS_FULL[dow]}` },
+    { freq: "monthly",  label: `Chaque mois le ${nthStr} ${FR_DAYS_FULL[dow]}` },
+    { freq: "yearly",   label: `Chaque année le ${dom} ${FR_MONTHS[date.getMonth()]}` },
+    { freq: "weekdays", label: "Chaque jour de la semaine (lun. à ven.)" },
+    { freq: "custom",   label: "Personnaliser..." },
+  ];
+}
+
+function getRecurrenceLabel(rec: Recurrence, startStr: string): string {
+  if (rec.freq === "none") return "Ne se répète pas";
+  const opts = getContextualOptions(startStr);
+  const found = opts.find(o => o.freq === rec.freq);
+  if (found && rec.freq !== "custom") return found.label;
+  const unitLabels: Record<RecurrenceUnit, string> = { day: "jour", week: "semaine", month: "mois", year: "an" };
+  const s = rec.interval > 1 && rec.unit !== "month" && rec.unit !== "year" ? "s" : "";
+  return `Tous les ${rec.interval} ${unitLabels[rec.unit]}${s}`;
+}
 
 function generateDates(startStr: string, durationHours: number, rec: Recurrence): { start: Date; end: Date }[] {
   const base = parseBrusselsDateTimeString(startStr);
   if (!base) return [];
   const dur = durationHours * 3600000;
+  if (rec.freq === "none") return [{ start: base, end: new Date(base.getTime() + dur) }];
+  const MAX = 365;
+  const targetCount = rec.endType === "count" ? Math.max(1, Math.min(rec.count, MAX)) : MAX;
+  const endDate = rec.endType === "date" && rec.endDate ? new Date(rec.endDate + "T23:59:59") : null;
   const dates: { start: Date; end: Date }[] = [];
-  const count = rec.type === "none" ? 1 : Math.max(1, rec.count);
-  for (let i = 0; i < count; i++) {
+  if (rec.freq === "weekdays") {
+    let cur = new Date(base);
+    while (dates.length < targetCount) {
+      if (endDate && cur > endDate) break;
+      const d = cur.getDay();
+      if (d >= 1 && d <= 5) dates.push({ start: new Date(cur), end: new Date(cur.getTime() + dur) });
+      cur = new Date(cur); cur.setDate(cur.getDate() + 1);
+    }
+    return dates;
+  }
+  for (let i = 0; i < targetCount; i++) {
     const s = new Date(base);
     if (i > 0) {
-      if (rec.type === "weekly")   s.setDate(s.getDate() + 7 * i);
-      else if (rec.type === "biweekly") s.setDate(s.getDate() + 14 * i);
-      else if (rec.type === "monthly") s.setMonth(s.getMonth() + i);
-      else if (rec.type === "custom") {
-        if (rec.unit === "day")   s.setDate(s.getDate() + rec.interval * i);
+      if (rec.freq === "daily")        s.setDate(s.getDate() + i);
+      else if (rec.freq === "weekly")  s.setDate(s.getDate() + 7 * i);
+      else if (rec.freq === "monthly") s.setMonth(s.getMonth() + i);
+      else if (rec.freq === "yearly")  s.setFullYear(s.getFullYear() + i);
+      else if (rec.freq === "custom") {
+        if (rec.unit === "day")        s.setDate(s.getDate() + rec.interval * i);
         else if (rec.unit === "week")  s.setDate(s.getDate() + 7 * rec.interval * i);
         else if (rec.unit === "month") s.setMonth(s.getMonth() + rec.interval * i);
+        else if (rec.unit === "year")  s.setFullYear(s.getFullYear() + rec.interval * i);
       }
     }
+    if (endDate && s > endDate) break;
     dates.push({ start: s, end: new Date(s.getTime() + dur) });
   }
   return dates;
@@ -158,10 +203,14 @@ export default function AddInterventionScreen() {
 
   // --- Récurrence ---
   const [recurrence, setRecurrence] = useState<Recurrence>(DEFAULT_RECURRENCE);
-  const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
-  const [recurrenceCountStr, setRecurrenceCountStr] = useState("4");
+  const [showRecurrenceDropdown, setShowRecurrenceDropdown] = useState(false);
+  const [showCustomModal, setShowCustomModal] = useState(false);
   const [customIntervalStr, setCustomIntervalStr] = useState("1");
   const [customUnit, setCustomUnit] = useState<RecurrenceUnit>("week");
+  const [customDaysOfWeek, setCustomDaysOfWeek] = useState<number[]>([]);
+  const [customEndType, setCustomEndType] = useState<EndType>("count");
+  const [customCountStr, setCustomCountStr] = useState("4");
+  const [customEndDate, setCustomEndDate] = useState("");
 
   // --- Reprise : mode "non repris" ---
   const [noRepriseMode, setNoRepriseMode] = useState(false);
@@ -256,6 +305,21 @@ export default function AddInterventionScreen() {
     }
   }, [isRepriseMode, repriseSource, clients]);
 
+  // Reset form quand on navigue vers "nouveau" (pas edit, pas reprise)
+  useFocusEffect(useCallback(() => {
+    if (!isEditMode && !isRepriseMode) {
+      setTitle(""); setDescription(""); setIsInvoice(false);
+      setIntervType("intervention"); setZone("hainaut");
+      setSelectedClient(null); setSelectedEmployeeIds([]);
+      setItems([{ label: "", price: "" }]);
+      setStartDateStr(defaultStart); setDurationHours("");
+      setRecurrence(DEFAULT_RECURRENCE);
+      setNoRepriseMode(false); setNoRepriseNote("");
+      setShowRecurrenceDropdown(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, isRepriseMode]));
+
   const totalPrice = useMemo(
     () => items.reduce((acc, item) => acc + (parseFloat(item.price) || 0), 0),
     [items],
@@ -332,8 +396,8 @@ export default function AddInterventionScreen() {
           start_time: occ.start.toISOString(),
           end_time: occ.end.toISOString(),
           recurrence_rule: occurrences.length > 1 ? {
-            freq: recurrence.type === "custom" ? recurrence.unit : recurrence.type.replace("biweekly", "week"),
-            interval: recurrence.type === "biweekly" ? 2 : recurrence.type === "custom" ? recurrence.interval : 1,
+            freq: recurrence.freq === "custom" ? recurrence.unit : recurrence.freq,
+            interval: recurrence.freq === "custom" ? recurrence.interval : 1,
             count: occurrences.length,
           } : null,
           recurrence_group_id: groupId ?? null,
@@ -402,9 +466,8 @@ export default function AddInterventionScreen() {
   const typeNeedsClient = NEEDS_CLIENT.includes(intervType);
   const typeNeedsItems = NEEDS_ITEMS.includes(intervType);
 
-  const recurrenceLabel = recurrence.type === "custom"
-    ? `Tous les ${recurrence.interval} ${recurrence.unit === "day" ? "jours" : recurrence.unit === "week" ? "semaines" : "mois"}`
-    : RECURRENCE_LABELS[recurrence.type];
+  const recurrenceLabel = getRecurrenceLabel(recurrence, startDateStr);
+  const contextualOptions = useMemo(() => getContextualOptions(startDateStr), [startDateStr]);
 
   return (
     <View
@@ -632,47 +695,82 @@ export default function AddInterventionScreen() {
             {!isEditMode && (
               <View className="gap-1">
                 <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">Récurrence</Text>
-                <View className="flex-row gap-2 flex-wrap">
-                  {(["none", "weekly", "biweekly", "monthly", "custom"] as RecurrenceType[]).map((t) => {
-                    const active = recurrence.type === t;
-                    return (
-                      <Pressable
-                        key={t}
-                        onPress={() => {
-                          if (t === "custom") {
-                            setShowRecurrenceModal(true);
-                          } else {
-                            setRecurrence({ ...recurrence, type: t });
-                          }
-                        }}
-                        style={{
-                          paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16,
-                          borderWidth: 1.5,
-                          borderColor: active ? "#3B82F6" : "#E2E8F0",
-                          backgroundColor: active ? "#EFF6FF" : "transparent",
-                          flexDirection: "row", alignItems: "center", gap: 4,
-                        }}
-                      >
-                        {t !== "none" && <Repeat size={11} color={active ? "#3B82F6" : "#94A3B8"} />}
-                        <Text style={{ fontWeight: "600", fontSize: 12, color: active ? "#3B82F6" : "#94A3B8" }}>
-                          {t === "custom" && recurrence.type === "custom" ? recurrenceLabel : RECURRENCE_LABELS[t]}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+
+                {/* Dropdown trigger */}
+                <Pressable
+                  onPress={() => setShowRecurrenceDropdown(v => !v)}
+                  style={{
+                    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+                    borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12,
+                    borderColor: recurrence.freq !== "none" ? "#3B82F6" : "#E2E8F0",
+                    backgroundColor: recurrence.freq !== "none" ? "#EFF6FF" : "transparent",
+                  }}
+                >
+                  <Text style={{
+                    fontSize: 14, fontWeight: "600",
+                    color: recurrence.freq !== "none" ? "#3B82F6" : "#64748B",
+                  }}>
+                    {recurrenceLabel}
+                  </Text>
+                  <ChevronDown size={18} color={recurrence.freq !== "none" ? "#3B82F6" : "#94A3B8"} />
+                </Pressable>
+
+                {/* Dropdown options */}
+                {showRecurrenceDropdown && (
+                  <View style={{
+                    borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 14,
+                    backgroundColor: "white", overflow: "hidden", marginTop: 4,
+                    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.08, shadowRadius: 8, elevation: 4,
+                  }}>
+                    {contextualOptions.map((opt, idx) => {
+                      const isActive = recurrence.freq === opt.freq && opt.freq !== "custom";
+                      const isLast = idx === contextualOptions.length - 1;
+                      return (
+                        <Pressable
+                          key={opt.freq}
+                          onPress={() => {
+                            if (opt.freq === "custom") {
+                              setCustomIntervalStr(String(recurrence.interval));
+                              setCustomUnit(recurrence.unit);
+                              setCustomDaysOfWeek(recurrence.daysOfWeek);
+                              setCustomEndType(recurrence.endType);
+                              setCustomCountStr(String(recurrence.count));
+                              setCustomEndDate(recurrence.endDate);
+                              setShowCustomModal(true);
+                            } else {
+                              setRecurrence({ ...DEFAULT_RECURRENCE, freq: opt.freq, endType: recurrence.endType, count: recurrence.count, endDate: recurrence.endDate });
+                            }
+                            setShowRecurrenceDropdown(false);
+                          }}
+                          style={[{
+                            flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+                            paddingHorizontal: 16, paddingVertical: 13,
+                          }, !isLast ? { borderBottomWidth: 1, borderBottomColor: "#F1F5F9" } : {}]}
+                        >
+                          <Text style={{
+                            fontSize: 14,
+                            fontWeight: isActive ? "700" : "500",
+                            color: isActive ? "#3B82F6" : opt.freq === "custom" ? "#8B5CF6" : "#0f172a",
+                          }}>
+                            {opt.label}
+                          </Text>
+                          {isActive && <Check size={16} color="#3B82F6" />}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
 
                 {/* Nombre d'occurrences si récurrence active */}
-                {recurrence.type !== "none" && (
-                  <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, gap: 10 }}>
-                    <RefreshCw size={14} color="#3B82F6" />
-                    <Text style={{ fontSize: 13, color: "#64748B" }}>Nombre de répétitions :</Text>
+                {recurrence.freq !== "none" && (
+                  <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, gap: 10, paddingHorizontal: 4 }}>
+                    <Text style={{ fontSize: 13, color: "#64748B", flex: 1 }}>Nombre d'occurrences :</Text>
                     <TextInput
-                      value={recurrenceCountStr}
+                      value={String(recurrence.count)}
                       onChangeText={(v) => {
-                        setRecurrenceCountStr(v);
                         const n = parseInt(v);
-                        if (!isNaN(n) && n > 0) setRecurrence(r => ({ ...r, count: n }));
+                        if (!isNaN(n) && n > 0) setRecurrence(r => ({ ...r, count: n, endType: "count" }));
                       }}
                       keyboardType="numeric"
                       style={[{
@@ -682,9 +780,6 @@ export default function AddInterventionScreen() {
                         backgroundColor: "#F0F9FF",
                       }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
                     />
-                    <Text style={{ fontSize: 13, color: "#64748B" }}>
-                      fois ({recurrence.count} intervention{recurrence.count > 1 ? "s" : ""})
-                    </Text>
                   </View>
                 )}
               </View>
@@ -787,21 +882,22 @@ export default function AddInterventionScreen() {
       </ScrollView>
 
       {/* MODAL RÉCURRENCE PERSONNALISÉE */}
-      <Dialog open={showRecurrenceModal} onClose={() => setShowRecurrenceModal(false)} position="center">
+      <Dialog open={showCustomModal} onClose={() => setShowCustomModal(false)} position="center">
         <View className="p-6 gap-5">
           <View className="flex-row items-center justify-between">
             <Text className="text-lg font-bold text-foreground dark:text-white">Récurrence personnalisée</Text>
-            <Pressable onPress={() => setShowRecurrenceModal(false)} className="p-1">
+            <Pressable onPress={() => setShowCustomModal(false)} className="p-1">
               <X size={20} color="#64748B" />
             </Pressable>
           </View>
 
+          {/* Intervalle */}
           <View className="gap-3">
             <Text className="text-sm font-semibold text-foreground dark:text-white">Répéter toutes les</Text>
-            <View className="flex-row gap-3 items-center">
+            <View className="flex-row gap-3 items-center flex-wrap">
               <TextInput
                 value={customIntervalStr}
-                onChangeText={(v) => setCustomIntervalStr(v)}
+                onChangeText={setCustomIntervalStr}
                 keyboardType="numeric"
                 style={[{
                   width: 60, borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 10,
@@ -809,43 +905,116 @@ export default function AddInterventionScreen() {
                 }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
               />
               <View className="flex-row gap-2 flex-1 flex-wrap">
-                {([["day", "Jour(s)"], ["week", "Semaine(s)"], ["month", "Mois"]] as [RecurrenceUnit, string][]).map(([u, label]) => (
+                {([["day", "Jour(s)"], ["week", "Semaine(s)"], ["month", "Mois"], ["year", "Année(s)"]] as [RecurrenceUnit, string][]).map(([u, label]) => (
                   <Pressable
                     key={u}
                     onPress={() => setCustomUnit(u)}
                     style={{
-                      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12,
+                      paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10,
                       borderWidth: 1.5,
                       borderColor: customUnit === u ? "#3B82F6" : "#E2E8F0",
                       backgroundColor: customUnit === u ? "#EFF6FF" : "transparent",
                     }}
                   >
-                    <Text style={{ fontWeight: "600", fontSize: 13, color: customUnit === u ? "#3B82F6" : "#94A3B8" }}>
+                    <Text style={{ fontWeight: "600", fontSize: 12, color: customUnit === u ? "#3B82F6" : "#94A3B8" }}>
                       {label}
                     </Text>
                   </Pressable>
                 ))}
               </View>
             </View>
+          </View>
 
-            <Text className="text-sm font-semibold text-foreground dark:text-white mt-2">Nombre d'occurrences</Text>
-            <TextInput
-              value={recurrenceCountStr}
-              onChangeText={(v) => setRecurrenceCountStr(v)}
-              keyboardType="numeric"
-              style={[{
-                borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 10,
-                padding: 10, fontSize: 16, color: "#0f172a",
-              }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
-            />
+          {/* Jours de semaine (si semaine sélectionnée) */}
+          {customUnit === "week" && (
+            <View className="gap-2">
+              <Text className="text-sm font-semibold text-foreground dark:text-white">Répéter le</Text>
+              <View className="flex-row gap-1.5">
+                {["D", "L", "M", "M", "J", "V", "S"].map((d, i) => {
+                  const active = customDaysOfWeek.includes(i);
+                  return (
+                    <Pressable
+                      key={i}
+                      onPress={() => setCustomDaysOfWeek(prev =>
+                        prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]
+                      )}
+                      style={{
+                        flex: 1, aspectRatio: 1, borderRadius: 999, maxWidth: 40,
+                        borderWidth: 1.5,
+                        borderColor: active ? "#3B82F6" : "#E2E8F0",
+                        backgroundColor: active ? "#3B82F6" : "transparent",
+                        alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <Text style={{ fontWeight: "700", fontSize: 11, color: active ? "white" : "#94A3B8" }}>
+                        {d}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* Se termine */}
+          <View className="gap-3">
+            <Text className="text-sm font-semibold text-foreground dark:text-white">Se termine</Text>
+            {([["never", "Jamais", null], ["count", "Après", "occurrences"], ["date", "Le", null]] as [EndType, string, string | null][]).map(([t, lbl, suffix]) => (
+              <Pressable
+                key={t}
+                onPress={() => setCustomEndType(t)}
+                style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+              >
+                <View style={{
+                  width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+                  borderColor: customEndType === t ? "#3B82F6" : "#CBD5E1",
+                  alignItems: "center", justifyContent: "center",
+                }}>
+                  {customEndType === t && (
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#3B82F6" }} />
+                  )}
+                </View>
+                <Text style={{ fontSize: 14, color: "#0f172a", fontWeight: "500" }}>{lbl}</Text>
+                {t === "count" && customEndType === "count" && (
+                  <>
+                    <TextInput
+                      value={customCountStr}
+                      onChangeText={setCustomCountStr}
+                      keyboardType="numeric"
+                      style={[{
+                        width: 60, borderWidth: 1.5, borderColor: "#DBEAFE", borderRadius: 8,
+                        padding: 6, textAlign: "center", fontSize: 14, color: "#3B82F6", fontWeight: "700",
+                      }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                    />
+                    <Text style={{ fontSize: 14, color: "#64748B" }}>{suffix}</Text>
+                  </>
+                )}
+                {t === "date" && customEndType === "date" && (
+                  <TextInput
+                    value={customEndDate}
+                    onChangeText={setCustomEndDate}
+                    placeholder="AAAA-MM-JJ"
+                    placeholderTextColor="#CBD5E1"
+                    style={[{
+                      flex: 1, borderWidth: 1.5, borderColor: "#DBEAFE", borderRadius: 8,
+                      padding: 6, fontSize: 14, color: "#3B82F6",
+                    }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                  />
+                )}
+              </Pressable>
+            ))}
           </View>
 
           <Button
             onPress={() => {
               const interval = parseInt(customIntervalStr) || 1;
-              const count = parseInt(recurrenceCountStr) || 4;
-              setRecurrence({ type: "custom", interval, unit: customUnit, count });
-              setShowRecurrenceModal(false);
+              const count = parseInt(customCountStr) || 4;
+              setRecurrence({
+                freq: "custom", interval, unit: customUnit,
+                daysOfWeek: customDaysOfWeek,
+                endType: customEndType, count, endDate: customEndDate,
+              });
+              setShowCustomModal(false);
             }}
             className="rounded-[20px]"
           >

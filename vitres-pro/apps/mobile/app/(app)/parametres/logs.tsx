@@ -142,7 +142,7 @@ export default function LogsScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10, gap: 8 }}
+        contentContainerStyle={{ flexDirection: "row", paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: "center" }}
       >
         {FILTERS.map((f) => {
           const active = filter === f.key;
@@ -155,6 +155,7 @@ export default function LogsScreen() {
                 borderWidth: 1.5,
                 borderColor: active ? "#3B82F6" : "#E2E8F0",
                 backgroundColor: active ? "#EFF6FF" : "transparent",
+                alignSelf: "flex-start",
               }}
             >
               <Text style={{ fontWeight: "600", fontSize: 13, color: active ? "#3B82F6" : "#94A3B8" }}>

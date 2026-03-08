@@ -722,11 +722,34 @@ export default function CalendarScreen() {
               <Text className="text-muted-foreground dark:text-slate-500 text-center py-8">
                 Rien de prévu.
               </Text>
-            ) : (
-              dayList.map((item) => (
-                <InterventionCard key={item.id} item={item} />
-              ))
-            )}
+            ) : (() => {
+              const STATUS_ORDER: Record<string, number> = { in_progress: 0, planned: 1, done: 2 };
+              const STATUS_LABELS: Record<string, string> = { in_progress: "En cours", planned: "Planifié", done: "Terminé" };
+              const STATUS_COLORS: Record<string, string> = { in_progress: "#F97316", planned: "#3B82F6", done: "#22C55E" };
+              const sorted = [...dayList].sort((a, b) =>
+                (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)
+              );
+              const groups: { status: string; items: typeof sorted }[] = [];
+              for (const item of sorted) {
+                const last = groups[groups.length - 1];
+                if (last && last.status === item.status) last.items.push(item);
+                else groups.push({ status: item.status, items: [item] });
+              }
+              return groups.map((group) => (
+                <View key={group.status} className="mb-2">
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6, marginTop: 4 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: STATUS_COLORS[group.status] ?? "#94A3B8" }} />
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: STATUS_COLORS[group.status] ?? "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      {STATUS_LABELS[group.status] ?? group.status} ({group.items.length})
+                    </Text>
+                    <View style={{ flex: 1, height: 1, backgroundColor: "#F1F5F9", marginLeft: 4 }} />
+                  </View>
+                  {group.items.map((item) => (
+                    <InterventionCard key={item.id} item={item} />
+                  ))}
+                </View>
+              ));
+            })()}
           </View>
         </View>
       </View>
