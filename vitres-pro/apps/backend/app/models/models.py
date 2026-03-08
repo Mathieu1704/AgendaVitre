@@ -145,11 +145,50 @@ class Intervention(Base):
     google_event_id = Column(String, nullable=True, unique=True, index=True)
     zone = Column(String(20), nullable=True)  # "hainaut" ou "ardennes"
 
+    # Reprise RDV
+    reprise_taken = Column(Boolean, nullable=True)
+    reprise_note = Column(Text, nullable=True)
+
+    # Récurrence
+    recurrence_rule = Column(JSONB, nullable=True)   # {"freq":"weekly","interval":1,"count":12}
+    recurrence_group_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+
     # Relations
     client = relationship("Client", back_populates="interventions")
     employees = relationship("Employee", secondary=intervention_employees, back_populates="interventions")
 
     items = relationship("InterventionItem", back_populates="intervention", cascade="all, delete-orphan")
+
+
+class AuditLog(Base):
+    """Historique des actions : création, suppression, modification de statut, reprise."""
+    __tablename__ = "audit_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    action_type = Column(String(30), nullable=False)  # created/deleted/modified/status_change/no_reprise
+    employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    intervention_id = Column(UUID(as_uuid=True), ForeignKey("interventions.id", ondelete="SET NULL"), nullable=True)
+    description = Column(Text, nullable=True)
+    metadata_ = Column("metadata", JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    employee = relationship("Employee", foreign_keys=[employee_id])
+
+
+class InAppNotification(Base):
+    """Notifications in-app (ex: RDV non repris → admins)."""
+    __tablename__ = "notifications"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    recipient_id = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    type = Column(String(30), nullable=False)
+    title = Column(Text, nullable=False)
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False, nullable=False)
+    metadata_ = Column("metadata", JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    recipient = relationship("Employee", foreign_keys=[recipient_id])
 
 
 class RawCalendarEvent(Base):

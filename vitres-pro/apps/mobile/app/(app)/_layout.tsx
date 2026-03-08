@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { View, useWindowDimensions, ActivityIndicator } from "react-native";
+import { View, Text, useWindowDimensions, ActivityIndicator } from "react-native";
 import { Tabs, Redirect } from "expo-router";
 import { supabase } from "../../src/lib/supabase";
 import { Sidebar } from "../../src/ui/layout/Sidebar";
 import { Header } from "../../src/ui/layout/Header";
+import { useNotifications } from "../../src/hooks/useNotifications";
 
 import {
   LayoutDashboard,
@@ -11,6 +12,7 @@ import {
   Users,
   FileText,
   Settings,
+  Bell,
 } from "lucide-react-native";
 
 export default function AppLayout() {
@@ -19,6 +21,7 @@ export default function AppLayout() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
+  const { unreadCount } = useNotifications();
 
   useEffect(() => {
     let mounted = true;
@@ -75,11 +78,13 @@ export default function AppLayout() {
               <Tabs.Screen name="clients/index" />
               <Tabs.Screen name="facturation/index" />
               <Tabs.Screen name="parametres/index" />
+              <Tabs.Screen name="notifications/index" options={{ href: null }} />
               <Tabs.Screen name="calendar/add" options={{ href: null }} />
               <Tabs.Screen name="calendar/[id]" options={{ href: null }} />
               <Tabs.Screen name="clients/add" options={{ href: null }} />
               <Tabs.Screen name="clients/[id]" options={{ href: null }} />
               <Tabs.Screen name="facturation/add" options={{ href: null }} />
+              <Tabs.Screen name="parametres/logs" options={{ href: null }} />
             </Tabs>
           </View>
         </View>
@@ -154,9 +159,34 @@ export default function AppLayout() {
             ),
           }}
         />
+        <Tabs.Screen
+          name="notifications/index"
+          options={{
+            title: "Alertes",
+            tabBarIcon: ({ color, size }) => (
+              <View>
+                <Bell size={size} color={color} />
+                {unreadCount > 0 && (
+                  <View style={{
+                    position: "absolute", top: -4, right: -6,
+                    minWidth: 16, height: 16, borderRadius: 8,
+                    backgroundColor: "#EF4444",
+                    alignItems: "center", justifyContent: "center",
+                    paddingHorizontal: 3,
+                  }}>
+                    <Text style={{ color: "white", fontSize: 9, fontWeight: "700" }}>
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ),
+          }}
+        />
         {/* Écrans cachés de la tab bar */}
         <Tabs.Screen name="calendar/add" options={{ href: null }} />
         <Tabs.Screen name="calendar/[id]" options={{ href: null }} />
+        <Tabs.Screen name="calendar/raw-event/[id]" options={{ href: null }} />
         <Tabs.Screen name="clients/add" options={{ href: null }} />
         <Tabs.Screen name="clients/[id]" options={{ href: null }} />
         <Tabs.Screen name="facturation/add" options={{ href: null }} />
@@ -165,6 +195,7 @@ export default function AppLayout() {
           options={{ href: null }}
         />
         <Tabs.Screen name="parametres/team" options={{ href: null }} />
+        <Tabs.Screen name="parametres/logs" options={{ href: null }} />
       </Tabs>
     </View>
   );

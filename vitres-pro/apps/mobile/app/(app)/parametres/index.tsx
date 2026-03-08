@@ -16,6 +16,7 @@ import {
   Users,
   Briefcase,
   Info,
+  History,
 } from "lucide-react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -227,6 +228,7 @@ export default function ParametresScreen() {
               {/* Gérer Équipe */}
               <Pressable
                 onPress={() => router.push("/(app)/parametres/team" as any)}
+                className="mb-3"
               >
                 {/* ✅ Card arrondie */}
                 <Card className="rounded-[32px] bg-purple-500/5 border-purple-200 dark:border-purple-900 active:scale-[0.99] transition-transform overflow-hidden">
@@ -248,6 +250,29 @@ export default function ParametresScreen() {
                       size={20}
                       color={isDark ? "white" : "black"}
                     />
+                  </CardContent>
+                </Card>
+              </Pressable>
+              {/* Historique des actions */}
+              <Pressable
+                onPress={() => router.push("/(app)/parametres/logs" as any)}
+              >
+                <Card className="rounded-[32px] bg-amber-500/5 border-amber-200 dark:border-amber-900 active:scale-[0.99] transition-transform overflow-hidden">
+                  <CardContent className="p-4 flex-row items-center justify-between">
+                    <View className="flex-row items-center gap-4 flex-1">
+                      <View className="bg-amber-500 rounded-full w-12 h-12 items-center justify-center">
+                        <History size={24} color="white" />
+                      </View>
+                      <View className="flex-1 justify-center">
+                        <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                          Historique
+                        </Text>
+                        <Text className="text-sm text-muted-foreground leading-tight">
+                          Actions, modifications, statuts
+                        </Text>
+                      </View>
+                    </View>
+                    <ChevronRight size={20} color={isDark ? "white" : "black"} />
                   </CardContent>
                 </Card>
               </Pressable>

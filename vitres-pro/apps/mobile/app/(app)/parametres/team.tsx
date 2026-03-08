@@ -164,12 +164,33 @@ export default function TeamManagementScreen() {
         {isLoading ? (
           <ActivityIndicator size="large" color="#3B82F6" className="mt-10" />
         ) : (
-          employees?.map((emp: any) => (
+          [...(employees || [])].sort((a: any, b: any) => {
+            // 1. Admins en premier
+            const roleOrder = (r: string) => r === "admin" ? 0 : 1;
+            if (roleOrder(a.role) !== roleOrder(b.role)) return roleOrder(a.role) - roleOrder(b.role);
+            // 2. Hainaut avant Ardennes (pour les employés)
+            if (a.role !== "admin") {
+              const zoneOrder = (z: string) => z === "ardennes" ? 1 : 0;
+              if (zoneOrder(a.zone) !== zoneOrder(b.zone)) return zoneOrder(a.zone) - zoneOrder(b.zone);
+            }
+            // 3. Alphabétique
+            return (a.full_name || "").localeCompare(b.full_name || "");
+          }).map((emp: any) => (
             <Card key={emp.id} className="mb-4 rounded-[32px] overflow-hidden">
+              {/* Bande de couleur en haut */}
+              <View style={{ height: 6, backgroundColor: emp.color || "#3B82F6" }} />
+
               <CardContent className="p-4 flex-row items-center">
+                {/* Avatar avec ring coloré */}
                 <View
-                  className="w-12 h-12 rounded-full items-center justify-center border-2 border-white dark:border-slate-800 shadow-sm"
-                  style={{ backgroundColor: emp.color || "#3B82F6" }}
+                  style={{
+                    width: 52, height: 52, borderRadius: 26,
+                    backgroundColor: emp.color || "#3B82F6",
+                    alignItems: "center", justifyContent: "center",
+                    shadowColor: emp.color || "#3B82F6",
+                    shadowOffset: { width: 0, height: 3 },
+                    shadowOpacity: 0.5, shadowRadius: 6, elevation: 4,
+                  }}
                 >
                   <Text className="text-white font-bold text-lg">
                     {getInitials(emp.full_name || emp.email || "?")}
@@ -191,16 +212,31 @@ export default function TeamManagementScreen() {
                       </Text>
                     </View>
                   ) : null}
-                  <View className="flex-row items-center mt-2 gap-3">
+                  <View className="flex-row items-center mt-2 gap-2 flex-wrap">
+                    {/* Badge rôle */}
                     <View
                       className={`px-2 py-0.5 rounded-full ${emp.role === "admin" ? "bg-purple-100 dark:bg-purple-900/30" : "bg-gray-100 dark:bg-slate-800"}`}
                     >
                       <Text
                         className={`text-xs font-bold uppercase ${emp.role === "admin" ? "text-purple-700 dark:text-purple-400" : "text-gray-600 dark:text-slate-400"}`}
                       >
-                        {emp.role}
+                        {emp.role === "admin" ? "Admin" : "Employé"}
                       </Text>
                     </View>
+                    {/* Badge zone */}
+                    <View
+                      style={{
+                        paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99,
+                        backgroundColor: emp.zone === "ardennes" ? "#D1FAE5" : "#DBEAFE",
+                      }}
+                    >
+                      <Text
+                        className={`text-xs font-bold uppercase ${emp.zone === "ardennes" ? "text-emerald-700" : "text-blue-600"}`}
+                      >
+                        {emp.zone === "ardennes" ? "Ardennes" : "Hainaut"}
+                      </Text>
+                    </View>
+                    {/* Heures */}
                     <View className="flex-row items-center">
                       <Clock size={12} color="#94A3B8" />
                       <Text className="text-xs text-muted-foreground ml-1">

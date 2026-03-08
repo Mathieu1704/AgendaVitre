@@ -128,6 +128,8 @@ class InterventionOut(BaseModel):
     price_estimated: Optional[float]
     is_invoice: bool = False
     zone: Optional[str] = None
+    reprise_taken: Optional[bool] = None
+    reprise_note: Optional[str] = None
     client: Optional[ClientOutLite] = None
     employees: List[EmployeeOut] = []
     items: List[InterventionItemOut] = []
@@ -138,5 +140,32 @@ class InterventionOut(BaseModel):
 # --- CLIENT COMPLET ---
 class ClientOut(ClientOutLite):
     interventions: List[InterventionOutLite] = []
+    class Config:
+        from_attributes = True
+
+# --- AUDIT LOG ---
+class AuditLogOut(BaseModel):
+    id: UUID
+    action_type: str
+    employee_id: Optional[UUID] = None
+    intervention_id: Optional[UUID] = None
+    description: Optional[str] = None
+    created_at: datetime
+    employee_name: Optional[str] = None  # Enrichi côté router
+
+    class Config:
+        from_attributes = True
+
+# --- NOTIFICATION ---
+class NotificationOut(BaseModel):
+    id: UUID
+    recipient_id: UUID
+    type: str
+    title: str
+    message: str
+    is_read: bool
+    metadata: Optional[dict] = None
+    created_at: datetime
+
     class Config:
         from_attributes = True

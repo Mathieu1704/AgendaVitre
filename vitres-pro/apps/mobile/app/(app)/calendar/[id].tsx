@@ -9,7 +9,6 @@ import {
   useWindowDimensions,
   Platform,
   Linking,
-  Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -589,20 +588,15 @@ export default function InterventionDetailScreen() {
 
         {intervention.status === "in_progress" && (
           <Button
-            onPress={() => statusMutation.mutate("done")}
-            disabled={statusMutation.isPending}
+            onPress={() => router.push(`/(app)/calendar/add?reprise_of=${id}` as any)}
             className="w-full h-14 bg-green-500 hover:bg-green-600 rounded-full"
           >
-            {statusMutation.isPending ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <View className="flex-row items-center">
-                <CheckCircle2 size={20} color="white" strokeWidth={2.5} />
-                <Text className="text-white font-bold text-lg ml-2">
-                  Terminer l'intervention
-                </Text>
-              </View>
-            )}
+            <View className="flex-row items-center">
+              <CheckCircle2 size={20} color="white" strokeWidth={2.5} />
+              <Text className="text-white font-bold text-lg ml-2">
+                Terminer l'intervention
+              </Text>
+            </View>
           </Button>
         )}
 
