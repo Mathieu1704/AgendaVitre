@@ -1,9 +1,8 @@
 import React from "react";
-import { View, ScrollView, Text, Pressable, ActivityIndicator } from "react-native";
+import { View, ScrollView, Text, Pressable, ActivityIndicator, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronLeft, Bell, BellOff, CheckCheck, AlertTriangle, Info } from "lucide-react-native";
-import { useTheme } from "../../../src/ui/components/ThemeToggle";
+import { BellOff, CheckCheck, AlertTriangle, Info } from "lucide-react-native";
 import {
   useNotifications,
   useMarkNotificationRead,
@@ -82,7 +81,6 @@ function NotifItem({
 export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isDark } = useTheme();
   const { notifications, isLoading, unreadCount } = useNotifications();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllRead();
@@ -99,32 +97,30 @@ export default function NotificationsScreen() {
       className="flex-1 bg-background dark:bg-slate-950"
       style={{ paddingTop: insets.top }}
     >
-      {/* Header */}
-      <View className="px-4 pt-4 pb-3 flex-row items-center border-b border-border dark:border-slate-800">
-        <Pressable
-          onPress={() => router.back()}
-          className="p-2 rounded-full active:bg-muted mr-1"
-        >
-          <ChevronLeft size={24} color={isDark ? "white" : "black"} />
-        </Pressable>
-        <Bell size={20} color="#3B82F6" />
-        <Text className="text-xl font-bold text-foreground dark:text-white ml-2 flex-1">
-          Notifications
+      {/* Header — même style que Planning */}
+      <View
+        className="px-6 pb-4 bg-background dark:bg-slate-950 z-10"
+        style={{ paddingTop: Platform.OS === "web" ? 24 : 10 }}
+      >
+        <View className="flex-row justify-between items-center">
+          <Text className="text-3xl font-bold text-foreground dark:text-slate-50">
+            Alertes
+            {unreadCount > 0 && (
+              <Text style={{ color: "#3B82F6", fontSize: 20 }}> ({unreadCount})</Text>
+            )}
+          </Text>
           {unreadCount > 0 && (
-            <Text style={{ color: "#3B82F6" }}> ({unreadCount})</Text>
+            <Pressable
+              onPress={() => markAllRead.mutate()}
+              className="flex-row items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 active:bg-blue-100"
+            >
+              <CheckCheck size={14} color="#3B82F6" />
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#3B82F6" }}>
+                Tout lu
+              </Text>
+            </Pressable>
           )}
-        </Text>
-        {unreadCount > 0 && (
-          <Pressable
-            onPress={() => markAllRead.mutate()}
-            className="flex-row items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 active:bg-blue-100"
-          >
-            <CheckCheck size={14} color="#3B82F6" />
-            <Text style={{ fontSize: 12, fontWeight: "600", color: "#3B82F6" }}>
-              Tout lu
-            </Text>
-          </Pressable>
-        )}
+        </View>
       </View>
 
       {isLoading ? (

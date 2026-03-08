@@ -533,21 +533,23 @@ export default function Dashboard() {
                   </View>
                 </View>
 
-                {stat.trend ? (
-                  <View className="flex-row items-center mt-2 gap-1">
-                    {stat.trendPositive !== undefined ? (
-                      stat.trendPositive
-                        ? <ArrowUpRight size={13} color="#22C55E" />
-                        : <ArrowDownRight size={13} color="#EF4444" />
-                    ) : null}
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: stat.trendPositive === false ? "#EF4444" : "#22C55E" }}>
-                      {stat.trend}
-                    </Text>
-                    <Text className="text-xs text-muted-foreground dark:text-slate-500">
-                      vs mois dern.
-                    </Text>
-                  </View>
-                ) : null}
+                <View className="flex-row items-center mt-2 gap-1" style={{ minHeight: 20 }}>
+                  {stat.trend ? (
+                    <>
+                      {stat.trendPositive !== undefined ? (
+                        stat.trendPositive
+                          ? <ArrowUpRight size={13} color="#22C55E" />
+                          : <ArrowDownRight size={13} color="#EF4444" />
+                      ) : null}
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: stat.trendPositive === false ? "#EF4444" : "#22C55E" }}>
+                        {stat.trend}
+                      </Text>
+                      <Text className="text-xs text-muted-foreground dark:text-slate-500">
+                        vs mois dern.
+                      </Text>
+                    </>
+                  ) : null}
+                </View>
               </CardContent>
             </Card>
           </Animated.View>

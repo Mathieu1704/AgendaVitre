@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { Pressable, Text, View, ScrollView } from "react-native";
+import React, { useMemo, useState, useRef, useEffect } from "react";
+import { Pressable, Text, View, ScrollView, Animated } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import {
   LayoutDashboard,
@@ -7,32 +7,90 @@ import {
   Users,
   FileText,
   Settings,
-  ChevronLeft,
-  ChevronRight,
   LogOut,
   Bell,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react-native";
-import { cn } from "../cn";
 import { supabase } from "../../lib/supabase";
 import { useNotifications } from "../../hooks/useNotifications";
+import { useTheme } from "../components/ThemeToggle";
+
+const ITEM_HEIGHT = 44; // height of each nav item (p-3 + mb-1 ≈ 44px)
+const ITEM_MARGIN = 4;  // mb-1 = 4px
+const ITEMS_OFFSET = 24; // py-6 top padding
 
 export function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { unreadCount } = useNotifications();
+  const { isDark } = useTheme();
+
+  const colors = {
+    bg: isDark ? "#0F172A" : "#FFFFFF",
+    border: isDark ? "#1E293B" : "#E2E8F0",
+    logoText: isDark ? "#FFFFFF" : "#09090B",
+    inactiveIcon: isDark ? "#94A3B8" : "#64748B",
+    inactiveText: isDark ? "#94A3B8" : "#64748B",
+    pill: "#3B82F6",
+    collapseText: isDark ? "#94A3B8" : "#64748B",
+    hoverBg: isDark ? "#1E293B" : "#F1F5F9",
+    logoutHover: isDark ? "#2D1515" : "#FEF2F2",
+  };
+
+  // Width animation
+  const widthAnim = useRef(new Animated.Value(288)).current; // 72 * 4 = 288px
+  const collapsedWidth = 80;
+  const expandedWidth = 288;
+
+  useEffect(() => {
+    Animated.spring(widthAnim, {
+      toValue: collapsed ? collapsedWidth : expandedWidth,
+      useNativeDriver: false,
+      tension: 120,
+      friction: 14,
+    }).start();
+  }, [collapsed]);
 
   const items = useMemo(
     () => [
-      { path: "/(app)", label: "Dashboard", icon: LayoutDashboard, exact: true },
-      { path: "/(app)/calendar", label: "Planning", icon: Calendar },
-      { path: "/(app)/clients", label: "Clients", icon: Users },
-      { path: "/(app)/facturation", label: "Facturation", icon: FileText },
-      { path: "/(app)/notifications", label: "Alertes", icon: Bell, badge: true },
-      { path: "/(app)/parametres", label: "Paramètres", icon: Settings },
+      { path: "/(app)", label: "Dashboard", icon: LayoutDashboard, exact: true, match: "/" },
+      { path: "/(app)/calendar", label: "Planning", icon: Calendar, match: "/calendar" },
+      { path: "/(app)/clients", label: "Clients", icon: Users, match: "/clients" },
+      { path: "/(app)/facturation", label: "Facturation", icon: FileText, match: "/facturation" },
+      { path: "/(app)/notifications", label: "Alertes", icon: Bell, badge: true, match: "/notifications" },
+      { path: "/(app)/parametres", label: "Paramètres", icon: Settings, match: "/parametres" },
     ],
     []
   );
+
+  // Find active index
+  const activeIndex = useMemo(() => {
+    return items.findIndex((item) => {
+      if (item.exact) return pathname === "/" || pathname === "/index";
+      return (
+        pathname === item.match ||
+        pathname.startsWith(item.match + "/") ||
+        pathname.startsWith(item.path) ||
+        pathname.startsWith(item.path + "/")
+      );
+    });
+  }, [pathname, items]);
+
+  // Sliding indicator animation
+  const slideY = useRef(new Animated.Value(activeIndex >= 0 ? activeIndex * (ITEM_HEIGHT + ITEM_MARGIN) : 0)).current;
+
+  useEffect(() => {
+    if (activeIndex >= 0) {
+      Animated.spring(slideY, {
+        toValue: activeIndex * (ITEM_HEIGHT + ITEM_MARGIN),
+        useNativeDriver: true,
+        tension: 180,
+        friction: 22,
+      }).start();
+    }
+  }, [activeIndex]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -40,38 +98,74 @@ export function Sidebar() {
   };
 
   return (
-    <View
-      className={cn(
-        "h-full border-r border-border bg-sidebar transition-all duration-300",
-        collapsed ? "w-20" : "w-72"
-      )}
+    <Animated.View
+      style={[
+        {
+          height: "100%",
+          borderRightWidth: 1,
+          borderRightColor: colors.border,
+          backgroundColor: colors.bg,
+          overflow: "hidden",
+          width: widthAnim,
+        },
+      ]}
     >
-      <View className="h-16 flex-row items-center px-6 border-b border-border">
-        <View className="h-11 w-11 bg-primary rounded-lg items-center justify-center">
-          <Text className="text-white font-bold text-lg">LVM</Text>
+      {/* Logo Header */}
+      <View style={{ height: 64, flexDirection: "row", alignItems: "center", paddingHorizontal: 24, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <View style={{ height: 44, width: 44, backgroundColor: "#3B82F6", borderRadius: 10, alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: "white", fontWeight: "700", fontSize: 17 }}>LVM</Text>
         </View>
         {!collapsed && (
-          <Text className="ml-3 text-lg font-bold text-foreground">LVM Agenda</Text>
+          <Text style={{ marginLeft: 12, fontSize: 17, fontWeight: "700", color: colors.logoText }} numberOfLines={1}>
+            LVM Agenda
+          </Text>
         )}
       </View>
 
-      <ScrollView className="flex-1 py-6 px-3 gap-1">
-        {items.map((item) => {
-          const isActive = item.exact
-            ? pathname === "/" || pathname === "/index"
-            : pathname.startsWith(item.path);
+      {/* Navigation Items */}
+      <ScrollView
+        style={{ flex: 1, paddingTop: ITEMS_OFFSET, paddingBottom: ITEMS_OFFSET }}
+        contentContainerStyle={{ paddingHorizontal: 12 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Sliding pill indicator */}
+        {activeIndex >= 0 && (
+          <Animated.View
+            style={{
+              position: "absolute",
+              left: 12,
+              right: 12,
+              height: ITEM_HEIGHT,
+              top: ITEMS_OFFSET,
+              backgroundColor: colors.pill,
+              borderRadius: 12,
+              transform: [{ translateY: slideY }],
+            }}
+            pointerEvents="none"
+          />
+        )}
+
+        {items.map((item, index) => {
+          const isActive = index === activeIndex;
 
           return (
             <Pressable
               key={item.path}
               onPress={() => router.push(item.path as any)}
-              className={cn(
-                "flex-row items-center rounded-xl p-3 mb-1 transition-all",
-                isActive ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
-              )}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                paddingVertical: 12,
+                marginBottom: ITEM_MARGIN,
+                height: ITEM_HEIGHT,
+                position: "relative",
+                zIndex: 1,
+              }}
             >
               <View style={{ position: "relative" }}>
-                <item.icon size={20} color={isActive ? "#FFFFFF" : "#64748B"} />
+                <item.icon size={20} color={isActive ? "#FFFFFF" : colors.inactiveIcon} />
                 {item.badge && unreadCount > 0 && (
                   <View style={{
                     position: "absolute", top: -4, right: -6,
@@ -88,7 +182,7 @@ export function Sidebar() {
               </View>
               {!collapsed && (
                 <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <Text className={cn("ml-3 font-medium text-sm", isActive ? "text-white" : "text-muted-foreground")}>
+                  <Text style={{ marginLeft: 12, fontWeight: "500", fontSize: 14, color: isActive ? "#FFFFFF" : colors.inactiveText }} numberOfLines={1}>
                     {item.label}
                   </Text>
                   {item.badge && unreadCount > 0 && !isActive && (
@@ -103,21 +197,48 @@ export function Sidebar() {
         })}
       </ScrollView>
 
-      <View className="p-3 border-t border-border gap-2">
+      {/* Bottom: Collapse + Logout */}
+      <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 4 }}>
+        {/* Collapse button */}
         <Pressable
           onPress={() => setCollapsed(!collapsed)}
-          className="flex-row items-center justify-center p-2 rounded-lg hover:bg-muted"
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: collapsed ? "center" : "flex-start",
+            padding: 10,
+            borderRadius: 10,
+            backgroundColor: pressed ? colors.hoverBg : "transparent",
+            gap: 8,
+          })}
         >
-          {collapsed ? <ChevronRight size={20} color="#64748B" /> : <ChevronLeft size={20} color="#64748B" />}
+          {collapsed
+            ? <PanelLeftOpen size={18} color={colors.collapseText} />
+            : <PanelLeftClose size={18} color={colors.collapseText} />
+          }
+          {!collapsed && (
+            <Text style={{ fontSize: 13, fontWeight: "500", color: colors.collapseText }}>Réduire</Text>
+          )}
         </Pressable>
+
+        {/* Logout */}
         <Pressable
           onPress={handleSignOut}
-          className="flex-row items-center p-3 rounded-xl hover:bg-destructive/10 group"
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            padding: 12,
+            borderRadius: 10,
+            backgroundColor: pressed ? colors.logoutHover : "transparent",
+            gap: 10,
+          })}
         >
-          <LogOut size={20} color="#EF4444" />
-          {!collapsed && <Text className="ml-3 text-sm font-medium text-destructive">Déconnexion</Text>}
+          <LogOut size={18} color="#EF4444" />
+          {!collapsed && (
+            <Text style={{ fontSize: 13, fontWeight: "500", color: "#EF4444" }}>Déconnexion</Text>
+          )}
         </Pressable>
       </View>
-    </View>
+    </Animated.View>
   );
 }

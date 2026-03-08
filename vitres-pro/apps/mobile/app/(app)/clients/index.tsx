@@ -125,8 +125,11 @@ export default function ClientsListScreen() {
       style={{ paddingTop: isWeb ? 0 : insets.top }}
     >
       {/* Header avec Recherche */}
-      <View className="px-6 pt-2 pb-4 bg-background dark:bg-slate-950 z-10">
-        <Text className="text-3xl font-bold text-foreground dark:text-white mb-4">
+      <View
+        className="px-6 pb-4 bg-background dark:bg-slate-950 z-10"
+        style={{ paddingTop: isWeb ? 24 : 10 }}
+      >
+        <Text className="text-3xl font-bold text-foreground dark:text-slate-50 mb-4">
           Clients
         </Text>
 

@@ -161,23 +161,25 @@ export default function FacturationScreen() {
       className="flex-1 bg-background dark:bg-slate-950"
       style={{ paddingTop: isWeb ? 0 : insets.top }}
     >
+      {/* Header — même style que Planning */}
+      <View
+        className="px-6 pb-4 bg-background dark:bg-slate-950 z-10"
+        style={{ paddingTop: isWeb ? 24 : 10 }}
+      >
+        <Text className="text-3xl font-bold text-foreground dark:text-slate-50">
+          Facturation
+        </Text>
+        <Text className="text-muted-foreground dark:text-slate-400 mt-1 text-sm">
+          Revenus & Factures (TVA 21%)
+        </Text>
+      </View>
+
       <ScrollView
         ref={scrollRef}
         className="flex-1 px-4 lg:p-8"
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Page */}
-        <View className="flex-row items-center justify-between mb-6 pt-4">
-          <View>
-            <Text className="text-3xl font-bold text-foreground dark:text-white">
-              Facturation
-            </Text>
-            <Text className="text-muted-foreground mt-1">
-              Revenus & Factures (TVA 21%)
-            </Text>
-          </View>
-        </View>
 
         {/* 1. KPIS GRID (Style Exact du Dashboard) */}
         {/* On utilise gap-3 comme dans le dashboard */}

@@ -5,6 +5,7 @@ import {
   Text,
   Pressable,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import {
   User,
@@ -134,8 +135,11 @@ export default function ParametresScreen() {
     >
       <Stack.Screen options={{ headerShown: false }} />
 
-      <View className="px-6 py-4 border-b border-border dark:border-slate-800">
-        <Text className="text-2xl font-bold text-foreground dark:text-white">
+      <View
+        className="px-6 pb-4 bg-background dark:bg-slate-950 z-10"
+        style={{ paddingTop: Platform.OS === "web" ? 24 : 10 }}
+      >
+        <Text className="text-3xl font-bold text-foreground dark:text-slate-50">
           Paramètres
         </Text>
       </View>
