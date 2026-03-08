@@ -14,6 +14,8 @@ import {
   Users,
   Euro,
   Clock,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react-native";
 import { LineChart } from "react-native-gifted-charts";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -44,6 +46,7 @@ interface StatItem {
   color: string;
   bg: string;
   trend: string;
+  trendPositive?: boolean;
 }
 
 export default function Dashboard() {
@@ -116,7 +119,29 @@ export default function Dashboard() {
     { value: 2800, label: "Juin" },
   ];
 
-  const doneCount = interventions?.filter((i: any) => i.status === "done").length || 0;
+  // Tendances mois-sur-mois
+  const now = new Date();
+  const startThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+  const revenueThisMonth = interventions
+    ?.filter((i: any) => i.status === "done" && new Date(i.start_time) >= startThisMonth)
+    .reduce((acc: number, i: any) => acc + (Number(i.price_estimated) || 0), 0) || 0;
+  const revenueLastMonth = interventions
+    ?.filter((i: any) => i.status === "done" && new Date(i.start_time) >= startLastMonth && new Date(i.start_time) <= endLastMonth)
+    .reduce((acc: number, i: any) => acc + (Number(i.price_estimated) || 0), 0) || 0;
+  const caTrendPct = revenueLastMonth > 0
+    ? Math.round(((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100)
+    : revenueThisMonth > 0 ? 100 : 0;
+
+  const intThisMonth = interventions?.filter((i: any) => new Date(i.start_time) >= startThisMonth).length || 0;
+  const intLastMonth = interventions?.filter((i: any) => new Date(i.start_time) >= startLastMonth && new Date(i.start_time) <= endLastMonth).length || 0;
+  const intTrendPct = intLastMonth > 0
+    ? Math.round(((intThisMonth - intLastMonth) / intLastMonth) * 100)
+    : intThisMonth > 0 ? 100 : 0;
+
+  const fmtPct = (n: number) => `${n > 0 ? "+" : ""}${n}%`;
 
   const stats: StatItem[] = [
     {
@@ -125,7 +150,8 @@ export default function Dashboard() {
       icon: Euro,
       color: "#22C55E",
       bg: "bg-green-500/10",
-      trend: `${doneCount} terminée${doneCount > 1 ? "s" : ""}`,
+      trend: fmtPct(caTrendPct),
+      trendPositive: caTrendPct >= 0,
     },
     {
       label: "Interventions à venir",
@@ -133,7 +159,8 @@ export default function Dashboard() {
       icon: CalendarIcon,
       color: "#3B82F6",
       bg: "bg-blue-500/10",
-      trend: todayInterventions.length > 0 ? `${todayInterventions.length} aujourd'hui` : "",
+      trend: fmtPct(intTrendPct),
+      trendPositive: intTrendPct >= 0,
     },
     {
       label: "Clients",
@@ -155,6 +182,7 @@ export default function Dashboard() {
       color: "#8B5CF6",
       bg: "bg-purple-500/10",
       trend: inProgressToday > 0 ? `${inProgressToday} en cours` : "",
+      trendPositive: true,
     },
   ];
 
@@ -233,9 +261,16 @@ export default function Dashboard() {
                           {stat.value}
                         </Text>
                         {stat.trend ? (
-                          <Text className="text-[10px] text-muted-foreground dark:text-slate-400 ml-2 mb-0.5">
-                            {stat.trend}
-                          </Text>
+                          <View className="flex-row items-center ml-2 mb-0.5 gap-0.5">
+                            {stat.trendPositive !== undefined ? (
+                              stat.trendPositive
+                                ? <ArrowUpRight size={10} color="#22C55E" strokeWidth={2.5} />
+                                : <ArrowDownRight size={10} color="#EF4444" strokeWidth={2.5} />
+                            ) : null}
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: stat.trendPositive === false ? "#EF4444" : "#22C55E" }}>
+                              {stat.trend}
+                            </Text>
+                          </View>
                         ) : null}
                       </View>
                     </CardContent>
@@ -499,9 +534,17 @@ export default function Dashboard() {
                 </View>
 
                 {stat.trend ? (
-                  <View className="flex-row items-center mt-2">
-                    <Text className="text-xs text-muted-foreground dark:text-slate-500 font-medium">
+                  <View className="flex-row items-center mt-2 gap-1">
+                    {stat.trendPositive !== undefined ? (
+                      stat.trendPositive
+                        ? <ArrowUpRight size={13} color="#22C55E" />
+                        : <ArrowDownRight size={13} color="#EF4444" />
+                    ) : null}
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: stat.trendPositive === false ? "#EF4444" : "#22C55E" }}>
                       {stat.trend}
+                    </Text>
+                    <Text className="text-xs text-muted-foreground dark:text-slate-500">
+                      vs mois dern.
                     </Text>
                   </View>
                 ) : null}
