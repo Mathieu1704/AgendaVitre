@@ -13,7 +13,6 @@ import {
   Calendar as CalendarIcon,
   Users,
   Euro,
-  ArrowUpRight,
   Clock,
 } from "lucide-react-native";
 import { LineChart } from "react-native-gifted-charts";
@@ -117,6 +116,8 @@ export default function Dashboard() {
     { value: 2800, label: "Juin" },
   ];
 
+  const doneCount = interventions?.filter((i: any) => i.status === "done").length || 0;
+
   const stats: StatItem[] = [
     {
       label: "Chiffre d'affaires",
@@ -124,7 +125,7 @@ export default function Dashboard() {
       icon: Euro,
       color: "#22C55E",
       bg: "bg-green-500/10",
-      trend: "+12%",
+      trend: `${doneCount} terminée${doneCount > 1 ? "s" : ""}`,
     },
     {
       label: "Interventions à venir",
@@ -132,7 +133,7 @@ export default function Dashboard() {
       icon: CalendarIcon,
       color: "#3B82F6",
       bg: "bg-blue-500/10",
-      trend: "+4",
+      trend: todayInterventions.length > 0 ? `${todayInterventions.length} aujourd'hui` : "",
     },
     {
       label: "Clients",
@@ -140,10 +141,11 @@ export default function Dashboard() {
       icon: Users,
       color: "#F97316",
       bg: "bg-orange-500/10",
-      trend: "+2",
+      trend: "",
     },
   ];
 
+  const inProgressToday = todayInterventions.filter((i: any) => i.status === "in_progress").length;
   const mobileStats: StatItem[] = [
     ...stats,
     {
@@ -152,7 +154,7 @@ export default function Dashboard() {
       icon: Clock,
       color: "#8B5CF6",
       bg: "bg-purple-500/10",
-      trend: "",
+      trend: inProgressToday > 0 ? `${inProgressToday} en cours` : "",
     },
   ];
 
@@ -231,16 +233,9 @@ export default function Dashboard() {
                           {stat.value}
                         </Text>
                         {stat.trend ? (
-                          <View className="flex-row items-center ml-2 mb-0.5">
-                            <ArrowUpRight
-                              size={11}
-                              color="#22C55E"
-                              strokeWidth={2.5}
-                            />
-                            <Text className="text-[10px] text-green-600 dark:text-green-400 font-bold ml-0.5">
-                              {stat.trend}
-                            </Text>
-                          </View>
+                          <Text className="text-[10px] text-muted-foreground dark:text-slate-400 ml-2 mb-0.5">
+                            {stat.trend}
+                          </Text>
                         ) : null}
                       </View>
                     </CardContent>
@@ -503,15 +498,13 @@ export default function Dashboard() {
                   </View>
                 </View>
 
-                <View className="flex-row items-center mt-2">
-                  <ArrowUpRight size={14} color="#22C55E" />
-                  <Text className="text-xs text-green-600 font-medium ml-1">
-                    {stat.trend}{" "}
-                    <Text className="text-muted-foreground dark:text-slate-500 font-normal">
-                      vs mois dernier
+                {stat.trend ? (
+                  <View className="flex-row items-center mt-2">
+                    <Text className="text-xs text-muted-foreground dark:text-slate-500 font-medium">
+                      {stat.trend}
                     </Text>
-                  </Text>
-                </View>
+                  </View>
+                ) : null}
               </CardContent>
             </Card>
           </Animated.View>

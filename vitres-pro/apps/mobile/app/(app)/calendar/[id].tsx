@@ -111,13 +111,13 @@ export default function InterventionDetailScreen() {
 
   // 4. HELPER FUNCTIONS
   const handleBack = () => {
-    if (intervention?.start_time) {
-      router.push({
-        pathname: "/(app)/calendar",
-        params: { date: intervention.start_time },
-      });
-    } else {
+    if (router.canGoBack()) {
       router.back();
+    } else {
+      router.replace({
+        pathname: "/(app)/calendar",
+        params: intervention?.start_time ? { date: intervention.start_time } : {},
+      });
     }
   };
 

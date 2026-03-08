@@ -142,6 +142,7 @@ export default function LogsScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={{ flexGrow: 0, flexShrink: 0 }}
         contentContainerStyle={{ flexDirection: "row", paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: "center" }}
       >
         {FILTERS.map((f) => {

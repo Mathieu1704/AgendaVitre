@@ -44,8 +44,8 @@ function NotifItem({
         padding: 16,
         backgroundColor: notif.is_read ? "transparent" : "#EFF6FF",
         borderRadius: 16, marginBottom: 8,
-        borderWidth: notif.is_read ? 0 : 1,
-        borderColor: notif.is_read ? "transparent" : "#BFDBFE",
+        borderWidth: 1,
+        borderColor: notif.is_read ? "#E2E8F0" : "#BFDBFE",
       }}
     >
       {/* Dot non lu */}
