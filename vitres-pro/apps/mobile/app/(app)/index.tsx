@@ -379,7 +379,13 @@ export default function Dashboard() {
                   </Text>
                 </View>
               ) : (
-                <View className="gap-3">
+                <ScrollView
+                  style={{ maxHeight: 320 }}
+                  contentContainerStyle={{ paddingRight: 8 }}
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
+                >
+                  <View className="gap-3">
                   {todayInterventions.map((item: any, i: number) => (
                     <View
                       key={i}
@@ -406,7 +412,8 @@ export default function Dashboard() {
                       <StatusBadge status={item.status} />
                     </View>
                   ))}
-                </View>
+                  </View>
+                </ScrollView>
               )}
             </CardContent>
           </Card>
@@ -663,34 +670,41 @@ export default function Dashboard() {
                   </Text>
                 </View>
               ) : (
-                <View className="gap-3">
-                  {todayInterventions.map((item: any, i: number) => (
-                    <View
-                      key={i}
-                      className="flex-row items-center gap-3 p-3 rounded-xl bg-muted/50 dark:bg-slate-800 border border-transparent hover:border-border dark:hover:border-slate-700 transition-all"
-                    >
-                      <Avatar
-                        name={item.client?.name || item.title}
-                        size="sm"
-                      />
-                      <View className="flex-1">
-                        <Text
-                          className="text-sm font-semibold text-foreground dark:text-white"
-                          numberOfLines={1}
-                        >
-                          {item.title}
-                        </Text>
-                        <Text className="text-xs text-muted-foreground dark:text-slate-400">
-                          {item.start_time
-                            ? format(parseISO(item.start_time), "HH:mm")
-                            : "--:--"}{" "}
-                          • {item.client?.name || "Client"}
-                        </Text>
+                <ScrollView
+                  style={{ maxHeight: 400 }}
+                  contentContainerStyle={{ paddingRight: 8 }}
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
+                >
+                  <View className="gap-3">
+                    {todayInterventions.map((item: any, i: number) => (
+                      <View
+                        key={i}
+                        className="flex-row items-center gap-3 p-3 rounded-xl bg-muted/50 dark:bg-slate-800 border border-transparent hover:border-border dark:hover:border-slate-700 transition-all"
+                      >
+                        <Avatar
+                          name={item.client?.name || item.title}
+                          size="sm"
+                        />
+                        <View className="flex-1">
+                          <Text
+                            className="text-sm font-semibold text-foreground dark:text-white"
+                            numberOfLines={1}
+                          >
+                            {item.title}
+                          </Text>
+                          <Text className="text-xs text-muted-foreground dark:text-slate-400">
+                            {item.start_time
+                              ? format(parseISO(item.start_time), "HH:mm")
+                              : "--:--"}{" "}
+                            • {item.client?.name || "Client"}
+                          </Text>
+                        </View>
+                        <StatusBadge status={item.status} />
                       </View>
-                      <StatusBadge status={item.status} />
-                    </View>
-                  ))}
-                </View>
+                    ))}
+                  </View>
+                </ScrollView>
               )}
             </CardContent>
           </Card>
