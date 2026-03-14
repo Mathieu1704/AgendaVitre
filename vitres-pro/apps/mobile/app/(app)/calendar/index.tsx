@@ -16,7 +16,9 @@ import {
   LocaleConfig,
 } from "react-native-calendars";
 import { useRouter } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { CalendarDayView } from "../../../src/ui/components/calendar/CalendarDayView";
+import { CalendarWeekView } from "../../../src/ui/components/calendar/CalendarWeekView";
 import {
   ChevronLeft,
   ChevronRight,
@@ -109,6 +111,8 @@ LocaleConfig.locales["fr"] = {
 LocaleConfig.defaultLocale = "fr";
 
 type ViewMode = "day" | "week" | "month" | "year";
+type DisplayMode = "list" | "calendar";
+type CalView = "day" | "week";
 
 // ─── Animated Sliding Pill Selector (style iOS segmented control) ──────────
 type PillOption = {
@@ -271,6 +275,7 @@ export default function CalendarScreen() {
   const { width } = useWindowDimensions();
   const { isDark } = useTheme();
   const { isAdmin, userZone } = useAuth();
+  const queryClient = useQueryClient();
 
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
@@ -280,10 +285,22 @@ export default function CalendarScreen() {
 
   // --- ÉTATS ---
   const [viewMode, setViewMode] = useState<ViewMode>("month");
+  const [displayMode, setDisplayMode] = useState<DisplayMode>("list");
+  const [calView, setCalView] = useState<CalView>("week");
   const [cursorDate, setCursorDate] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState(toISODate(new Date()));
   // Admin : toggle Toutes/Hainaut/Ardennes. Employé : fixé à sa zone.
   const [selectedZone, setSelectedZone] = useState<"all" | "hainaut" | "ardennes">("all");
+  // Filtres actifs
+  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
+  const [activeStatuses, setActiveStatuses] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (params.view) {
+      const v = (typeof params.view === "string" ? params.view : params.view[0]) as ViewMode;
+      if (["day","week","month","year"].includes(v)) setViewMode(v);
+    }
+  }, []);
 
   useEffect(() => {
     if (params.date) {
@@ -334,24 +351,120 @@ export default function CalendarScreen() {
     return map;
   }, [interventions, dayKeyFromDateTime, effectiveZone]);
 
+  // --- FILTRES ---
+  const FILTER_TYPES = [
+    { id: "intervention", label: "Intervention", color: "#3B82F6" },
+    { id: "devis",        label: "Devis",        color: "#8B5CF6" },
+    { id: "tournee",      label: "Tournée",      color: "#F97316" },
+    { id: "note",         label: "Note",         color: "#64748B" },
+  ];
+  const FILTER_STATUSES = [
+    { id: "planned",     label: "Planifié",  color: "#3B82F6" },
+    { id: "in_progress", label: "En cours",  color: "#F97316" },
+    { id: "done",        label: "Terminé",   color: "#22C55E" },
+  ];
+  const filterItem = useCallback((item: any) => {
+    if (activeTypes.size > 0 && !activeTypes.has(item.type ?? "intervention")) return false;
+    if (activeStatuses.size > 0 && !activeStatuses.has(item.status)) return false;
+    return true;
+  }, [activeTypes, activeStatuses]);
+
+  const toggleType = (id: string) => {
+    setActiveTypes(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+  const toggleStatus = (id: string) => {
+    setActiveStatuses(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+  const hasFilters = activeTypes.size > 0 || activeStatuses.size > 0;
+
+  const FilterChipsBar = () => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ paddingVertical: 8, gap: 6 }}
+      style={{ marginBottom: 8 }}
+    >
+      {hasFilters && (
+        <Pressable
+          onPress={() => { setActiveTypes(new Set()); setActiveStatuses(new Set()); }}
+          style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginRight: 2 }}
+        >
+          <Text style={{ fontSize: 11, fontWeight: "700", color: isDark ? "#CBD5E1" : "#64748B" }}>✕ Tout</Text>
+        </Pressable>
+      )}
+      {FILTER_TYPES.map(f => {
+        const active = activeTypes.has(f.id);
+        return (
+          <Pressable key={f.id} onPress={() => toggleType(f.id)}
+            style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: active ? f.color : isDark ? "#1E293B" : "#F1F5F9", borderWidth: 1, borderColor: active ? f.color : isDark ? "#334155" : "#E2E8F0" }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>{f.label}</Text>
+          </Pressable>
+        );
+      })}
+      <View style={{ width: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginHorizontal: 4 }} />
+      {FILTER_STATUSES.map(f => {
+        const active = activeStatuses.has(f.id);
+        return (
+          <Pressable key={f.id} onPress={() => toggleStatus(f.id)}
+            style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: active ? f.color : isDark ? "#1E293B" : "#F1F5F9", borderWidth: 1, borderColor: active ? f.color : isDark ? "#334155" : "#E2E8F0" }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>{f.label}</Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+
+  // Interventions filtrées par zone pour la vue calendrier grille
+  const calendarInterventions = useMemo(() => {
+    if (!interventions) return [];
+    if (effectiveZone === "all") return interventions;
+    return interventions.filter((i: any) => i.zone === effectiveZone);
+  }, [interventions, effectiveZone]);
+
+  // Effective view (used for nav + title when in calendar mode)
+  const effectiveView = displayMode === "calendar" ? calView : viewMode;
+
   // --- NAVIGATION ---
   const handlePrev = () => {
     setCursorDate((d) => {
-      if (viewMode === "day") return addDays(d, -1);
-      if (viewMode === "week") return addDays(d, -7);
-      if (viewMode === "year") return new Date(d.getFullYear() - 1, 0, 1);
+      if (effectiveView === "day") return addDays(d, -1);
+      if (effectiveView === "week") return addDays(d, -7);
+      if (effectiveView === "year") return new Date(d.getFullYear() - 1, 0, 1);
       return addMonths(d, -1);
     });
   };
 
   const handleNext = () => {
     setCursorDate((d) => {
-      if (viewMode === "day") return addDays(d, 1);
-      if (viewMode === "week") return addDays(d, 7);
-      if (viewMode === "year") return new Date(d.getFullYear() + 1, 0, 1);
+      if (effectiveView === "day") return addDays(d, 1);
+      if (effectiveView === "week") return addDays(d, 7);
+      if (effectiveView === "year") return new Date(d.getFullYear() + 1, 0, 1);
       return addMonths(d, 1);
     });
   };
+
+  // --- MISE À JOUR ÉVÉNEMENT (optimistic update + rollback) ---
+  const handleEventUpdate = useCallback(async (id: string, newStart: string, newEnd: string) => {
+    const prev = queryClient.getQueryData<any[]>(["interventions"]);
+    queryClient.setQueryData<any[]>(["interventions"], (old) =>
+      old ? old.map(i => i.id === id ? { ...i, start_time: newStart, end_time: newEnd } : i) : old
+    );
+    try {
+      await api.patch(`/api/interventions/${id}`, { start_time: newStart, end_time: newEnd });
+    } catch {
+      queryClient.setQueryData(["interventions"], prev);
+    }
+  }, [queryClient]);
 
   const handleToday = () => {
     const now = new Date();
@@ -362,14 +475,15 @@ export default function CalendarScreen() {
   // Titre dynamique
   const headerTitle = useMemo(() => {
     const d = cursorDate;
-    if (viewMode === "year") return d.getFullYear().toString();
-    if (viewMode === "day")
+    const vm = effectiveView;
+    if (vm === "year") return d.getFullYear().toString();
+    if (vm === "day")
       return d.toLocaleDateString("fr-FR", {
         weekday: "long",
         day: "numeric",
         month: "long",
       });
-    if (viewMode === "week") {
+    if (vm === "week") {
       const start = startOfWeek(d, 1);
       const end = addDays(start, 6);
       if (start.getMonth() === end.getMonth()) {
@@ -385,7 +499,7 @@ export default function CalendarScreen() {
       })}`;
     }
     return d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
-  }, [cursorDate, viewMode]);
+  }, [cursorDate, effectiveView]);
 
   // --- COMPOSANT CARTE INTERVENTION (Mobile Optimisé) ---
   const InterventionCard = ({
@@ -416,7 +530,7 @@ export default function CalendarScreen() {
 
     return (
       <Pressable
-        onPress={() => router.push(`/(app)/calendar/${item.id}` as any)}
+        onPress={() => router.push(`/(app)/calendar/${item.id}?from_view=${viewMode}&from_date=${selectedDate}` as any)}
         className={`bg-card dark:bg-slate-900 border border-border dark:border-slate-800 shadow-sm active:scale-[0.98] mb-3 ${cardPadding}`}
         style={{ borderRadius: cardRadius }}
       >
@@ -480,7 +594,7 @@ export default function CalendarScreen() {
                 )}
               </View>
 
-              {!compact && <StatusBadge status={item.status} />}
+              {!compact && <StatusBadge status={item.status} className="self-center" />}
             </View>
 
             {/* Adresse (si client avec adresse, même anonyme) */}
@@ -662,7 +776,7 @@ export default function CalendarScreen() {
       return marks;
     }, [itemsByDate, monthRawEvents, selectedDate]);
 
-    const dayList = itemsByDate[selectedDate] || [];
+    const dayList = (itemsByDate[selectedDate] || []).filter(filterItem);
     const dayRawEvents = monthRawEvents.filter(
       (e) => e.start_time.split("T")[0] === selectedDate,
     );
@@ -723,6 +837,7 @@ export default function CalendarScreen() {
                 ))}
               </View>
             )}
+            <FilterChipsBar />
             {dayList.length === 0 && dayRawEvents.length === 0 ? (
               <Text className="text-muted-foreground dark:text-slate-500 text-center py-8">
                 Rien de prévu.
@@ -743,20 +858,46 @@ export default function CalendarScreen() {
                 if (last && last.status === item.status) last.items.push(item);
                 else groups.push({ status: item.status, items: [item] });
               }
-              return groups.map((group) => (
-                <View key={group.status} className="mb-2">
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6, marginTop: 4 }}>
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: STATUS_COLORS[group.status] ?? "#94A3B8" }} />
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: STATUS_COLORS[group.status] ?? "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                      {STATUS_LABELS[group.status] ?? group.status} ({group.items.length})
-                    </Text>
-                    <View style={{ flex: 1, height: 1, backgroundColor: "#F1F5F9", marginLeft: 4 }} />
+              const TYPE_LABELS: Record<string, string> = { intervention: "Intervention", devis: "Devis", tournee: "Tournée", note: "Note" };
+              const TYPE_COLORS: Record<string, string> = { intervention: "#3B82F6", devis: "#8B5CF6", tournee: "#F97316", note: "#64748B" };
+              return groups.map((group) => {
+                // sub-group by type within this status group
+                const typeGroups: { type: string; items: typeof sorted }[] = [];
+                for (const item of group.items) {
+                  const t = item.type ?? "intervention";
+                  const last = typeGroups[typeGroups.length - 1];
+                  if (last && last.type === t) last.items.push(item);
+                  else typeGroups.push({ type: t, items: [item] });
+                }
+                const multipleTypes = typeGroups.length > 1;
+                return (
+                  <View key={group.status} className="mb-2">
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6, marginTop: 4 }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: STATUS_COLORS[group.status] ?? "#94A3B8" }} />
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: STATUS_COLORS[group.status] ?? "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        {STATUS_LABELS[group.status] ?? group.status} ({group.items.length})
+                      </Text>
+                      <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "#1E293B" : "#F1F5F9", marginLeft: 4 }} />
+                    </View>
+                    {typeGroups.map((tg) => (
+                      <View key={tg.type}>
+                        {(multipleTypes || tg.type !== "intervention") && (
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 5, marginTop: 2, marginLeft: 8 }}>
+                            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: TYPE_COLORS[tg.type] ?? "#94A3B8" }} />
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: TYPE_COLORS[tg.type] ?? "#94A3B8", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                              {TYPE_LABELS[tg.type] ?? tg.type}
+                            </Text>
+                            <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "#1E293B" : "#F1F5F9", marginLeft: 4 }} />
+                          </View>
+                        )}
+                        {tg.items.map((item) => (
+                          <InterventionCard key={item.id} item={item} />
+                        ))}
+                      </View>
+                    ))}
                   </View>
-                  {group.items.map((item) => (
-                    <InterventionCard key={item.id} item={item} />
-                  ))}
-                </View>
-              ));
+                );
+              });
             })()}
           </View>
         </View>
@@ -792,7 +933,7 @@ export default function CalendarScreen() {
       <>
         {weekDays.map((date) => {
           const iso = toISODate(date);
-          const list = itemsByDate[iso] || [];
+          const list = (itemsByDate[iso] || []).filter(filterItem);
           const rawList = rawByDate[iso] || [];
           const isToday = iso === toISODate(new Date());
           const stat = rangeStats ? rangeStats[iso] : null;
@@ -889,7 +1030,7 @@ export default function CalendarScreen() {
   // --- VUE : JOUR ---
   const RenderDay = () => {
     const iso = toISODate(cursorDate);
-    const list = itemsByDate[iso] || [];
+    const list = (itemsByDate[iso] || []).filter(filterItem);
     const { rawEvents } = useRawEventsByDate(iso);
 
     const unassigned = rawEvents.filter((e) => !e.employee_id);
@@ -919,24 +1060,71 @@ export default function CalendarScreen() {
         )}
 
         {/* Interventions structurées */}
-        {list.length > 0 && (
-          <View className="mb-4">
-            {assigned.length > 0 || unassigned.length > 0 ? (
-              <View className="flex-row items-center gap-2 mb-2">
-                <View className="w-2 h-2 rounded-full bg-blue-500" />
-                <Text className="text-xs font-bold text-blue-500 uppercase tracking-wider">
-                  Interventions
-                </Text>
-              </View>
-            ) : null}
-            {[...list].sort((a, b) => {
-              const T: Record<string,number> = { intervention:0, devis:1, tournee:2, note:3 };
-              return (T[a.type??"intervention"]??9)-(T[b.type??"intervention"]??9);
-            }).map((item) => (
-              <InterventionCard key={item.id} item={item} />
-            ))}
-          </View>
-        )}
+        <FilterChipsBar />
+        {list.length > 0 && (() => {
+          const STATUS_ORDER: Record<string,number> = { in_progress:0, planned:1, done:2 };
+          const TYPE_ORDER: Record<string,number> = { intervention:0, devis:1, tournee:2, note:3 };
+          const TYPE_LABELS: Record<string,string> = { intervention:"Intervention", devis:"Devis", tournee:"Tournée", note:"Note" };
+          const TYPE_COLORS: Record<string,string> = { intervention:"#3B82F6", devis:"#8B5CF6", tournee:"#F97316", note:"#64748B" };
+          const STATUS_LABELS: Record<string,string> = { in_progress:"En cours", planned:"Planifié", done:"Terminé" };
+          const STATUS_COLORS: Record<string,string> = { in_progress:"#F97316", planned:"#3B82F6", done:"#22C55E" };
+          const sorted = [...list].sort((a,b) => {
+            const sd = (STATUS_ORDER[a.status]??9)-(STATUS_ORDER[b.status]??9);
+            if (sd !== 0) return sd;
+            return (TYPE_ORDER[a.type??"intervention"]??9)-(TYPE_ORDER[b.type??"intervention"]??9);
+          });
+          const groups: { status:string; items:typeof sorted }[] = [];
+          for (const item of sorted) {
+            const last = groups[groups.length-1];
+            if (last && last.status === item.status) last.items.push(item);
+            else groups.push({ status: item.status, items: [item] });
+          }
+          return (
+            <View className="mb-4">
+              {(assigned.length > 0 || unassigned.length > 0) && (
+                <View className="flex-row items-center gap-2 mb-2">
+                  <View className="w-2 h-2 rounded-full bg-blue-500" />
+                  <Text className="text-xs font-bold text-blue-500 uppercase tracking-wider">Planifié</Text>
+                </View>
+              )}
+              {groups.map(group => {
+                const typeGroups: { type:string; items:typeof sorted }[] = [];
+                for (const item of group.items) {
+                  const t = item.type ?? "intervention";
+                  const last = typeGroups[typeGroups.length-1];
+                  if (last && last.type === t) last.items.push(item);
+                  else typeGroups.push({ type: t, items: [item] });
+                }
+                const multipleTypes = typeGroups.length > 1;
+                return (
+                  <View key={group.status} className="mb-2">
+                    <View style={{ flexDirection:"row", alignItems:"center", gap:6, marginBottom:6, marginTop:4 }}>
+                      <View style={{ width:6, height:6, borderRadius:3, backgroundColor:STATUS_COLORS[group.status]??"#94A3B8" }} />
+                      <Text style={{ fontSize:11, fontWeight:"700", color:STATUS_COLORS[group.status]??"#94A3B8", textTransform:"uppercase", letterSpacing:0.5 }}>
+                        {STATUS_LABELS[group.status]??group.status} ({group.items.length})
+                      </Text>
+                      <View style={{ flex:1, height:1, backgroundColor:isDark?"#1E293B":"#F1F5F9", marginLeft:4 }} />
+                    </View>
+                    {typeGroups.map(tg => (
+                      <View key={tg.type}>
+                        {(multipleTypes || tg.type !== "intervention") && (
+                          <View style={{ flexDirection:"row", alignItems:"center", gap:5, marginBottom:5, marginTop:2, marginLeft:8 }}>
+                            <View style={{ width:4, height:4, borderRadius:2, backgroundColor:TYPE_COLORS[tg.type]??"#94A3B8" }} />
+                            <Text style={{ fontSize:10, fontWeight:"700", color:TYPE_COLORS[tg.type]??"#94A3B8", textTransform:"uppercase", letterSpacing:0.4 }}>
+                              {TYPE_LABELS[tg.type]??tg.type}
+                            </Text>
+                            <View style={{ flex:1, height:1, backgroundColor:isDark?"#1E293B":"#F1F5F9", marginLeft:4 }} />
+                          </View>
+                        )}
+                        {tg.items.map(item => <InterventionCard key={item.id} item={item} />)}
+                      </View>
+                    ))}
+                  </View>
+                );
+              })}
+            </View>
+          );
+        })()}
 
         {/* Raw events assignés (dans la lane de leur employé) */}
         {assigned.length > 0 && (
@@ -1085,39 +1273,70 @@ export default function CalendarScreen() {
         // Si Mobile -> insets.top + 10px pour descendre sous l'encoche
         style={{ paddingTop: isWeb ? 24 : insets.top + 10 }}
       >
-        {/* Titre + Btn Aujourd'hui */}
+        {/* Titre + Toggle Liste/Calendrier + Btn Aujourd'hui */}
         <View className="flex-row justify-between items-center mb-4">
           <Text className="text-3xl font-bold text-foreground dark:text-slate-50">
             Planning
           </Text>
-          <Pressable
-            onPress={handleToday}
-            className="flex-row items-center bg-primary/10 px-3 py-2 rounded-full active:opacity-60"
-          >
-            <CalendarCheck size={16} color="#3B82F6" />
-            <Text className="ml-2 text-primary font-bold text-xs uppercase">
-              Aujourd'hui
-            </Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <SlidingPillSelector
+              options={[
+                { id: "list",     label: "Liste" },
+                { id: "calendar", label: "Calendrier" },
+              ]}
+              selected={displayMode}
+              onSelect={(id) => setDisplayMode(id as DisplayMode)}
+              pillColor="#3B82F6"
+              bgColor={isDark ? "#1E293B" : "#E2E8F0"}
+              activeTextColor="#FFFFFF"
+              inactiveTextColor={isDark ? "#94A3B8" : "#64748B"}
+              containerStyle={{ width: 160 }}
+              itemPy={6}
+              fontSize={12}
+            />
+            <Pressable
+              onPress={handleToday}
+              className="flex-row items-center bg-primary/10 px-3 py-2 rounded-full active:opacity-60"
+            >
+              <CalendarCheck size={16} color="#3B82F6" />
+            </Pressable>
+          </View>
         </View>
 
         {/* Slider (View Selector) — animated pill */}
-        <SlidingPillSelector
-          options={[
-            { id: "day",   label: "Jour" },
-            { id: "week",  label: "Semaine" },
-            { id: "month", label: "Mois" },
-            { id: "year",  label: "Année" },
-          ]}
-          selected={viewMode}
-          onSelect={(id) => setViewMode(id as ViewMode)}
-          pillColor={isDark ? "#475569" : "#FFFFFF"}
-          bgColor={isDark ? "#1E293B" : "#E2E8F0"}
-          activeTextColor={isDark ? "#FFFFFF" : "#09090B"}
-          inactiveTextColor={isDark ? "#94A3B8" : "#64748B"}
-          containerStyle={{ marginBottom: 12 }}
-          itemPy={8}
-        />
+        {displayMode === "list" ? (
+          <SlidingPillSelector
+            options={[
+              { id: "day",   label: "Jour" },
+              { id: "week",  label: "Semaine" },
+              { id: "month", label: "Mois" },
+              { id: "year",  label: "Année" },
+            ]}
+            selected={viewMode}
+            onSelect={(id) => setViewMode(id as ViewMode)}
+            pillColor={isDark ? "#475569" : "#FFFFFF"}
+            bgColor={isDark ? "#1E293B" : "#E2E8F0"}
+            activeTextColor={isDark ? "#FFFFFF" : "#09090B"}
+            inactiveTextColor={isDark ? "#94A3B8" : "#64748B"}
+            containerStyle={{ marginBottom: 12 }}
+            itemPy={8}
+          />
+        ) : (
+          <SlidingPillSelector
+            options={[
+              { id: "day",  label: "Jour" },
+              { id: "week", label: "Semaine" },
+            ]}
+            selected={calView}
+            onSelect={(id) => setCalView(id as CalView)}
+            pillColor={isDark ? "#475569" : "#FFFFFF"}
+            bgColor={isDark ? "#1E293B" : "#E2E8F0"}
+            activeTextColor={isDark ? "#FFFFFF" : "#09090B"}
+            inactiveTextColor={isDark ? "#94A3B8" : "#64748B"}
+            containerStyle={{ marginBottom: 12 }}
+            itemPy={8}
+          />
+        )}
 
         {/* Barre de Navigation (Flèches + Titre + Zone selector) */}
         <View className="flex-row items-center justify-between bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-3 rounded-3xl shadow-sm mb-4">
@@ -1180,19 +1399,40 @@ export default function CalendarScreen() {
             />
           </Pressable>
         </View>
+
       </View>
 
       {/* === CONTENU === */}
-      <ScrollView
-        className="flex-1"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
-      >
-        {viewMode === "month" && <RenderMonth />}
-        {viewMode === "week" && <RenderWeek />}
-        {viewMode === "day" && <RenderDay />}
-        {viewMode === "year" && <RenderYear />}
-      </ScrollView>
+      {displayMode === "calendar" ? (
+        <View style={{ flex: 1 }}>
+          {calView === "week" ? (
+            <CalendarWeekView
+              weekStart={startOfWeek(cursorDate, 1)}
+              interventions={calendarInterventions}
+              isDark={isDark}
+              onEventUpdate={handleEventUpdate}
+            />
+          ) : (
+            <CalendarDayView
+              date={toISODate(cursorDate)}
+              interventions={calendarInterventions}
+              isDark={isDark}
+              onEventUpdate={handleEventUpdate}
+            />
+          )}
+        </View>
+      ) : (
+        <ScrollView
+          className="flex-1"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 100 }}
+        >
+          {viewMode === "month" && <RenderMonth />}
+          {viewMode === "week" && <RenderWeek />}
+          {viewMode === "day" && <RenderDay />}
+          {viewMode === "year" && <RenderYear />}
+        </ScrollView>
+      )}
 
       {/* FAB */}
       <Pressable

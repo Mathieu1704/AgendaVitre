@@ -36,7 +36,7 @@ export const StatusBadge = ({ status, className }: StatusBadgeProps) => {
   return (
     <View
       className={cn(
-        "border px-2.5 py-1 rounded-full self-start",
+        "border px-2.5 py-1 rounded-full",
         config.style,
         className
       )}

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
 
@@ -103,6 +103,8 @@ class InterventionBase(BaseModel):
     client_id: Optional[UUID] = None
     employee_ids: List[UUID] = []
     items: List[InterventionItemCreate] = []
+    recurrence_rule: Optional[Dict[str, Any]] = None
+    recurrence_group_id: Optional[UUID] = None
 
 class InterventionCreate(InterventionBase):
     pass
@@ -130,6 +132,8 @@ class InterventionOut(BaseModel):
     zone: Optional[str] = None
     reprise_taken: Optional[bool] = None
     reprise_note: Optional[str] = None
+    recurrence_rule: Optional[Dict[str, Any]] = None
+    recurrence_group_id: Optional[UUID] = None
     client: Optional[ClientOutLite] = None
     employees: List[EmployeeOut] = []
     items: List[InterventionItemOut] = []

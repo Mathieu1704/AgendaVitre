@@ -42,7 +42,7 @@ import { OptionsModal } from "../../../src/ui/components/OptionsModal";
 import { ConfirmModal } from "../../../src/ui/components/ConfirmModal";
 
 export default function InterventionDetailScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, from_view, from_date } = useLocalSearchParams();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isDark } = useTheme();
@@ -111,14 +111,17 @@ export default function InterventionDetailScreen() {
 
   // 4. HELPER FUNCTIONS
   const handleBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace({
-        pathname: "/(app)/calendar",
-        params: intervention?.start_time ? { date: intervention.start_time } : {},
-      });
-    }
+    router.replace({
+      pathname: "/(app)/calendar",
+      params: {
+        ...(from_view ? { view: from_view } : {}),
+        ...(from_date
+          ? { date: from_date }
+          : intervention?.start_time
+          ? { date: intervention.start_time }
+          : {}),
+      },
+    });
   };
 
   const handleDeleteRequest = () => {
@@ -159,18 +162,10 @@ export default function InterventionDetailScreen() {
 
   const startTime = new Date(intervention.start_time);
 
-  const inferTypeFromTitle = (title: string, hasAddr: boolean): string => {
-    const t = (title ?? "").toLowerCase();
-    if (t.includes("devis")) return "devis";
-    if (t.includes("tournée") || t.includes("tournee")) return "tournee";
-    if (!hasAddr) return "note";
-    return "intervention";
-  };
-  const hasAddress = !!(intervention.client?.address);
   const intervType: string =
-    intervention.type && intervention.type !== "intervention"
+    typeof intervention.type === "string" && intervention.type.trim() !== ""
       ? intervention.type
-      : inferTypeFromTitle(intervention.title, hasAddress);
+      : "intervention";
   const hasClient = ["intervention", "devis"].includes(intervType);
   const TYPE_BADGE: Record<string, { label: string; color: string; bg: string }> = {
     intervention: { label: "Intervention", color: "#3B82F6", bg: "#EFF6FF" },
@@ -213,21 +208,22 @@ export default function InterventionDetailScreen() {
             />
           </Pressable>
         )}
-        {/* Badge type */}
-        <View
-          style={{
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            borderRadius: 20,
-            backgroundColor: typeBadge.bg,
-            marginRight: 6,
-          }}
-        >
-          <Text style={{ fontSize: 11, fontWeight: "700", color: typeBadge.color }}>
-            {typeBadge.label.toUpperCase()}
-          </Text>
+        {/* Badges type + statut alignés */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <View
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 20,
+              backgroundColor: typeBadge.bg,
+            }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: "700", color: typeBadge.color }}>
+              {typeBadge.label.toUpperCase()}
+            </Text>
+          </View>
+          <StatusBadge status={intervention.status} />
         </View>
-        <StatusBadge status={intervention.status} className="self-center" />
       </View>
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>

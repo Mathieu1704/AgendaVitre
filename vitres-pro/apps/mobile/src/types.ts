@@ -25,6 +25,14 @@ export interface Intervention {
   status: "planned" | "in_progress" | "done" | string;
   price_estimated?: number;
   zone: "hainaut" | "ardennes";
+  recurrence_rule?: {
+    freq?: string;
+    interval?: number;
+    count?: number;
+    until?: string;
+    byday?: string[] | number[];
+  } | null;
+  recurrence_group_id?: string | null;
   client?: Client;
   employees: Employee[]; // Liste d'employés maintenant
 }
