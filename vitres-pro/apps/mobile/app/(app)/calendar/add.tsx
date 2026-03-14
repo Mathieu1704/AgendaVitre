@@ -860,7 +860,7 @@ export default function AddInterventionScreen() {
                       placeholder="Nom (ex: RDC, Velux…)"
                       value={newServiceLabel}
                       onChangeText={setNewServiceLabel}
-                      style={[{ flex: 2, borderWidth: 1, borderColor: "#BAE6FD", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 14, backgroundColor: "#fff" },
+                      style={[{ flex: 2, borderWidth: 1, borderColor: "#BAE6FD", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 14, backgroundColor: "#fff", color: "#1E293B" },
                         Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
                     />
                     <TextInput
@@ -868,7 +868,7 @@ export default function AddInterventionScreen() {
                       keyboardType="numeric"
                       value={newServicePrice}
                       onChangeText={setNewServicePrice}
-                      style={[{ flex: 1, borderWidth: 1, borderColor: "#BAE6FD", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 14, backgroundColor: "#fff" },
+                      style={[{ flex: 1, borderWidth: 1, borderColor: "#BAE6FD", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 14, backgroundColor: "#fff", color: "#1E293B" },
                         Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
                     />
                     <Pressable
