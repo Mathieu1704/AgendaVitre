@@ -97,6 +97,9 @@ export default function ClientDetailScreen() {
       await api.delete(`/api/clients/${id}`);
     },
     onSuccess: () => {
+      queryClient.setQueryData(["clients"], (old: any[]) =>
+        old ? old.filter((c) => c.id !== id) : []
+      );
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       toast.success("Supprimé", "Client supprimé.");
       router.push("/(app)/clients");
