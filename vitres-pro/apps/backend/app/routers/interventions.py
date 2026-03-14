@@ -90,7 +90,11 @@ def create_intervention(
     total_price = 0
     if intervention.items:
         for item_data in intervention.items:
-            new_item = InterventionItem(label=item_data.label, price=item_data.price)
+            new_item = InterventionItem(
+                label=item_data.label,
+                price=item_data.price,
+                client_service_id=item_data.client_service_id,
+            )
             new_intervention.items.append(new_item)
             total_price += item_data.price
 
@@ -134,7 +138,8 @@ def update_intervention(
                 db.add(InterventionItem(
                     intervention_id=intervention_id,
                     label=item_data["label"],
-                    price=item_data["price"]
+                    price=item_data["price"],
+                    client_service_id=item_data.get("client_service_id"),
                 ))
         elif hasattr(db_intervention, key):
             setattr(db_intervention, key, value)

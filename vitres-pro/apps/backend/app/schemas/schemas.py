@@ -77,9 +77,30 @@ class ClientOutLite(ClientBase):
     class Config:
         from_attributes = True
 
+# --- CLIENT SERVICE (catalogue de prestations par client) ---
+class ClientServiceCreate(BaseModel):
+    label: str
+    price: float
+    position: float = 0
+
+class ClientServiceOut(BaseModel):
+    id: UUID
+    label: str
+    price: float
+    position: float = 0
+    class Config:
+        from_attributes = True
+
+class ClientServiceUpdate(BaseModel):
+    label: Optional[str] = None
+    price: Optional[float] = None
+    position: Optional[float] = None
+
+# --- INTERVENTION ITEMS ---
 class InterventionItemBase(BaseModel):
     label: str  # Ex: "RDC", "Velux"
     price: float # Ex: 35.0
+    client_service_id: Optional[UUID] = None
 
 class InterventionItemCreate(InterventionItemBase):
     pass

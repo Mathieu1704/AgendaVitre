@@ -116,17 +116,33 @@ class Client(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     interventions = relationship("Intervention", back_populates="client")
+    services = relationship("ClientService", back_populates="client", cascade="all, delete-orphan", order_by="ClientService.position")
+
+class ClientService(Base):
+    """Catalogue de services pour un client (liste persistée, coche/décoche par intervention)."""
+    __tablename__ = "client_services"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id", ondelete="CASCADE"), nullable=False)
+    label = Column(String, nullable=False)
+    price = Column(Numeric(10, 2), nullable=False, default=0)
+    position = Column(Float, default=0)
+
+    client = relationship("Client", back_populates="services")
+
 
 class InterventionItem(Base):
     __tablename__ = "intervention_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     intervention_id = Column(UUID(as_uuid=True), ForeignKey("interventions.id"))
-    
+    client_service_id = Column(UUID(as_uuid=True), ForeignKey("client_services.id", ondelete="SET NULL"), nullable=True)
+
     label = Column(String, nullable=False) # Ex: "RDC", "Velux"
     price = Column(Numeric(10, 2), nullable=False, default=0)
-    
+
     intervention = relationship("Intervention", back_populates="items")
+    client_service = relationship("ClientService")
 
 class Intervention(Base):
     __tablename__ = "interventions"

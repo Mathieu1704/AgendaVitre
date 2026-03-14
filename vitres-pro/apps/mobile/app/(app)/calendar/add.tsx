@@ -42,7 +42,8 @@ import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useAuth } from "../../../src/hooks/useAuth";
 
 type Client = { id: string; name: string | null; address: string | null; phone?: string | null };
-type Item = { label: string; price: string };
+type Item = { label: string; price: string; client_service_id?: string | null };
+type ClientService = { id: string; label: string; price: number; position: number };
 type IntervType = "intervention" | "devis" | "tournee" | "note";
 
 const TYPE_CONFIG: Record<IntervType, { label: string; color: string; bg: string }> = {
@@ -188,7 +189,13 @@ export default function AddInterventionScreen() {
   const [title, setTitle] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
-  const [items, setItems] = useState<Item[]>([{ label: "", price: "" }]);
+  // Services cochables par client
+  const [checkedServiceIds, setCheckedServiceIds] = useState<Set<string>>(new Set());
+  const [servicePriceOverrides, setServicePriceOverrides] = useState<Record<string, string>>({});
+  const [adHocItems, setAdHocItems] = useState<Item[]>([]);
+  const [isAddingService, setIsAddingService] = useState(false);
+  const [newServiceLabel, setNewServiceLabel] = useState("");
+  const [newServicePrice, setNewServicePrice] = useState("");
   const [description, setDescription] = useState("");
   const [isInvoice, setIsInvoice] = useState(false);
 
@@ -226,6 +233,13 @@ export default function AddInterventionScreen() {
   const [newClientEmail, setNewClientEmail] = useState("");
   const [newClientNotes, setNewClientNotes] = useState("");
   const [ncFocused, setNcFocused] = useState<string | null>(null);
+
+  // Catalogue de services du client sélectionné
+  const { data: clientServices = [], refetch: refetchClientServices } = useQuery<ClientService[]>({
+    queryKey: ["client-services", selectedClient?.id],
+    queryFn: async () => (await api.get(`/api/clients/${selectedClient!.id}/services`)).data,
+    enabled: !!selectedClient?.id,
+  });
 
   const createClientMutation = useMutation({
     mutationFn: async (data: any) => (await api.post("/api/clients", data)).data as Client,
@@ -273,8 +287,15 @@ export default function AddInterventionScreen() {
       else if (interventionData.client) setSelectedClient(interventionData.client);
       if (interventionData.employees)
         setSelectedEmployeeIds(interventionData.employees.map((e: any) => e.id));
-      if (interventionData.items && interventionData.items.length > 0)
-        setItems(interventionData.items.map((i: any) => ({ label: i.label, price: i.price.toString() })));
+      if (interventionData.items && interventionData.items.length > 0) {
+        const withId = interventionData.items.filter((i: any) => i.client_service_id);
+        const withoutId = interventionData.items.filter((i: any) => !i.client_service_id);
+        setCheckedServiceIds(new Set(withId.map((i: any) => i.client_service_id as string)));
+        const overrides: Record<string, string> = {};
+        withId.forEach((i: any) => { overrides[i.client_service_id] = i.price.toString(); });
+        setServicePriceOverrides(overrides);
+        setAdHocItems(withoutId.map((i: any) => ({ label: i.label, price: i.price.toString() })));
+      }
     }
   }, [isEditMode, interventionData, clients]);
 
@@ -300,8 +321,15 @@ export default function AddInterventionScreen() {
 
       if (repriseSource.employees)
         setSelectedEmployeeIds(repriseSource.employees.map((e: any) => e.id));
-      if (repriseSource.items && repriseSource.items.length > 0)
-        setItems(repriseSource.items.map((i: any) => ({ label: i.label, price: i.price.toString() })));
+      if (repriseSource.items && repriseSource.items.length > 0) {
+        const withId = repriseSource.items.filter((i: any) => i.client_service_id);
+        const withoutId = repriseSource.items.filter((i: any) => !i.client_service_id);
+        setCheckedServiceIds(new Set(withId.map((i: any) => i.client_service_id as string)));
+        const overrides: Record<string, string> = {};
+        withId.forEach((i: any) => { overrides[i.client_service_id] = i.price.toString(); });
+        setServicePriceOverrides(overrides);
+        setAdHocItems(withoutId.map((i: any) => ({ label: i.label, price: i.price.toString() })));
+      }
     }
   }, [isRepriseMode, repriseSource, clients]);
 
@@ -311,7 +339,7 @@ export default function AddInterventionScreen() {
       setTitle(""); setDescription(""); setIsInvoice(false);
       setIntervType("intervention"); setZone("hainaut");
       setSelectedClient(null); setSelectedEmployeeIds([]);
-      setItems([{ label: "", price: "" }]);
+      setCheckedServiceIds(new Set()); setServicePriceOverrides({}); setAdHocItems([]);
       setStartDateStr(defaultStart); setDurationHours("");
       setRecurrence(DEFAULT_RECURRENCE);
       setNoRepriseMode(false); setNoRepriseNote("");
@@ -320,17 +348,35 @@ export default function AddInterventionScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, isRepriseMode]));
 
+  // Items finaux = services cochés + items ad-hoc
+  const allItems = useMemo(() => {
+    const serviceItems = clientServices
+      .filter((s) => checkedServiceIds.has(s.id))
+      .map((s) => ({
+        label: s.label,
+        price: servicePriceOverrides[s.id] ?? s.price.toString(),
+        client_service_id: s.id,
+      }));
+    return [...serviceItems, ...adHocItems];
+  }, [clientServices, checkedServiceIds, servicePriceOverrides, adHocItems]);
+
   const totalPrice = useMemo(
-    () => items.reduce((acc, item) => acc + (parseFloat(item.price) || 0), 0),
-    [items],
+    () => allItems.reduce((acc, item) => acc + (parseFloat(item.price as string) || 0), 0),
+    [allItems],
   );
 
-  const addItem = () => setItems([...items, { label: "", price: "" }]);
-  const removeItem = (index: number) => setItems(items.filter((_, i) => i !== index));
-  const updateItem = (index: number, field: keyof Item, value: string) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    setItems(newItems);
+  const toggleService = (id: string) => {
+    setCheckedServiceIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const addAdHocItem = () => setAdHocItems((prev) => [...prev, { label: "", price: "" }]);
+  const removeAdHocItem = (index: number) => setAdHocItems((prev) => prev.filter((_, i) => i !== index));
+  const updateAdHocItem = (index: number, field: "label" | "price", value: string) => {
+    setAdHocItems((prev) => { const n = [...prev]; n[index] = { ...n[index], [field]: value }; return n; });
   };
 
   const clientItems = useMemo(
@@ -354,7 +400,7 @@ export default function AddInterventionScreen() {
 
     setIsSubmitting(true);
     try {
-      const cleanItems = items.filter((i) => i.label.trim() !== "");
+      const cleanItems = allItems.filter((i) => i.label.trim() !== "");
       const basePayload = {
         type: intervType,
         title,
@@ -364,7 +410,11 @@ export default function AddInterventionScreen() {
         employee_ids: selectedEmployeeIds,
         price_estimated: totalPrice,
         is_invoice: isInvoice,
-        items: cleanItems.map((i) => ({ label: i.label, price: Number(i.price) || 0 })),
+        items: cleanItems.map((i) => ({
+          label: i.label,
+          price: Number(i.price) || 0,
+          client_service_id: i.client_service_id ?? null,
+        })),
       };
 
       if (isEditMode) {
@@ -791,26 +841,143 @@ export default function AddInterventionScreen() {
               <View className="mt-2 pt-4 border-t border-border dark:border-slate-800">
                 <View className="flex-row justify-between items-center mb-3">
                   <Text className="text-sm font-semibold text-foreground dark:text-white">Prestations</Text>
-                  <Pressable onPress={addItem} className="flex-row items-center bg-primary/10 px-3 py-1.5 rounded-full">
-                    <PlusCircle size={16} color="#3B82F6" />
-                    <Text className="text-primary font-bold ml-1.5 text-xs">Ajouter</Text>
-                  </Pressable>
+                  {!isAddingService && (
+                    <Pressable
+                      onPress={() => { setIsAddingService(true); setNewServiceLabel(""); setNewServicePrice(""); }}
+                      className="flex-row items-center bg-primary/10 px-3 py-1.5 rounded-full"
+                    >
+                      <PlusCircle size={16} color="#3B82F6" />
+                      <Text className="text-primary font-bold ml-1.5 text-xs">Ajouter</Text>
+                    </Pressable>
+                  )}
                 </View>
-                {items.map((item, index) => (
-                  <View key={index} className="flex-row gap-2 items-center mb-2">
+
+                {/* Formulaire inline d'ajout */}
+                {isAddingService && (
+                  <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginBottom: 10, backgroundColor: "#F0F9FF", borderRadius: 10, padding: 8 }}>
+                    <TextInput
+                      autoFocus
+                      placeholder="Nom (ex: RDC, Velux…)"
+                      value={newServiceLabel}
+                      onChangeText={setNewServiceLabel}
+                      style={[{ flex: 2, borderWidth: 1, borderColor: "#BAE6FD", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 14, backgroundColor: "#fff" },
+                        Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                    />
+                    <TextInput
+                      placeholder="Prix"
+                      keyboardType="numeric"
+                      value={newServicePrice}
+                      onChangeText={setNewServicePrice}
+                      style={[{ flex: 1, borderWidth: 1, borderColor: "#BAE6FD", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 14, backgroundColor: "#fff" },
+                        Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                    />
+                    <Pressable
+                      onPress={async () => {
+                        if (!newServiceLabel.trim()) { toast.error("Nom requis", ""); return; }
+                        if (selectedClient?.id) {
+                          try {
+                            const newSvc: ClientService = (await api.post(`/api/clients/${selectedClient.id}/services`, {
+                              label: newServiceLabel.trim(), price: Number(newServicePrice) || 0, position: clientServices.length,
+                            })).data;
+                            await refetchClientServices();
+                            setCheckedServiceIds((prev) => new Set([...prev, newSvc.id]));
+                          } catch { toast.error("Erreur", "Impossible d'ajouter"); }
+                        } else {
+                          addAdHocItem();
+                          updateAdHocItem(adHocItems.length, "label", newServiceLabel.trim());
+                          updateAdHocItem(adHocItems.length, "price", newServicePrice);
+                        }
+                        setIsAddingService(false);
+                      }}
+                      style={{ backgroundColor: "#3B82F6", borderRadius: 8, padding: 8 }}
+                    >
+                      <Check size={18} color="#fff" />
+                    </Pressable>
+                    <Pressable onPress={() => setIsAddingService(false)} style={{ padding: 6 }}>
+                      <X size={18} color="#94A3B8" />
+                    </Pressable>
+                  </View>
+                )}
+
+                {/* Services du client = cases à cocher */}
+                {clientServices.map((svc) => {
+                  const checked = checkedServiceIds.has(svc.id);
+                  const priceVal = servicePriceOverrides[svc.id] ?? svc.price.toString();
+                  return (
+                    <View key={svc.id} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <Pressable
+                        onPress={() => toggleService(svc.id)}
+                        style={{
+                          width: 22, height: 22, borderRadius: 6, borderWidth: 2,
+                          borderColor: checked ? "#3B82F6" : "#CBD5E1",
+                          backgroundColor: checked ? "#3B82F6" : "transparent",
+                          alignItems: "center", justifyContent: "center", flexShrink: 0,
+                        }}
+                      >
+                        {checked && <Check size={13} color="#fff" />}
+                      </Pressable>
+                      <View style={{ flex: 2 }}>
+                        <TextInput
+                          value={svc.label}
+                          placeholder="Nom du service"
+                          onChangeText={async (t) => {
+                            try { await api.patch(`/api/clients/${selectedClient!.id}/services/${svc.id}`, { label: t }); await refetchClientServices(); }
+                            catch { /* silently ignore */ }
+                          }}
+                          style={[{
+                            borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8,
+                            paddingHorizontal: 10, paddingVertical: 7, fontSize: 14,
+                            color: checked ? "#1E293B" : "#94A3B8",
+                          }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <TextInput
+                          value={checked ? priceVal : svc.price.toString()}
+                          placeholder="Prix"
+                          keyboardType="numeric"
+                          editable={checked}
+                          onChangeText={(t) => setServicePriceOverrides((prev) => ({ ...prev, [svc.id]: t }))}
+                          style={[{
+                            borderWidth: 1, borderColor: checked ? "#E2E8F0" : "#F1F5F9",
+                            borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
+                            fontSize: 14, color: checked ? "#1E293B" : "#94A3B8",
+                            backgroundColor: checked ? undefined : "#F8FAFC",
+                          }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                        />
+                      </View>
+                      <Pressable
+                        onPress={async () => {
+                          try {
+                            await api.delete(`/api/clients/${selectedClient!.id}/services/${svc.id}`);
+                            setCheckedServiceIds((prev) => { const n = new Set(prev); n.delete(svc.id); return n; });
+                            setServicePriceOverrides((prev) => { const n = { ...prev }; delete n[svc.id]; return n; });
+                            await refetchClientServices();
+                          } catch { toast.error("Erreur", "Impossible de supprimer"); }
+                        }}
+                        style={{ padding: 6 }}
+                      >
+                        <Trash2 size={18} color="#EF4444" />
+                      </Pressable>
+                    </View>
+                  );
+                })}
+
+                {/* Items ad-hoc (sans client ou ajout ponctuel) */}
+                {adHocItems.map((item, index) => (
+                  <View key={`adhoc-${index}`} className="flex-row gap-2 items-center mb-2">
                     <View className="flex-[2]">
-                      <Input placeholder="Ex: RDC, Velux..." value={item.label} onChangeText={(t) => updateItem(index, "label", t)} />
+                      <Input placeholder="Ex: RDC, Velux..." value={item.label} onChangeText={(t) => updateAdHocItem(index, "label", t)} />
                     </View>
                     <View className="flex-1">
-                      <Input placeholder="Prix" keyboardType="numeric" value={item.price} onChangeText={(t) => updateItem(index, "price", t)} />
+                      <Input placeholder="Prix" keyboardType="numeric" value={item.price} onChangeText={(t) => updateAdHocItem(index, "price", t)} />
                     </View>
-                    {items.length > 1 && (
-                      <Pressable onPress={() => removeItem(index)} className="p-2">
-                        <Trash2 size={20} color="#EF4444" />
-                      </Pressable>
-                    )}
+                    <Pressable onPress={() => removeAdHocItem(index)} className="p-2">
+                      <Trash2 size={20} color="#EF4444" />
+                    </Pressable>
                   </View>
                 ))}
+
                 <View className="flex-row justify-between items-center mt-2">
                   <Text className="font-bold text-lg text-foreground dark:text-white">Total Estimé</Text>
                   <Text className="font-extrabold text-2xl text-primary">{totalPrice.toFixed(2)} €</Text>
