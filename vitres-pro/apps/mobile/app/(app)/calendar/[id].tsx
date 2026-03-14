@@ -159,7 +159,18 @@ export default function InterventionDetailScreen() {
 
   const startTime = new Date(intervention.start_time);
 
-  const intervType: string = intervention.type ?? "intervention";
+  const inferTypeFromTitle = (title: string, hasAddr: boolean): string => {
+    const t = (title ?? "").toLowerCase();
+    if (t.includes("devis")) return "devis";
+    if (t.includes("tournée") || t.includes("tournee")) return "tournee";
+    if (!hasAddr) return "note";
+    return "intervention";
+  };
+  const hasAddress = !!(intervention.client?.address);
+  const intervType: string =
+    intervention.type && intervention.type !== "intervention"
+      ? intervention.type
+      : inferTypeFromTitle(intervention.title, hasAddress);
   const hasClient = ["intervention", "devis"].includes(intervType);
   const TYPE_BADGE: Record<string, { label: string; color: string; bg: string }> = {
     intervention: { label: "Intervention", color: "#3B82F6", bg: "#EFF6FF" },
@@ -216,7 +227,7 @@ export default function InterventionDetailScreen() {
             {typeBadge.label.toUpperCase()}
           </Text>
         </View>
-        <StatusBadge status={intervention.status} />
+        <StatusBadge status={intervention.status} className="self-center" />
       </View>
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
@@ -227,8 +238,8 @@ export default function InterventionDetailScreen() {
               {intervention.title}
             </Text>
 
-            {/* ✅ LOGIQUE FACTURATION vs ENCAISSEMENT — uniquement pour intervention/devis avec client */}
-            {hasClient && !intervention.is_invoice && (
+            {/* Alerte facturation — uniquement pour les interventions */}
+            {intervType === "intervention" && !intervention.is_invoice && (
               <View className="bg-red-100 dark:bg-red-900/20 p-4 rounded-2xl mb-6 border border-red-200 dark:border-red-900/50 flex-row gap-4 items-center">
                 <View className="bg-red-500 h-10 w-10 rounded-full items-center justify-center">
                   <Wallet size={20} color="white" />
@@ -500,55 +511,57 @@ export default function InterventionDetailScreen() {
             </Animated.View>
           )}
 
+          {(intervType === "intervention" || !!intervention.description) && (
           <Animated.View
             entering={FadeInDown.delay(450)}
             className="w-full mt-4"
           >
             <Card className="rounded-3xl">
               <CardContent className="p-5">
-                <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
-                  Détail de la prestation
-                </Text>
-
-                {/* LISTE DES ITEMS */}
-                {intervention.items && intervention.items.length > 0 ? (
-                  <View className="gap-3 mb-4">
-                    {intervention.items.map((item: any, idx: number) => (
-                      <View
-                        key={idx}
-                        className="flex-row justify-between items-center pb-2 border-b border-border dark:border-slate-800 last:border-0"
-                      >
-                        <Text className="text-foreground dark:text-white font-medium flex-1 mr-4">
-                          {item.label}
+                {/* Prix — uniquement pour les interventions */}
+                {intervType === "intervention" && (
+                  <>
+                    <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
+                      Détail de la prestation
+                    </Text>
+                    {intervention.items && intervention.items.length > 0 ? (
+                      <View className="gap-3 mb-4">
+                        {intervention.items.map((item: any, idx: number) => (
+                          <View
+                            key={idx}
+                            className="flex-row justify-between items-center pb-2 border-b border-border dark:border-slate-800 last:border-0"
+                          >
+                            <Text className="text-foreground dark:text-white font-medium flex-1 mr-4">
+                              {item.label}
+                            </Text>
+                            <Text className="text-foreground dark:text-white font-bold">
+                              {item.price} €
+                            </Text>
+                          </View>
+                        ))}
+                        <View className="flex-row justify-between items-center pt-2 mt-1">
+                          <Text className="text-lg font-bold text-foreground dark:text-white">
+                            Total
+                          </Text>
+                          <Text className="text-xl font-extrabold text-primary">
+                            {intervention.price_estimated} €
+                          </Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <View className="flex-row justify-between items-center mb-4">
+                        <Text className="text-muted-foreground">
+                          Prix global estimé
                         </Text>
-                        <Text className="text-foreground dark:text-white font-bold">
-                          {item.price} €
+                        <Text className="text-xl font-extrabold text-primary">
+                          {intervention.price_estimated} €
                         </Text>
                       </View>
-                    ))}
-                    {/* TOTAL */}
-                    <View className="flex-row justify-between items-center pt-2 mt-1">
-                      <Text className="text-lg font-bold text-foreground dark:text-white">
-                        Total
-                      </Text>
-                      <Text className="text-xl font-extrabold text-primary">
-                        {intervention.price_estimated} €
-                      </Text>
-                    </View>
-                  </View>
-                ) : (
-                  // Fallback si pas d'items (anciennes données)
-                  <View className="flex-row justify-between items-center mb-4">
-                    <Text className="text-muted-foreground">
-                      Prix global estimé
-                    </Text>
-                    <Text className="text-xl font-extrabold text-primary">
-                      {intervention.price_estimated} €
-                    </Text>
-                  </View>
+                    )}
+                  </>
                 )}
 
-                {/* DESCRIPTION / NOTES */}
+                {/* Notes — toujours affichées */}
                 {intervention.description && (
                   <View className="bg-muted/50 dark:bg-slate-900/50 p-4 rounded-xl mt-2">
                     <Text className="text-xs font-bold text-muted-foreground mb-1">
@@ -562,6 +575,7 @@ export default function InterventionDetailScreen() {
               </CardContent>
             </Card>
           </Animated.View>
+          )}
         </View>
       </ScrollView>
 

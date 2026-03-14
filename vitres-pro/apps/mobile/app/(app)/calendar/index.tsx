@@ -405,13 +405,13 @@ export default function CalendarScreen() {
       ? new Date(item.end_time)
       : new Date(startTime.getTime() + 60 * 60 * 1000);
 
-    const TYPE_STYLE: Record<string, { bg: string; text: string }> = {
-      intervention: { bg: "#EFF6FF", text: "#3B82F6" },
-      devis:        { bg: "#F5F3FF", text: "#8B5CF6" },
-      tournee:      { bg: "#FFF7ED", text: "#F97316" },
-      note:         { bg: "#F8FAFC", text: "#64748B" },
+    const TYPE_CONFIG: Record<string, { bg: string; text: string; label: string }> = {
+      intervention: { bg: "#EFF6FF", text: "#3B82F6", label: "Intervention" },
+      devis:        { bg: "#F5F3FF", text: "#8B5CF6", label: "Devis" },
+      tournee:      { bg: "#FFF7ED", text: "#F97316", label: "Tournée" },
+      note:         { bg: "#F8FAFC", text: "#64748B", label: "Note" },
     };
-    const typeStyle = TYPE_STYLE[item.type ?? "intervention"] ?? TYPE_STYLE["intervention"];
+    const typeConfig = TYPE_CONFIG[item.type ?? "intervention"] ?? TYPE_CONFIG["intervention"];
     const hasClient = ["intervention", "devis"].includes(item.type ?? "intervention");
 
     return (
@@ -424,10 +424,10 @@ export default function CalendarScreen() {
           {/* COLONNE GAUCHE : HEURE */}
           <View
             className={`items-center justify-center ${compact ? "w-11" : "w-16"} py-2.5`}
-            style={{ borderRadius: 16, backgroundColor: typeStyle.bg }}
+            style={{ borderRadius: 16, backgroundColor: typeConfig.bg }}
           >
             <Text
-              style={{ color: typeStyle.text }}
+              style={{ color: typeConfig.text }}
               className={`font-bold ${compact ? "text-xs" : "text-base"}`}
             >
               {startTime.toLocaleTimeString("fr-FR", {
@@ -443,6 +443,11 @@ export default function CalendarScreen() {
                   minute: "2-digit",
                   timeZone: "Europe/Brussels",
                 })}
+              </Text>
+            )}
+            {!compact && item.type && item.type !== "intervention" && (
+              <Text style={{ color: typeConfig.text }} className="text-[8px] font-bold uppercase mt-0.5 tracking-wide">
+                {typeConfig.label}
               </Text>
             )}
           </View>
@@ -726,9 +731,12 @@ export default function CalendarScreen() {
               const STATUS_ORDER: Record<string, number> = { in_progress: 0, planned: 1, done: 2 };
               const STATUS_LABELS: Record<string, string> = { in_progress: "En cours", planned: "Planifié", done: "Terminé" };
               const STATUS_COLORS: Record<string, string> = { in_progress: "#F97316", planned: "#3B82F6", done: "#22C55E" };
-              const sorted = [...dayList].sort((a, b) =>
-                (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)
-              );
+              const TYPE_ORDER: Record<string, number> = { intervention: 0, devis: 1, tournee: 2, note: 3 };
+              const sorted = [...dayList].sort((a, b) => {
+                const statusDiff = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
+                if (statusDiff !== 0) return statusDiff;
+                return (TYPE_ORDER[a.type ?? "intervention"] ?? 9) - (TYPE_ORDER[b.type ?? "intervention"] ?? 9);
+              });
               const groups: { status: string; items: typeof sorted }[] = [];
               for (const item of sorted) {
                 const last = groups[groups.length - 1];
@@ -841,7 +849,10 @@ export default function CalendarScreen() {
                 {rawList.map((item) => (
                   <RawEventCard key={item.id} item={item} compact date={iso} />
                 ))}
-                {list.map((item) => (
+                {[...list].sort((a, b) => {
+                  const T: Record<string,number> = { intervention:0, devis:1, tournee:2, note:3 };
+                  return (T[a.type??"intervention"]??9)-(T[b.type??"intervention"]??9);
+                }).map((item) => (
                   <InterventionCard key={item.id} item={item} compact />
                 ))}
                 {list.length === 0 && rawList.length === 0 && (
@@ -918,7 +929,10 @@ export default function CalendarScreen() {
                 </Text>
               </View>
             ) : null}
-            {list.map((item) => (
+            {[...list].sort((a, b) => {
+              const T: Record<string,number> = { intervention:0, devis:1, tournee:2, note:3 };
+              return (T[a.type??"intervention"]??9)-(T[b.type??"intervention"]??9);
+            }).map((item) => (
               <InterventionCard key={item.id} item={item} />
             ))}
           </View>
