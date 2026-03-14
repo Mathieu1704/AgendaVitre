@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   ScrollView,
@@ -7,9 +7,10 @@ import {
   Linking,
   ActivityIndicator,
   Platform,
+  TextInput,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ChevronLeft,
@@ -18,20 +19,44 @@ import {
   MapPin,
   FileText,
   ExternalLink,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  Check,
+  X,
 } from "lucide-react-native";
 
 import { api } from "../../../src/lib/api";
 import { Avatar } from "../../../src/ui/components/Avatar";
 import { Card, CardContent } from "../../../src/ui/components/Card";
 import { Button } from "../../../src/ui/components/Button";
+import { Input } from "../../../src/ui/components/Input";
+import { Dialog } from "../../../src/ui/components/Dialog";
+import { toast } from "../../../src/ui/toast";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
+import { useAuth } from "../../../src/hooks/useAuth";
 
 export default function ClientDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { isDark } = useTheme();
-  const insets = useSafeAreaInsets(); // ✅ Gestion Notch
+  const { isAdmin } = useAuth();
+  const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
+  const queryClient = useQueryClient();
+
+  const [menuOpen, setMenuOpen]           = useState(false);
+  const [editing, setEditing]             = useState(false);
+  const [deleteDialog, setDeleteDialog]   = useState(false);
+
+  // Form state
+  const [name, setName]       = useState("");
+  const [street, setStreet]   = useState("");
+  const [zipCode, setZipCode] = useState("");
+  const [city, setCity]       = useState("");
+  const [phone, setPhone]     = useState("");
+  const [email, setEmail]     = useState("");
+  const [notes, setNotes]     = useState("");
 
   const { data: client, isLoading } = useQuery({
     queryKey: ["client", id],
@@ -41,29 +66,68 @@ export default function ClientDetailScreen() {
     },
   });
 
-  const handleCall = () => {
-    if (client?.phone) {
-      const cleanedPhone = client.phone.replace(/\s/g, "");
-      Linking.openURL(`tel:${cleanedPhone}`);
-    }
+  const startEdit = () => {
+    setName(client?.name || "");
+    setStreet(client?.street || "");
+    setZipCode(client?.zip_code || "");
+    setCity(client?.city || "");
+    setPhone(client?.phone || "");
+    setEmail(client?.email || "");
+    setNotes(client?.notes || "");
+    setMenuOpen(false);
+    setEditing(true);
   };
 
-  const handleEmail = () => {
-    if (client?.email) {
-      Linking.openURL(`mailto:${client.email.trim()}`);
-    }
+  const updateMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await api.patch(`/api/clients/${id}`, payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["client", id] });
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      toast.success("Succès", "Client mis à jour.");
+      setEditing(false);
+    },
+    onError: () => toast.error("Erreur", "Impossible de mettre à jour le client."),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await api.delete(`/api/clients/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      toast.success("Supprimé", "Client supprimé.");
+      router.push("/(app)/clients");
+    },
+    onError: () => toast.error("Erreur", "Impossible de supprimer le client."),
+  });
+
+  const handleSave = () => {
+    const addressStr = [street, zipCode, city].filter(Boolean).join(", ");
+    updateMutation.mutate({
+      name:     name || null,
+      street:   street || null,
+      zip_code: zipCode || null,
+      city:     city || null,
+      address:  addressStr || null,
+      phone:    phone || null,
+      email:    email || null,
+      notes:    notes || null,
+    });
   };
 
-  const handleMaps = () => {
-    if (client?.address) {
-      const query = encodeURIComponent(client.address);
-      const url = Platform.select({
-        ios: `maps:0,0?q=${query}`,
-        android: `geo:0,0?q=${query}`,
-        web: `https://www.google.com/maps/search/?api=1&query=${query}`,
-      });
-      Linking.openURL(url!);
-    }
+  const handleCall  = () => client?.phone && Linking.openURL(`tel:${client.phone.replace(/\s/g, "")}`);
+  const handleEmail = () => client?.email && Linking.openURL(`mailto:${client.email.trim()}`);
+  const handleMaps  = () => {
+    if (!client?.address) return;
+    const q = encodeURIComponent(client.address);
+    Linking.openURL(Platform.select({
+      ios:     `maps:0,0?q=${q}`,
+      android: `geo:0,0?q=${q}`,
+      web:     `https://www.google.com/maps/search/?api=1&query=${q}`,
+    })!);
   };
 
   if (isLoading) {
@@ -83,114 +147,195 @@ export default function ClientDetailScreen() {
     >
       {/* Header */}
       <View className="flex-row items-center px-4 py-2 border-b border-border dark:border-slate-800">
-        <Button
-          variant="ghost"
-          size="icon"
-          onPress={() => router.push("/(app)/clients")}
-        >
+        <Button variant="ghost" size="icon" onPress={() => router.push("/(app)/clients")}>
           <ChevronLeft size={24} color={isDark ? "white" : "black"} />
         </Button>
-        <Text className="ml-2 text-lg font-bold text-foreground dark:text-white">
-          Fiche Client
+        <Text className="ml-2 text-lg font-bold text-foreground dark:text-white flex-1">
+          {editing ? "Modifier le client" : "Fiche Client"}
         </Text>
+        {isAdmin && !editing && (
+          <Pressable
+            onPress={() => setMenuOpen(true)}
+            className="p-2 rounded-full"
+          >
+            <MoreVertical size={22} color={isDark ? "#94A3B8" : "#64748B"} />
+          </Pressable>
+        )}
+        {editing && (
+          <Pressable onPress={() => setEditing(false)} className="p-2">
+            <X size={22} color={isDark ? "#94A3B8" : "#64748B"} />
+          </Pressable>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20 }}>
-        {/* Profil Header */}
-        <View className="items-center mb-8 pt-4">
-          <Avatar name={client.name || client.address || "?"} size="lg" className="h-24 w-24 mb-4" />
-          <Text className="text-2xl font-bold text-foreground dark:text-white text-center">
-            {client.name || "Client anonyme"}
-          </Text>
-          {client.address && (
-            <Text className="text-muted-foreground text-center mt-1 px-8">
-              {client.address}
-            </Text>
-          )}
-        </View>
+        {editing ? (
+          /* ── Mode édition ── */
+          <>
+            <Card className="mb-4 rounded-[32px] overflow-hidden">
+              <CardContent className="px-6 py-6 gap-4">
+                <Input label="Nom / Entreprise" value={name} onChangeText={setName} placeholder="Jean Dupont" />
+                <Input label="Rue et numéro"    value={street} onChangeText={setStreet} placeholder="10 Rue de la Paix" />
+                <View className="flex-row gap-3">
+                  <View style={{ flex: 1 }}>
+                    <Input label="Code postal" value={zipCode} onChangeText={setZipCode} keyboardType="numeric" placeholder="7000" />
+                  </View>
+                  <View style={{ flex: 2 }}>
+                    <Input label="Ville" value={city} onChangeText={setCity} placeholder="Mons" />
+                  </View>
+                </View>
+                <Input label="Téléphone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="0487 12 34 56" />
+                <Input label="Email"     value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" placeholder="client@email.com" />
+                <Input label="Notes"     value={notes} onChangeText={setNotes} multiline numberOfLines={3} className="h-24 py-2" placeholder="Code porte, préférences..." />
+              </CardContent>
+            </Card>
 
-        {/* Actions Rapides */}
-        <View className="flex-row justify-center gap-4 mb-8">
-          <Pressable
-            onPress={handleCall}
-            disabled={!client.phone}
-            className={`items-center justify-center h-14 w-14 rounded-full ${
-              client.phone ? "bg-green-500/10" : "bg-muted opacity-50"
-            }`}
-          >
-            <Phone size={24} color={client.phone ? "#22C55E" : "#94A3B8"} />
-          </Pressable>
-          <Pressable
-            onPress={handleEmail}
-            disabled={!client.email}
-            className={`items-center justify-center h-14 w-14 rounded-full ${
-              client.email ? "bg-blue-500/10" : "bg-muted opacity-50"
-            }`}
-          >
-            <Mail size={24} color={client.email ? "#3B82F6" : "#94A3B8"} />
-          </Pressable>
-          <Pressable
-            onPress={handleMaps}
-            className="items-center justify-center h-14 w-14 rounded-full bg-orange-500/10"
-          >
-            <MapPin size={24} color="#F97316" />
-          </Pressable>
-        </View>
-
-        {/* Informations */}
-        {/* ✅ Card arrondie */}
-        <Card className="mb-6 rounded-[32px] overflow-hidden">
-          <CardContent className="p-5 gap-6">
-            <View className="flex-row items-start">
-              <Phone size={18} color="#94A3B8" className="mt-1 mr-3" />
-              <View>
-                <Text className="text-xs text-muted-foreground uppercase font-bold">
-                  Téléphone
+            <Button
+              onPress={handleSave}
+              loading={updateMutation.isPending}
+              className="h-14 rounded-[28px]"
+            >
+              <Check size={20} color="white" />
+              <Text className="ml-2 text-white font-bold text-base">Enregistrer</Text>
+            </Button>
+          </>
+        ) : (
+          /* ── Mode lecture ── */
+          <>
+            {/* Profil */}
+            <View className="items-center mb-8 pt-4">
+              <Avatar name={client.name || client.address || "?"} size="lg" className="h-24 w-24 mb-4" />
+              <Text className="text-2xl font-bold text-foreground dark:text-white text-center">
+                {client.name || "Client anonyme"}
+              </Text>
+              {client.address && (
+                <Text className="text-muted-foreground text-center mt-1 px-8">
+                  {client.address}
                 </Text>
-                <Text className="text-base text-foreground dark:text-white mt-1">
-                  {client.phone || "Non renseigné"}
-                </Text>
-              </View>
+              )}
             </View>
 
-            <View className="flex-row items-start">
-              <Mail size={18} color="#94A3B8" className="mt-1 mr-3" />
-              <View>
-                <Text className="text-xs text-muted-foreground uppercase font-bold">
-                  Email
-                </Text>
-                <Text className="text-base text-foreground dark:text-white mt-1">
-                  {client.email || "Non renseigné"}
-                </Text>
-              </View>
+            {/* Actions rapides */}
+            <View className="flex-row justify-center gap-4 mb-8">
+              <Pressable
+                onPress={handleCall}
+                disabled={!client.phone}
+                className={`items-center justify-center h-14 w-14 rounded-full ${client.phone ? "bg-green-500/10" : "bg-muted opacity-50"}`}
+              >
+                <Phone size={24} color={client.phone ? "#22C55E" : "#94A3B8"} />
+              </Pressable>
+              <Pressable
+                onPress={handleEmail}
+                disabled={!client.email}
+                className={`items-center justify-center h-14 w-14 rounded-full ${client.email ? "bg-blue-500/10" : "bg-muted opacity-50"}`}
+              >
+                <Mail size={24} color={client.email ? "#3B82F6" : "#94A3B8"} />
+              </Pressable>
+              <Pressable
+                onPress={handleMaps}
+                className="items-center justify-center h-14 w-14 rounded-full bg-orange-500/10"
+              >
+                <MapPin size={24} color="#F97316" />
+              </Pressable>
             </View>
 
-            <View className="flex-row items-start">
-              <FileText size={18} color="#94A3B8" className="mt-1 mr-3" />
-              <View className="flex-1">
-                <Text className="text-xs text-muted-foreground uppercase font-bold">
-                  Notes
-                </Text>
-                <Text className="text-base text-foreground dark:text-white mt-1 leading-relaxed">
-                  {client.notes || "Aucune note particulière."}
-                </Text>
-              </View>
-            </View>
-          </CardContent>
-        </Card>
+            {/* Infos */}
+            <Card className="mb-6 rounded-[32px] overflow-hidden">
+              <CardContent className="p-5 gap-6">
+                <View className="flex-row items-start">
+                  <Phone size={18} color="#94A3B8" className="mt-1 mr-3" />
+                  <View>
+                    <Text className="text-xs text-muted-foreground uppercase font-bold">Téléphone</Text>
+                    <Text className="text-base text-foreground dark:text-white mt-1">{client.phone || "Non renseigné"}</Text>
+                  </View>
+                </View>
+                <View className="flex-row items-start">
+                  <Mail size={18} color="#94A3B8" className="mt-1 mr-3" />
+                  <View>
+                    <Text className="text-xs text-muted-foreground uppercase font-bold">Email</Text>
+                    <Text className="text-base text-foreground dark:text-white mt-1">{client.email || "Non renseigné"}</Text>
+                  </View>
+                </View>
+                <View className="flex-row items-start">
+                  <FileText size={18} color="#94A3B8" className="mt-1 mr-3" />
+                  <View className="flex-1">
+                    <Text className="text-xs text-muted-foreground uppercase font-bold">Notes</Text>
+                    <Text className="text-base text-foreground dark:text-white mt-1 leading-relaxed">{client.notes || "Aucune note particulière."}</Text>
+                  </View>
+                </View>
+              </CardContent>
+            </Card>
 
-        {/* Bouton Historique */}
-        <Button
-          variant="outline"
-          onPress={() => alert("Historique bientôt disponible")}
-          className="w-full h-12 rounded-[24px]"
-        >
-          <ExternalLink size={18} color={isDark ? "white" : "black"} />
-          <Text className="ml-2 font-bold text-foreground dark:text-white">
-            Voir l'historique des interventions
-          </Text>
-        </Button>
+            <Button
+              variant="outline"
+              onPress={() => alert("Historique bientôt disponible")}
+              className="w-full h-12 rounded-[24px]"
+            >
+              <ExternalLink size={18} color={isDark ? "white" : "black"} />
+              <Text className="ml-2 font-bold text-foreground dark:text-white">
+                Voir l'historique des interventions
+              </Text>
+            </Button>
+          </>
+        )}
       </ScrollView>
+
+      {/* Menu contextuel (admin) */}
+      {menuOpen && (
+        <Dialog open onClose={() => setMenuOpen(false)}>
+          <View className="p-2">
+            <Text className="text-xs font-bold uppercase text-muted-foreground tracking-wider px-4 pt-3 pb-1">Options</Text>
+            <Pressable
+              onPress={startEdit}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+              className="flex-row items-center gap-3 px-4 py-3 rounded-xl"
+            >
+              <Pencil size={20} color="#3B82F6" />
+              <Text className="text-base text-foreground dark:text-white font-medium">Modifier les informations</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => { setMenuOpen(false); setDeleteDialog(true); }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+              className="flex-row items-center gap-3 px-4 py-3 rounded-xl"
+            >
+              <Trash2 size={20} color="#EF4444" />
+              <Text className="text-base text-red-500 font-medium">Supprimer ce client</Text>
+            </Pressable>
+          </View>
+        </Dialog>
+      )}
+
+      {/* Confirmation suppression */}
+      {deleteDialog && (
+        <Dialog open onClose={() => setDeleteDialog(false)}>
+          <View className="p-5">
+            <Text className="text-lg font-bold text-foreground dark:text-white mb-2">Supprimer ce client ?</Text>
+            <Text className="text-muted-foreground dark:text-slate-400 mb-6">
+              Le client sera supprimé, mais ses interventions resteront dans l'agenda.
+            </Text>
+            <View className="flex-row gap-3">
+              <View style={{ flex: 1 }}>
+                <Pressable
+                  onPress={() => setDeleteDialog(false)}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  className="h-12 rounded-[24px] border border-border dark:border-slate-700 items-center justify-center"
+                >
+                  <Text className="font-bold text-foreground dark:text-white">Annuler</Text>
+                </Pressable>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Pressable
+                  onPress={() => { setDeleteDialog(false); deleteMutation.mutate(); }}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  className="h-12 rounded-[24px] bg-red-500 items-center justify-center"
+                >
+                  <Text className="font-bold text-white">Supprimer</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Dialog>
+      )}
     </View>
   );
 }

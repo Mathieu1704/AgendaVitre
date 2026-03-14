@@ -158,20 +158,43 @@ def import_event(db, ev: dict) -> str:
 
     if is_unknown:
         if has_real_data:
-            client = Client(
-                name=None,
-                street=ev.get("client_street") or None,
-                zip_code=ev.get("client_zip") or None,
-                city=ev.get("client_city") or None,
-                address=address_str,
-                phone=ev.get("client_phone") or None,
-                email=ev.get("client_email") or None,
-                notes=ev.get("client_notes") or None,
-            )
-            db.add(client)
-            db.flush()
+            # Chercher un client existant avec les mêmes infos avant d'en créer un
+            lookup = db.query(Client).filter(Client.name == None)
+            if ev.get("client_street"):
+                lookup = lookup.filter(sqlfunc.lower(Client.street) == ev["client_street"].lower())
+            if ev.get("client_city"):
+                lookup = lookup.filter(sqlfunc.lower(Client.city) == ev["client_city"].lower())
+            if ev.get("client_phone"):
+                lookup = lookup.filter(Client.phone == ev["client_phone"])
+            client = lookup.first()
+            if not client:
+                client = Client(
+                    name=None,
+                    street=ev.get("client_street") or None,
+                    zip_code=ev.get("client_zip") or None,
+                    city=ev.get("client_city") or None,
+                    address=address_str,
+                    phone=ev.get("client_phone") or None,
+                    email=ev.get("client_email") or None,
+                    notes=ev.get("client_notes") or None,
+                )
+                db.add(client)
+                db.flush()
         else:
-            client = None
+            # Client sans aucune info utile : chercher par ville seule
+            city_val = ev.get("client_city") or None
+            if city_val:
+                client = db.query(Client).filter(
+                    Client.name == None,
+                    Client.address == None,
+                    sqlfunc.lower(Client.city) == city_val.lower(),
+                ).first()
+                if not client:
+                    client = Client(city=city_val)
+                    db.add(client)
+                    db.flush()
+            else:
+                client = None
     else:
         client = db.query(Client).filter(
             sqlfunc.lower(Client.name) == client_name.lower()
