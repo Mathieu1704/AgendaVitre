@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text, useWindowDimensions, ActivityIndicator } from "react-native";
 import { Tabs, Redirect } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../src/lib/supabase";
+import { api } from "../../src/lib/api";
 import { Sidebar } from "../../src/ui/layout/Sidebar";
 import { Header } from "../../src/ui/layout/Header";
 import { useNotifications } from "../../src/hooks/useNotifications";
@@ -22,6 +24,18 @@ export default function AppLayout() {
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
   const { unreadCount } = useNotifications();
+  const queryClient = useQueryClient();
+  const prefetchedRef = useRef(false);
+
+  const prefetchMainData = () => {
+    if (prefetchedRef.current) return;
+    prefetchedRef.current = true;
+    const today = new Date().toISOString().split("T")[0];
+    queryClient.prefetchQuery({ queryKey: ["clients"],        queryFn: () => api.get("/api/clients").then((r) => r.data) });
+    queryClient.prefetchQuery({ queryKey: ["employees"],      queryFn: () => api.get("/api/employees").then((r) => r.data) });
+    queryClient.prefetchQuery({ queryKey: ["notifications"],  queryFn: () => api.get("/api/notifications").then((r) => r.data) });
+    queryClient.prefetchQuery({ queryKey: ["planning-stats", today, "all"], queryFn: () => api.get(`/api/planning/daily-stats?date_str=${today}`).then((r) => r.data) });
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -30,6 +44,7 @@ export default function AppLayout() {
       if (!mounted) return;
       setSession(session);
       setIsLoading(false);
+      if (session) prefetchMainData();
     });
 
     const {
@@ -38,6 +53,7 @@ export default function AppLayout() {
       if (!mounted) return;
       setSession(session);
       setIsLoading(false);
+      if (session) prefetchMainData();
     });
 
     return () => {

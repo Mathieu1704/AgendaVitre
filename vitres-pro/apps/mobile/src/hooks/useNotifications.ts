@@ -16,7 +16,7 @@ export const useNotifications = () => {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["notifications"],
     queryFn: async () => (await api.get("/api/notifications")).data as InAppNotification[],
-    staleTime: 0,
+    staleTime: 30 * 1000,
     refetchInterval: 30000, // rafraîchir toutes les 30s
   });
 

@@ -12,7 +12,7 @@ export const usePlanningRangeStats = (startStr: string, endStr: string, zone?: s
       );
       return res.data as Record<string, DailyStats>;
     },
-    staleTime: 0,
+    staleTime: 2 * 60 * 1000,
   });
 
   return { rangeStats: data, isLoading, error };
@@ -28,7 +28,7 @@ export const usePlanningStats = (dateStr: string, zone?: string) => {
       );
       return res.data as DailyStats;
     },
-    staleTime: 0,
+    staleTime: 2 * 60 * 1000,
   });
 
   return { stats: data, isLoading, error, refetch };

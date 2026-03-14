@@ -18,7 +18,7 @@ export const useLogs = (actionType?: string, page = 0) => {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["audit-logs", actionType ?? "all", page],
     queryFn: async () => (await api.get(`/api/logs?${params.toString()}`)).data as AuditLog[],
-    staleTime: 0,
+    staleTime: 60 * 1000,
   });
 
   return { logs: data ?? [], isLoading, refetch };
