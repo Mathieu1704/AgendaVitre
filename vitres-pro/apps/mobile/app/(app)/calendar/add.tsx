@@ -455,6 +455,8 @@ export default function AddInterventionScreen() {
     }
   };
 
+  const contextualOptions = useMemo(() => getContextualOptions(startDateStr), [startDateStr]);
+
   if ((isEditMode && isLoadingIntervention) || (isRepriseMode && isLoadingReprise)) {
     return (
       <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950">
@@ -467,7 +469,6 @@ export default function AddInterventionScreen() {
   const typeNeedsItems = NEEDS_ITEMS.includes(intervType);
 
   const recurrenceLabel = getRecurrenceLabel(recurrence, startDateStr);
-  const contextualOptions = useMemo(() => getContextualOptions(startDateStr), [startDateStr]);
 
   return (
     <View
