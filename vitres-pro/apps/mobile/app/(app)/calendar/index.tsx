@@ -971,9 +971,11 @@ export default function CalendarScreen() {
                                           const label = sz.label;
                                           const color = sz.color;
                                           const date = selectedDate;
+                                          // Pré-sélectionner les employés déjà assignés (union de toutes les interventions du groupe)
+                                          const existingIds = [...new Set(sg.items.flatMap((it: any) => (it.employees ?? []).map((e: any) => e.id as string)))];
                                           setTimeout(() => {
                                             setAssignModal({ mode: "zone", date, subZone: code, label, color });
-                                            setSelectedAssignIds([]);
+                                            setSelectedAssignIds(existingIds);
                                           }, 100);
                                         }}
                                       >

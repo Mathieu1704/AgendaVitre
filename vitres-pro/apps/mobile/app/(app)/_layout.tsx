@@ -101,6 +101,9 @@ export default function AppLayout() {
               <Tabs.Screen name="clients/[id]" options={{ href: null }} />
               <Tabs.Screen name="facturation/add" options={{ href: null }} />
               <Tabs.Screen name="parametres/logs" options={{ href: null }} />
+              <Tabs.Screen name="parametres/zones" options={{ href: null }} />
+              <Tabs.Screen name="parametres/team" options={{ href: null }} />
+              <Tabs.Screen name="parametres/create-employee" options={{ href: null }} />
             </Tabs>
           </View>
         </View>
@@ -212,6 +215,7 @@ export default function AppLayout() {
         />
         <Tabs.Screen name="parametres/team" options={{ href: null }} />
         <Tabs.Screen name="parametres/logs" options={{ href: null }} />
+        <Tabs.Screen name="parametres/zones" options={{ href: null }} />
       </Tabs>
     </View>
   );
