@@ -7,6 +7,9 @@ import {
   TextInput,
   ActivityIndicator,
   Modal,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,6 +17,11 @@ import { ChevronDown, ChevronUp, ChevronLeft, Pencil, Check, X, MapPin } from "l
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useSubZones, useRenameZone, useReassignCity, SubZoneOut } from "../../../src/hooks/useZones";
 import { toast } from "../../../src/ui/toast";
+
+// Activer LayoutAnimation sur Android
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const PARENT_LABELS: Record<string, string> = {
   hainaut: "Hainaut",
@@ -36,12 +44,20 @@ export default function ZonesScreen() {
   const [expandedZone, setExpandedZone] = useState<string | null>(null);
   const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState("");
-
-  // Modal réassignation
   const [reassignModal, setReassignModal] = useState<{ city: string; currentZoneId: string } | null>(null);
 
   const hainauts = subZones.filter((z) => z.parent_zone === "hainaut");
   const ardennes = subZones.filter((z) => z.parent_zone === "ardennes");
+
+  const toggleExpand = (id: string) => {
+    LayoutAnimation.configureNext({
+      duration: 220,
+      create: { type: "easeInEaseOut", property: "opacity" },
+      update: { type: "spring", springDamping: 0.75 },
+      delete: { type: "easeInEaseOut", property: "opacity" },
+    });
+    setExpandedZone((prev) => (prev === id ? null : id));
+  };
 
   const handleRename = async (zone: SubZoneOut) => {
     if (!editingLabel.trim() || editingLabel === zone.label) {
@@ -86,9 +102,8 @@ export default function ZonesScreen() {
               key={zone.id}
               className="mb-2 rounded-2xl border border-border dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden"
             >
-              {/* Header sous-zone */}
               <Pressable
-                onPress={() => setExpandedZone(isExpanded ? null : zone.id)}
+                onPress={() => toggleExpand(zone.id)}
                 className="flex-row items-center justify-between px-4 py-3"
               >
                 <View className="flex-1 flex-row items-center gap-3">
@@ -120,18 +135,10 @@ export default function ZonesScreen() {
                 <View className="flex-row items-center gap-2">
                   {isEditing ? (
                     <>
-                      <Pressable
-                        onPress={() => handleRename(zone)}
-                        className="p-1"
-                        hitSlop={8}
-                      >
+                      <Pressable onPress={() => handleRename(zone)} className="p-1" hitSlop={8}>
                         <Check size={18} color="#22C55E" />
                       </Pressable>
-                      <Pressable
-                        onPress={() => setEditingZoneId(null)}
-                        className="p-1"
-                        hitSlop={8}
-                      >
+                      <Pressable onPress={() => setEditingZoneId(null)} className="p-1" hitSlop={8}>
                         <X size={18} color="#EF4444" />
                       </Pressable>
                     </>
@@ -141,7 +148,7 @@ export default function ZonesScreen() {
                         e.stopPropagation();
                         setEditingZoneId(zone.id);
                         setEditingLabel(zone.label);
-                        setExpandedZone(zone.id);
+                        if (!isExpanded) toggleExpand(zone.id);
                       }}
                       className="p-1 mr-1"
                       hitSlop={8}
@@ -157,7 +164,6 @@ export default function ZonesScreen() {
                 </View>
               </Pressable>
 
-              {/* Liste des villes */}
               {isExpanded && (
                 <View className="border-t border-border dark:border-slate-700 px-4 py-2">
                   {zone.cities.length === 0 ? (
@@ -199,7 +205,11 @@ export default function ZonesScreen() {
         options={{
           title: "Zones géographiques",
           headerLeft: () => (
-            <Pressable onPress={() => router.back()} className="mr-2" hitSlop={8}>
+            <Pressable
+              onPress={() => router.back()}
+              hitSlop={12}
+              style={{ marginRight: 8, padding: 4 }}
+            >
               <ChevronLeft size={24} color={isDark ? "white" : "black"} />
             </Pressable>
           ),
@@ -229,21 +239,36 @@ export default function ZonesScreen() {
         animationType="slide"
         onRequestClose={() => setReassignModal(null)}
       >
-        <Pressable
-          className="flex-1 bg-black/40"
-          onPress={() => setReassignModal(null)}
-        />
+        <Pressable className="flex-1 bg-black/40" onPress={() => setReassignModal(null)} />
         <View
           className="bg-white dark:bg-slate-900 rounded-t-3xl"
           style={{ paddingBottom: insets.bottom + 16 }}
         >
-          <View className="px-5 pt-5 pb-3 border-b border-border dark:border-slate-700">
-            <Text className="text-base font-bold text-foreground dark:text-white">
-              Déplacer «{reassignModal?.city}»
-            </Text>
-            <Text className="text-xs text-muted-foreground mt-0.5">
-              Choisir la nouvelle sous-zone
-            </Text>
+          {/* Header modal avec croix */}
+          <View className="px-5 pt-5 pb-3 border-b border-border dark:border-slate-700 flex-row items-start justify-between">
+            <View className="flex-1 mr-3">
+              <Text className="text-base font-bold text-foreground dark:text-white">
+                Déplacer «{reassignModal?.city}»
+              </Text>
+              <Text className="text-xs text-muted-foreground mt-0.5">
+                Choisir la nouvelle sous-zone
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => setReassignModal(null)}
+              hitSlop={12}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: isDark ? "#334155" : "#F1F5F9",
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: 2,
+              }}
+            >
+              <X size={14} color={isDark ? "#94A3B8" : "#64748B"} />
+            </Pressable>
           </View>
           <ScrollView style={{ maxHeight: 360 }}>
             {subZones.map((zone) => {
