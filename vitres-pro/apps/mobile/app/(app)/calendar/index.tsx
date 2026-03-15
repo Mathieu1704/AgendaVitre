@@ -547,7 +547,10 @@ export default function CalendarScreen() {
       <Pressable
         onPress={() => router.push(`/(app)/calendar/${item.id}?from_view=${viewMode}&from_date=${selectedDate}` as any)}
         className={`bg-card dark:bg-slate-900 border border-border dark:border-slate-800 shadow-sm active:scale-[0.98] mb-3 ${cardPadding}`}
-        style={{ borderRadius: cardRadius }}
+        style={(() => {
+          const sz = item.sub_zone ? subZoneMap.get(item.sub_zone) : null;
+          return { borderRadius: cardRadius, ...(sz ? { borderLeftWidth: 3, borderLeftColor: sz.color } : {}) };
+        })()}
       >
         <View className="flex-row items-center gap-3">
           {/* COLONNE GAUCHE : HEURE */}
@@ -634,19 +637,7 @@ export default function CalendarScreen() {
                 )}
               </View>
 
-              <View className="items-end gap-1">
-                {!compact && <StatusBadge status={item.status} />}
-                {item.sub_zone && subZoneMap.has(item.sub_zone) && (() => {
-                  const sz = subZoneMap.get(item.sub_zone)!;
-                  return (
-                    <View style={{ backgroundColor: sz.color + "18", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                      <Text style={{ color: sz.color, fontSize: 10, fontWeight: "700" }} numberOfLines={1}>
-                        {sz.label}
-                      </Text>
-                    </View>
-                  );
-                })()}
-              </View>
+              {!compact && <StatusBadge status={item.status} className="self-center" />}
             </View>
           </View>
         </View>
@@ -889,10 +880,9 @@ export default function CalendarScreen() {
               const sorted = [...dayList].sort((a, b) => {
                 const statusDiff = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
                 if (statusDiff !== 0) return statusDiff;
-                const za = a.sub_zone ?? "";
-                const zb = b.sub_zone ?? "";
-                if (za !== zb) return za.localeCompare(zb);
-                return (TYPE_ORDER[a.type ?? "intervention"] ?? 9) - (TYPE_ORDER[b.type ?? "intervention"] ?? 9);
+                const typeDiff = (TYPE_ORDER[a.type ?? "intervention"] ?? 9) - (TYPE_ORDER[b.type ?? "intervention"] ?? 9);
+                if (typeDiff !== 0) return typeDiff;
+                return (a.sub_zone ?? "").localeCompare(b.sub_zone ?? "");
               });
               const groups: { status: string; items: typeof sorted }[] = [];
               for (const item of sorted) {
@@ -932,9 +922,36 @@ export default function CalendarScreen() {
                             <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "#1E293B" : "#F1F5F9", marginLeft: 4 }} />
                           </View>
                         )}
-                        {tg.items.map((item) => (
-                          <InterventionCard key={item.id} item={item} />
-                        ))}
+                        {(() => {
+                          // Sous-grouper par sub_zone
+                          const szGroups: { code: string | null; items: typeof sorted }[] = [];
+                          for (const item of tg.items) {
+                            const code = item.sub_zone ?? null;
+                            const last = szGroups[szGroups.length - 1];
+                            if (last && last.code === code) last.items.push(item);
+                            else szGroups.push({ code, items: [item] });
+                          }
+                          const hasMultipleSubZones = szGroups.length > 1 || (szGroups.length === 1 && szGroups[0].code !== null);
+                          return szGroups.map((sg, idx) => {
+                            const sz = sg.code ? subZoneMap.get(sg.code) : null;
+                            return (
+                              <View key={sg.code ?? `null-${idx}`}>
+                                {hasMultipleSubZones && sz && (
+                                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4, marginTop: idx === 0 ? 2 : 6, marginLeft: 16 }}>
+                                    <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: sz.color }} />
+                                    <Text style={{ fontSize: 9, fontWeight: "700", color: sz.color, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                                      {sz.label}
+                                    </Text>
+                                    <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "#1E293B" : "#F1F5F9", marginLeft: 4 }} />
+                                  </View>
+                                )}
+                                {sg.items.map((item) => (
+                                  <InterventionCard key={item.id} item={item} />
+                                ))}
+                              </View>
+                            );
+                          });
+                        })()}
                       </View>
                     ))}
                   </View>
