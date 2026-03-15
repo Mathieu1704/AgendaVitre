@@ -30,6 +30,7 @@ const PARENT_COLORS: Record<string, { pill: string }> = {
 };
 
 const DELETE_WIDTH = 72;
+const DELETE_GAP = 8; // espace entre la card et le bouton supprimer
 
 // Composant sous-zone avec animation d'expansion
 function ZoneCard({
@@ -60,9 +61,8 @@ function ZoneCard({
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dy) < 20,
       onPanResponderMove: (_, g) => {
-        // Si déjà ouvert, partir de -DELETE_WIDTH
-        const base = swipeOpen.current ? -DELETE_WIDTH : 0;
-        const clamped = Math.max(-DELETE_WIDTH, Math.min(0, base + g.dx));
+        const base = swipeOpen.current ? -(DELETE_WIDTH + DELETE_GAP) : 0;
+        const clamped = Math.max(-(DELETE_WIDTH + DELETE_GAP), Math.min(0, base + g.dx));
         swipeX.setValue(clamped);
       },
       onPanResponderRelease: (_, g) => {
@@ -70,12 +70,12 @@ function ZoneCard({
         setTimeout(() => { justSwiped.current = false; }, 200);
 
         const shouldOpen = swipeOpen.current
-          ? g.dx < DELETE_WIDTH / 2   // refermer seulement si swipe droit suffisant
-          : g.dx < -DELETE_WIDTH / 2; // ouvrir si swipe gauche suffisant
+          ? g.dx < (DELETE_WIDTH + DELETE_GAP) / 2
+          : g.dx < -(DELETE_WIDTH + DELETE_GAP) / 2;
 
         if (shouldOpen) {
           onOpen(closeSwipe);
-          Animated.spring(swipeX, { toValue: -DELETE_WIDTH, useNativeDriver: true, damping: 20, stiffness: 200 }).start();
+          Animated.spring(swipeX, { toValue: -(DELETE_WIDTH + DELETE_GAP), useNativeDriver: true, damping: 20, stiffness: 200 }).start();
           swipeOpen.current = true;
         } else {
           Animated.spring(swipeX, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 200 }).start();
@@ -88,6 +88,7 @@ function ZoneCard({
   const closeSwipe = () => {
     Animated.spring(swipeX, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 200 }).start();
     swipeOpen.current = false;
+    justSwiped.current = false;
   };
 
   const handleDelete = async () => {
@@ -335,17 +336,22 @@ export default function ZonesScreen() {
           contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}
           onScrollBeginDrag={() => { activeSwipeClose.current?.(); activeSwipeClose.current = null; }}
         >
-          {isLoading ? (
-            <ActivityIndicator size="large" style={{ marginTop: 40 }} />
-          ) : (
-            <>
-              <Text className="text-xs text-muted-foreground mb-4">
-                {subZones.length} sous-zones · {subZones.reduce((s, z) => s + z.cities.length, 0)} villes
-              </Text>
-              {renderSection(hainauts, "hainaut")}
-              {renderSection(ardennes, "ardennes")}
-            </>
-          )}
+          <Pressable
+            onPress={() => { activeSwipeClose.current?.(); activeSwipeClose.current = null; }}
+            style={{ flex: 1 }}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="large" style={{ marginTop: 40 }} />
+            ) : (
+              <>
+                <Text className="text-xs text-muted-foreground mb-4">
+                  {subZones.length} sous-zones · {subZones.reduce((s, z) => s + z.cities.length, 0)} villes
+                </Text>
+                {renderSection(hainauts, "hainaut")}
+                {renderSection(ardennes, "ardennes")}
+              </>
+            )}
+          </Pressable>
         </ScrollView>
       </View>
 
