@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, Text, Numeric, create_engine, Table, Float, Date
+from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, Text, Numeric, create_engine, Table, Float, Date, Integer
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from sqlalchemy.sql import func
@@ -30,6 +30,25 @@ raw_event_employees = Table(
 )
 
 # --- TABLES ---
+
+class SubZone(Base):
+    """Sous-zone géographique (ex: HAINAUT_BRAINE_TUBIZE)."""
+    __tablename__ = "sub_zones"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(60), unique=True, nullable=False)
+    label = Column(String(100), nullable=False)
+    parent_zone = Column(String(20), nullable=False)  # "hainaut" | "ardennes"
+    position = Column(Integer, default=0)
+    cities = relationship("CitySubZone", back_populates="sub_zone")
+
+
+class CitySubZone(Base):
+    """Mapping ville → sous-zone."""
+    __tablename__ = "city_sub_zones"
+    city = Column(String(100), primary_key=True)
+    sub_zone_id = Column(UUID(as_uuid=True), ForeignKey("sub_zones.id", ondelete="SET NULL"), nullable=True)
+    sub_zone = relationship("SubZone", back_populates="cities")
+
 
 class CompanySettings(Base):
     """Pour stocker les paramètres globaux comme la tolérance d'heures"""
@@ -113,6 +132,7 @@ class Client(Base):
     phone = Column(String, nullable=True)
     email = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
+    sub_zone = Column(String(60), nullable=True)  # code sous-zone ex: "HAINAUT_BRAINE_TUBIZE"
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     interventions = relationship("Intervention", back_populates="client")
@@ -160,7 +180,8 @@ class Intervention(Base):
     is_invoice = Column(Boolean, default=False)
     payment_mode = Column(String(20), default="cash", nullable=False)  # "cash" | "invoice" | "invoice_cash"
     google_event_id = Column(String, nullable=True, unique=True, index=True)
-    zone = Column(String(20), nullable=True)  # "hainaut" ou "ardennes"
+    zone = Column(String(20), nullable=True)      # "hainaut" ou "ardennes"
+    sub_zone = Column(String(60), nullable=True)  # code sous-zone ex: "HAINAUT_BRAINE_TUBIZE"
 
     # Reprise RDV
     reprise_taken = Column(Boolean, nullable=True)

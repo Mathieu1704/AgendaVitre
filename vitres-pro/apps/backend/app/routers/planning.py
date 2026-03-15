@@ -27,7 +27,7 @@ def _get_employee_hours_for_day(emp: Employee, target_date: date, progressive: l
     return emp.daily_capacity
 
 
-def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = None):
+def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = None, sub_zone: Optional[str] = None):
     settings = db.query(CompanySettings).first()
     tolerance = settings.overtime_tolerance_hours if settings else 3.0
 
@@ -74,7 +74,9 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
     int_query = db.query(Intervention).filter(
         func.date(Intervention.start_time) == target_date
     )
-    if zone:
+    if sub_zone:
+        int_query = int_query.filter(Intervention.sub_zone == sub_zone)
+    elif zone:
         int_query = int_query.filter(Intervention.zone == zone)
     interventions = int_query.all()
 
@@ -108,17 +110,19 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
 def get_daily_stats_endpoint(
     date_str: str,
     zone: Optional[str] = None,
+    sub_zone: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
     d = datetime.strptime(date_str, "%Y-%m-%d").date()
-    return calculate_day_stats(d, db, zone=zone)
+    return calculate_day_stats(d, db, zone=zone, sub_zone=sub_zone)
 
 @router.get("/range-stats")
 def get_range_stats_endpoint(
     start_str: str,
     end_str: str,
     zone: Optional[str] = None,
+    sub_zone: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -128,7 +132,7 @@ def get_range_stats_endpoint(
     results = {}
     current = start
     while current <= end:
-        stats = calculate_day_stats(current, db, zone=zone)
+        stats = calculate_day_stats(current, db, zone=zone, sub_zone=sub_zone)
         results[stats["date"]] = stats
         current += timedelta(days=1)
 

@@ -57,6 +57,17 @@ class AbsenceOut(AbsenceCreate):
     class Config:
         from_attributes = True
 
+# --- SUB ZONE ---
+class SubZoneOut(BaseModel):
+    id: UUID
+    code: str
+    label: str
+    parent_zone: str
+    position: int
+    cities: List[str] = []
+    class Config:
+        from_attributes = True
+
 # --- CLIENT ---
 class ClientBase(BaseModel):
     name: Optional[str] = None
@@ -73,6 +84,7 @@ class ClientCreate(ClientBase):
 
 class ClientOutLite(ClientBase):
     id: UUID
+    sub_zone: Optional[str] = None
     created_at: datetime
     class Config:
         from_attributes = True
@@ -153,6 +165,7 @@ class InterventionOut(BaseModel):
     is_invoice: bool = False
     payment_mode: str = "cash"
     zone: Optional[str] = None
+    sub_zone: Optional[str] = None
     reprise_taken: Optional[bool] = None
     reprise_note: Optional[str] = None
     recurrence_rule: Optional[Dict[str, Any]] = None
