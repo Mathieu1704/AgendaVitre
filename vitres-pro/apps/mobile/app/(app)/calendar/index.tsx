@@ -346,7 +346,12 @@ export default function CalendarScreen() {
       (map[k] ||= []).push(it);
     }
     for (const k of Object.keys(map)) {
-      map[k].sort((a, b) => a.start_time.localeCompare(b.start_time));
+      map[k].sort((a, b) => {
+        const za = a.sub_zone ?? a.zone ?? "";
+        const zb = b.sub_zone ?? b.zone ?? "";
+        if (za !== zb) return za.localeCompare(zb);
+        return a.start_time.localeCompare(b.start_time);
+      });
     }
     return map;
   }, [interventions, dayKeyFromDateTime, effectiveZone]);

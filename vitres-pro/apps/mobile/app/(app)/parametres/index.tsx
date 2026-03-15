@@ -18,6 +18,7 @@ import {
   Briefcase,
   Info,
   History,
+  MapPin,
 } from "lucide-react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -254,6 +255,30 @@ export default function ParametresScreen() {
                       size={20}
                       color={isDark ? "white" : "black"}
                     />
+                  </CardContent>
+                </Card>
+              </Pressable>
+              {/* Zones géographiques */}
+              <Pressable
+                onPress={() => router.push("/(app)/parametres/zones" as any)}
+                className="mb-3"
+              >
+                <Card className="rounded-[32px] bg-emerald-500/5 border-emerald-200 dark:border-emerald-900 active:scale-[0.99] transition-transform overflow-hidden">
+                  <CardContent className="p-4 flex-row items-center justify-between">
+                    <View className="flex-row items-center gap-4 flex-1">
+                      <View className="bg-emerald-500 rounded-full w-12 h-12 items-center justify-center">
+                        <MapPin size={24} color="white" />
+                      </View>
+                      <View className="flex-1 justify-center">
+                        <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                          Zones géographiques
+                        </Text>
+                        <Text className="text-sm text-muted-foreground leading-tight">
+                          Gérer les sous-zones et villes
+                        </Text>
+                      </View>
+                    </View>
+                    <ChevronRight size={20} color={isDark ? "white" : "black"} />
                   </CardContent>
                 </Card>
               </Pressable>
