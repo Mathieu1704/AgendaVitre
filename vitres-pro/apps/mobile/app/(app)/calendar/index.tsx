@@ -64,6 +64,7 @@ import {
 } from "../../../src/hooks/usePlanning";
 import { useRawEventsByDate, useRawEventsByRange } from "../../../src/hooks/useRawEvents";
 import { useAuth } from "../../../src/hooks/useAuth";
+import { useSubZones } from "../../../src/hooks/useZones";
 import { RawCalendarEvent } from "../../../src/types";
 
 // --- CONFIGURATION LOCALE ---
@@ -294,6 +295,15 @@ export default function CalendarScreen() {
   // Filtres actifs
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
   const [activeStatuses, setActiveStatuses] = useState<Set<string>>(new Set());
+
+  const { subZones } = useSubZones();
+  const subZoneMap = useMemo(() => {
+    const m = new Map<string, { label: string; color: string }>();
+    for (const z of subZones) {
+      m.set(z.code, { label: z.label, color: z.parent_zone === "ardennes" ? "#22C55E" : "#3B82F6" });
+    }
+    return m;
+  }, [subZones]);
 
   useEffect(() => {
     if (params.view) {
@@ -624,7 +634,19 @@ export default function CalendarScreen() {
                 )}
               </View>
 
-              {!compact && <StatusBadge status={item.status} className="self-center" />}
+              <View className="items-end gap-1">
+                {!compact && <StatusBadge status={item.status} />}
+                {item.sub_zone && subZoneMap.has(item.sub_zone) && (() => {
+                  const sz = subZoneMap.get(item.sub_zone)!;
+                  return (
+                    <View style={{ backgroundColor: sz.color + "18", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ color: sz.color, fontSize: 10, fontWeight: "700" }} numberOfLines={1}>
+                        {sz.label}
+                      </Text>
+                    </View>
+                  );
+                })()}
+              </View>
             </View>
           </View>
         </View>
@@ -867,6 +889,9 @@ export default function CalendarScreen() {
               const sorted = [...dayList].sort((a, b) => {
                 const statusDiff = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
                 if (statusDiff !== 0) return statusDiff;
+                const za = a.sub_zone ?? "";
+                const zb = b.sub_zone ?? "";
+                if (za !== zb) return za.localeCompare(zb);
                 return (TYPE_ORDER[a.type ?? "intervention"] ?? 9) - (TYPE_ORDER[b.type ?? "intervention"] ?? 9);
               });
               const groups: { status: string; items: typeof sorted }[] = [];
