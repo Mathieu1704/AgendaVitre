@@ -120,6 +120,7 @@ class InterventionBase(BaseModel):
     status: str = "planned"
     price_estimated: Optional[float] = None
     is_invoice: bool = False
+    payment_mode: str = "cash"  # "cash" | "invoice" | "invoice_cash"
     zone: str = "hainaut"  # "hainaut" ou "ardennes"
     client_id: Optional[UUID] = None
     employee_ids: List[UUID] = []
@@ -150,6 +151,7 @@ class InterventionOut(BaseModel):
     status: str
     price_estimated: Optional[float]
     is_invoice: bool = False
+    payment_mode: str = "cash"
     zone: Optional[str] = None
     reprise_taken: Optional[bool] = None
     reprise_note: Optional[str] = None

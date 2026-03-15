@@ -570,45 +570,57 @@ export default function CalendarScreen() {
           <View className="flex-1 justify-center">
             <View className="flex-row justify-between items-start">
               <View className="flex-1 mr-2">
+                {/* Adresse en priorité, sinon titre */}
                 <Text
                   className={`font-extrabold text-foreground dark:text-white ${
                     compact ? "text-sm" : "text-xl"
                   }`}
                   numberOfLines={1}
                 >
-                  {hasClient && item.client?.name
-                    ? item.client.name
+                  {hasClient && item.client?.address
+                    ? item.client.address
                     : item.title}
                 </Text>
 
-                {/* Sous-titre : titre seulement si un vrai nom client est affiché */}
-                {hasClient && item.client?.name && (
+                {/* Titre + nom client en sous-titres si adresse affichée */}
+                {hasClient && item.client?.address && (
+                  <>
+                    <Text
+                      className={`text-muted-foreground dark:text-slate-400 font-medium ${
+                        compact ? "text-[10px]" : "text-sm"
+                      } mt-0.5`}
+                      numberOfLines={1}
+                    >
+                      {item.title}
+                    </Text>
+                    {item.client?.name && (
+                      <Text
+                        className={`text-muted-foreground dark:text-slate-400 ${
+                          compact ? "text-[10px]" : "text-xs"
+                        }`}
+                        numberOfLines={1}
+                      >
+                        {item.client.name}
+                      </Text>
+                    )}
+                  </>
+                )}
+
+                {/* Nom client seul (pas d'adresse) */}
+                {hasClient && !item.client?.address && item.client?.name && (
                   <Text
                     className={`text-muted-foreground dark:text-slate-400 font-medium ${
                       compact ? "text-[10px]" : "text-sm"
                     } mt-0.5`}
                     numberOfLines={1}
                   >
-                    {item.title}
+                    {item.client.name}
                   </Text>
                 )}
               </View>
 
               {!compact && <StatusBadge status={item.status} className="self-center" />}
             </View>
-
-            {/* Adresse (si client avec adresse, même anonyme) */}
-            {!compact && hasClient && item.client?.address && (
-              <View className="flex-row items-center mt-1.5 opacity-80">
-                <MapPin size={12} color="#64748B" className="mr-1" />
-                <Text
-                  className="text-xs text-muted-foreground"
-                  numberOfLines={1}
-                >
-                  {item.client.address}
-                </Text>
-              </View>
-            )}
           </View>
         </View>
       </Pressable>

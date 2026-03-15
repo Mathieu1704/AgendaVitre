@@ -195,7 +195,7 @@ export function CalendarEventBlock({
   const endHour = new Date(event.end_time).toLocaleTimeString("fr-FR", {
     hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels",
   });
-  const displayTitle = event.client?.name || event.title;
+  const displayTitle = event.client?.address || event.client?.name || event.title;
 
   return (
     <GestureDetector gesture={composedGesture}>

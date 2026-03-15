@@ -118,8 +118,8 @@ export default function InterventionDetailScreen() {
         ...(from_date
           ? { date: from_date }
           : intervention?.start_time
-          ? { date: intervention.start_time }
-          : {}),
+            ? { date: intervention.start_time }
+            : {}),
       },
     });
   };
@@ -167,11 +167,14 @@ export default function InterventionDetailScreen() {
       ? intervention.type
       : "intervention";
   const hasClient = ["intervention", "devis"].includes(intervType);
-  const TYPE_BADGE: Record<string, { label: string; color: string; bg: string }> = {
+  const TYPE_BADGE: Record<
+    string,
+    { label: string; color: string; bg: string }
+  > = {
     intervention: { label: "Intervention", color: "#3B82F6", bg: "#EFF6FF" },
-    devis:        { label: "Devis",         color: "#8B5CF6", bg: "#F5F3FF" },
-    tournee:      { label: "Tournée",       color: "#F97316", bg: "#FFF7ED" },
-    note:         { label: "Note",          color: "#64748B", bg: "#F8FAFC" },
+    devis: { label: "Devis", color: "#8B5CF6", bg: "#F5F3FF" },
+    tournee: { label: "Tournée", color: "#F97316", bg: "#FFF7ED" },
+    note: { label: "Note", color: "#64748B", bg: "#F8FAFC" },
   };
   const typeBadge = TYPE_BADGE[intervType] ?? TYPE_BADGE["intervention"];
 
@@ -218,7 +221,13 @@ export default function InterventionDetailScreen() {
               backgroundColor: typeBadge.bg,
             }}
           >
-            <Text style={{ fontSize: 11, fontWeight: "700", color: typeBadge.color }}>
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                color: typeBadge.color,
+              }}
+            >
               {typeBadge.label.toUpperCase()}
             </Text>
           </View>
@@ -234,23 +243,42 @@ export default function InterventionDetailScreen() {
               {intervention.title}
             </Text>
 
-            {/* Alerte facturation — uniquement pour les interventions */}
-            {intervType === "intervention" && !intervention.is_invoice && (
-              <View className="bg-red-100 dark:bg-red-900/20 p-4 rounded-2xl mb-6 border border-red-200 dark:border-red-900/50 flex-row gap-4 items-center">
-                <View className="bg-red-500 h-10 w-10 rounded-full items-center justify-center">
-                  <Wallet size={20} color="white" />
+            {/* Alerte paiement — uniquement pour les interventions */}
+            {intervType === "intervention" &&
+              (intervention.payment_mode === "cash" ||
+                (!intervention.payment_mode && !intervention.is_invoice)) && (
+                <View className="bg-red-100 dark:bg-red-900/20 p-4 rounded-2xl mb-6 border border-red-200 dark:border-red-900/50 flex-row gap-4 items-center">
+                  <View className="bg-red-500 h-10 w-10 rounded-full items-center justify-center">
+                    <Wallet size={20} color="white" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-red-700 dark:text-red-400 font-extrabold text-sm uppercase mb-0.5">
+                      À ENCAISSER SUR PLACE
+                    </Text>
+                    <Text className="text-red-600/80 dark:text-red-300 text-xs font-medium leading-tight">
+                      Le client doit payer {intervention.price_estimated} €
+                      maintenant.
+                    </Text>
+                  </View>
                 </View>
-                <View className="flex-1">
-                  <Text className="text-red-700 dark:text-red-400 font-extrabold text-sm uppercase mb-0.5">
-                    À ENCAISSER SUR PLACE
-                  </Text>
-                  <Text className="text-red-600/80 dark:text-red-300 text-xs font-medium leading-tight">
-                    Le client doit payer {intervention.price_estimated} €
-                    maintenant.
-                  </Text>
+              )}
+            {intervType === "intervention" &&
+              intervention.payment_mode === "invoice_cash" && (
+                <View className="bg-orange-100 dark:bg-orange-900/20 p-4 rounded-2xl mb-6 border border-orange-200 dark:border-orange-900/50 flex-row gap-4 items-center">
+                  <View className="bg-orange-500 h-10 w-10 rounded-full items-center justify-center">
+                    <Wallet size={20} color="white" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-orange-700 dark:text-orange-400 font-extrabold text-sm uppercase mb-0.5">
+                      À ENCAISSER SUR PLACE
+                    </Text>
+                    <Text className="text-orange-600/80 dark:text-orange-300 text-xs font-medium leading-tight">
+                      Le client doit payer {intervention.price_estimated} €
+                      maintenant.
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            )}
+              )}
 
             <View className="flex-row items-center gap-2 mb-6">
               <Calendar size={16} color={isDark ? "#94A3B8" : "#64748B"} />
@@ -346,98 +374,102 @@ export default function InterventionDetailScreen() {
 
           {/* LIGNE 2 : ACTIONS RAPIDES (seulement si client lié) */}
           {hasClient && intervention.client && (
-          <Animated.View
-            entering={FadeInDown.delay(350)}
-            className={`flex-row w-full ${isDesktop ? "gap-4" : "gap-2"}`}
-            style={{
-              marginBottom: isDesktop ? 0 : 20,
-            }}
-          >
-            {/* BOUTON GPS */}
-            <Pressable
-              className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
-              onPress={() => {
-                if (intervention.client?.address) {
-                  const query = encodeURIComponent(intervention.client.address);
-                  const url = Platform.select({
-                    ios: `maps:0,0?q=${query}`,
-                    android: `geo:0,0?q=${query}`,
-                    web: `https://www.google.com/maps/search/?api=1&query=${query}`,
-                  });
-                  Linking.openURL(url!);
-                } else {
-                  toast.error(
-                    "Pas d'adresse",
-                    "Aucune adresse pour ce client.",
-                  );
-                }
+            <Animated.View
+              entering={FadeInDown.delay(350)}
+              className={`flex-row w-full ${isDesktop ? "gap-4" : "gap-2"}`}
+              style={{
+                marginBottom: isDesktop ? 0 : 20,
               }}
             >
-              <View className="bg-emerald-500/10 p-3 rounded-full mb-2">
-                <Navigation
-                  size={24}
-                  color="#10B981"
-                  fill="#10B981"
-                  fillOpacity={0.2}
-                />
-              </View>
-              <Text className="text-xs font-bold text-foreground dark:text-white">
-                Y aller
-              </Text>
-            </Pressable>
+              {/* BOUTON GPS */}
+              <Pressable
+                className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
+                onPress={() => {
+                  if (intervention.client?.address) {
+                    const query = encodeURIComponent(
+                      intervention.client.address,
+                    );
+                    const url = Platform.select({
+                      ios: `maps:0,0?q=${query}`,
+                      android: `geo:0,0?q=${query}`,
+                      web: `https://www.google.com/maps/search/?api=1&query=${query}`,
+                    });
+                    Linking.openURL(url!);
+                  } else {
+                    toast.error(
+                      "Pas d'adresse",
+                      "Aucune adresse pour ce client.",
+                    );
+                  }
+                }}
+              >
+                <View className="bg-emerald-500/10 p-3 rounded-full mb-2">
+                  <Navigation
+                    size={24}
+                    color="#10B981"
+                    fill="#10B981"
+                    fillOpacity={0.2}
+                  />
+                </View>
+                <Text className="text-xs font-bold text-foreground dark:text-white">
+                  Y aller
+                </Text>
+              </Pressable>
 
-            {/* BOUTON APPELER */}
-            <Pressable
-              className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
-              onPress={() => {
-                if (intervention.client?.phone) {
-                  const cleanedPhone = intervention.client.phone.replace(
-                    /\s/g,
-                    "",
-                  );
-                  Linking.openURL(`tel:${cleanedPhone}`);
-                } else {
-                  toast.error("Pas de téléphone", "Aucun numéro renseigné.");
-                }
-              }}
-            >
-              <View className="bg-blue-500/10 p-3 rounded-full mb-2">
-                <Phone
-                  size={24}
-                  color="#3B82F6"
-                  fill="#3B82F6"
-                  fillOpacity={0.2}
-                />
-              </View>
-              <Text className="text-xs font-bold text-foreground dark:text-white">
-                Appeler
-              </Text>
-            </Pressable>
+              {/* BOUTON APPELER */}
+              <Pressable
+                className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
+                onPress={() => {
+                  if (intervention.client?.phone) {
+                    const cleanedPhone = intervention.client.phone.replace(
+                      /\s/g,
+                      "",
+                    );
+                    Linking.openURL(`tel:${cleanedPhone}`);
+                  } else {
+                    toast.error("Pas de téléphone", "Aucun numéro renseigné.");
+                  }
+                }}
+              >
+                <View className="bg-blue-500/10 p-3 rounded-full mb-2">
+                  <Phone
+                    size={24}
+                    color="#3B82F6"
+                    fill="#3B82F6"
+                    fillOpacity={0.2}
+                  />
+                </View>
+                <Text className="text-xs font-bold text-foreground dark:text-white">
+                  Appeler
+                </Text>
+              </Pressable>
 
-            {/* BOUTON MAIL */}
-            <Pressable
-              className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
-              onPress={() => {
-                if (intervention.client?.email) {
-                  Linking.openURL(`mailto:${intervention.client.email.trim()}`);
-                } else {
-                  toast.error("Pas d'email", "Aucun email renseigné.");
-                }
-              }}
-            >
-              <View className="bg-orange-500/10 p-3 rounded-full mb-2">
-                <Mail
-                  size={24}
-                  color="#F97316"
-                  fill="#F97316"
-                  fillOpacity={0.2}
-                />
-              </View>
-              <Text className="text-xs font-bold text-foreground dark:text-white">
-                Email
-              </Text>
-            </Pressable>
-          </Animated.View>
+              {/* BOUTON MAIL */}
+              <Pressable
+                className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
+                onPress={() => {
+                  if (intervention.client?.email) {
+                    Linking.openURL(
+                      `mailto:${intervention.client.email.trim()}`,
+                    );
+                  } else {
+                    toast.error("Pas d'email", "Aucun email renseigné.");
+                  }
+                }}
+              >
+                <View className="bg-orange-500/10 p-3 rounded-full mb-2">
+                  <Mail
+                    size={24}
+                    color="#F97316"
+                    fill="#F97316"
+                    fillOpacity={0.2}
+                  />
+                </View>
+                <Text className="text-xs font-bold text-foreground dark:text-white">
+                  Email
+                </Text>
+              </Pressable>
+            </Animated.View>
           )}
 
           {/* 3. SUIVI TEMPS RÉEL (Si dispo) */}
@@ -508,69 +540,69 @@ export default function InterventionDetailScreen() {
           )}
 
           {(intervType === "intervention" || !!intervention.description) && (
-          <Animated.View
-            entering={FadeInDown.delay(450)}
-            className="w-full mt-4"
-          >
-            <Card className="rounded-3xl">
-              <CardContent className="p-5">
-                {/* Prix — uniquement pour les interventions */}
-                {intervType === "intervention" && (
-                  <>
-                    <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
-                      Détail de la prestation
-                    </Text>
-                    {intervention.items && intervention.items.length > 0 ? (
-                      <View className="gap-3 mb-4">
-                        {intervention.items.map((item: any, idx: number) => (
-                          <View
-                            key={idx}
-                            className="flex-row justify-between items-center pb-2 border-b border-border dark:border-slate-800 last:border-0"
-                          >
-                            <Text className="text-foreground dark:text-white font-medium flex-1 mr-4">
-                              {item.label}
+            <Animated.View
+              entering={FadeInDown.delay(450)}
+              className="w-full mt-4"
+            >
+              <Card className="rounded-3xl">
+                <CardContent className="p-5">
+                  {/* Prix — uniquement pour les interventions */}
+                  {intervType === "intervention" && (
+                    <>
+                      <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
+                        Détail de la prestation
+                      </Text>
+                      {intervention.items && intervention.items.length > 0 ? (
+                        <View className="gap-3 mb-4">
+                          {intervention.items.map((item: any, idx: number) => (
+                            <View
+                              key={idx}
+                              className="flex-row justify-between items-center pb-2 border-b border-border dark:border-slate-800 last:border-0"
+                            >
+                              <Text className="text-foreground dark:text-white font-medium flex-1 mr-4">
+                                {item.label}
+                              </Text>
+                              <Text className="text-foreground dark:text-white font-bold">
+                                {item.price} €
+                              </Text>
+                            </View>
+                          ))}
+                          <View className="flex-row justify-between items-center pt-2 mt-1">
+                            <Text className="text-lg font-bold text-foreground dark:text-white">
+                              Total
                             </Text>
-                            <Text className="text-foreground dark:text-white font-bold">
-                              {item.price} €
+                            <Text className="text-xl font-extrabold text-primary">
+                              {intervention.price_estimated} €
                             </Text>
                           </View>
-                        ))}
-                        <View className="flex-row justify-between items-center pt-2 mt-1">
-                          <Text className="text-lg font-bold text-foreground dark:text-white">
-                            Total
+                        </View>
+                      ) : (
+                        <View className="flex-row justify-between items-center mb-4">
+                          <Text className="text-muted-foreground">
+                            Prix global estimé
                           </Text>
                           <Text className="text-xl font-extrabold text-primary">
                             {intervention.price_estimated} €
                           </Text>
                         </View>
-                      </View>
-                    ) : (
-                      <View className="flex-row justify-between items-center mb-4">
-                        <Text className="text-muted-foreground">
-                          Prix global estimé
-                        </Text>
-                        <Text className="text-xl font-extrabold text-primary">
-                          {intervention.price_estimated} €
-                        </Text>
-                      </View>
-                    )}
-                  </>
-                )}
+                      )}
+                    </>
+                  )}
 
-                {/* Notes — toujours affichées */}
-                {intervention.description && (
-                  <View className="bg-muted/50 dark:bg-slate-900/50 p-4 rounded-xl mt-2">
-                    <Text className="text-xs font-bold text-muted-foreground mb-1">
-                      NOTES
-                    </Text>
-                    <Text className="text-foreground dark:text-slate-300 leading-relaxed">
-                      {intervention.description}
-                    </Text>
-                  </View>
-                )}
-              </CardContent>
-            </Card>
-          </Animated.View>
+                  {/* Notes — toujours affichées */}
+                  {intervention.description && (
+                    <View className="bg-muted/50 dark:bg-slate-900/50 p-4 rounded-xl mt-2">
+                      <Text className="text-xs font-bold text-muted-foreground mb-1">
+                        NOTES
+                      </Text>
+                      <Text className="text-foreground dark:text-slate-300 leading-relaxed">
+                        {intervention.description}
+                      </Text>
+                    </View>
+                  )}
+                </CardContent>
+              </Card>
+            </Animated.View>
           )}
         </View>
       </ScrollView>
@@ -598,7 +630,9 @@ export default function InterventionDetailScreen() {
 
         {intervention.status === "in_progress" && (
           <Button
-            onPress={() => router.push(`/(app)/calendar/add?reprise_of=${id}` as any)}
+            onPress={() =>
+              router.push(`/(app)/calendar/add?reprise_of=${id}` as any)
+            }
             className="w-full h-14 bg-green-500 hover:bg-green-600 rounded-full"
           >
             <View className="flex-row items-center">

@@ -12,6 +12,7 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../src/lib/api";
+import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
 import {
   PlusCircle,
   Trash2,
@@ -22,6 +23,8 @@ import {
   X,
   ChevronDown,
   AlertTriangle,
+  Banknote,
+  Wallet,
 } from "lucide-react-native";
 import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
 import { Input } from "../../../src/ui/components/Input";
@@ -41,22 +44,42 @@ import { useEmployees } from "../../../src/hooks/useEmployees";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useAuth } from "../../../src/hooks/useAuth";
 
-type Client = { id: string; name: string | null; address: string | null; phone?: string | null };
+type Client = {
+  id: string;
+  name: string | null;
+  address: string | null;
+  phone?: string | null;
+};
 type Item = { label: string; price: string; client_service_id?: string | null };
-type ClientService = { id: string; label: string; price: number; position: number };
+type ClientService = {
+  id: string;
+  label: string;
+  price: number;
+  position: number;
+};
 type IntervType = "intervention" | "devis" | "tournee" | "note";
 
-const TYPE_CONFIG: Record<IntervType, { label: string; color: string; bg: string }> = {
+const TYPE_CONFIG: Record<
+  IntervType,
+  { label: string; color: string; bg: string }
+> = {
   intervention: { label: "Intervention", color: "#3B82F6", bg: "#EFF6FF" },
-  devis:        { label: "Devis",         color: "#8B5CF6", bg: "#F5F3FF" },
-  tournee:      { label: "Tournée",       color: "#F97316", bg: "#FFF7ED" },
-  note:         { label: "Note",          color: "#64748B", bg: "#F8FAFC" },
+  devis: { label: "Devis", color: "#8B5CF6", bg: "#F5F3FF" },
+  tournee: { label: "Tournée", color: "#F97316", bg: "#FFF7ED" },
+  note: { label: "Note", color: "#64748B", bg: "#F8FAFC" },
 };
 
 const NEEDS_CLIENT: IntervType[] = ["intervention", "devis"];
 const NEEDS_ITEMS: IntervType[] = ["intervention", "devis"];
 
-type RecurrenceFreq = "none" | "daily" | "weekly" | "monthly" | "yearly" | "weekdays" | "custom";
+type RecurrenceFreq =
+  | "none"
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "yearly"
+  | "weekdays"
+  | "custom";
 type RecurrenceUnit = "day" | "week" | "month" | "year";
 type EndType = "count" | "date" | "never";
 
@@ -71,14 +94,42 @@ interface Recurrence {
 }
 
 const DEFAULT_RECURRENCE: Recurrence = {
-  freq: "none", interval: 1, unit: "week",
-  daysOfWeek: [], endType: "count", count: 4, endDate: "",
+  freq: "none",
+  interval: 1,
+  unit: "week",
+  daysOfWeek: [],
+  endType: "count",
+  count: 4,
+  endDate: "",
 };
 
-const FR_DAYS_FULL = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
-const FR_MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const FR_DAYS_FULL = [
+  "dimanche",
+  "lundi",
+  "mardi",
+  "mercredi",
+  "jeudi",
+  "vendredi",
+  "samedi",
+];
+const FR_MONTHS = [
+  "janvier",
+  "février",
+  "mars",
+  "avril",
+  "mai",
+  "juin",
+  "juillet",
+  "août",
+  "septembre",
+  "octobre",
+  "novembre",
+  "décembre",
+];
 
-function getContextualOptions(startStr: string): Array<{ freq: RecurrenceFreq; label: string }> {
+function getContextualOptions(
+  startStr: string,
+): Array<{ freq: RecurrenceFreq; label: string }> {
   const date = parseBrusselsDateTimeString(startStr);
   if (!date) return [{ freq: "none", label: "Ne se répète pas" }];
   const dow = date.getDay();
@@ -86,57 +137,83 @@ function getContextualOptions(startStr: string): Array<{ freq: RecurrenceFreq; l
   const nth = Math.ceil(dom / 7);
   const nthStr = nth === 1 ? "1er" : `${nth}e`;
   return [
-    { freq: "none",     label: "Ne se répète pas" },
-    { freq: "daily",    label: "Chaque jour" },
-    { freq: "weekly",   label: `Chaque semaine le ${FR_DAYS_FULL[dow]}` },
-    { freq: "monthly",  label: `Chaque mois le ${nthStr} ${FR_DAYS_FULL[dow]}` },
-    { freq: "yearly",   label: `Chaque année le ${dom} ${FR_MONTHS[date.getMonth()]}` },
+    { freq: "none", label: "Ne se répète pas" },
+    { freq: "daily", label: "Chaque jour" },
+    { freq: "weekly", label: `Chaque semaine le ${FR_DAYS_FULL[dow]}` },
+    { freq: "monthly", label: `Chaque mois le ${nthStr} ${FR_DAYS_FULL[dow]}` },
+    {
+      freq: "yearly",
+      label: `Chaque année le ${dom} ${FR_MONTHS[date.getMonth()]}`,
+    },
     { freq: "weekdays", label: "Chaque jour de la semaine (lun. à ven.)" },
-    { freq: "custom",   label: "Personnaliser..." },
+    { freq: "custom", label: "Personnaliser..." },
   ];
 }
 
 function getRecurrenceLabel(rec: Recurrence, startStr: string): string {
   if (rec.freq === "none") return "Ne se répète pas";
   const opts = getContextualOptions(startStr);
-  const found = opts.find(o => o.freq === rec.freq);
+  const found = opts.find((o) => o.freq === rec.freq);
   if (found && rec.freq !== "custom") return found.label;
-  const unitLabels: Record<RecurrenceUnit, string> = { day: "jour", week: "semaine", month: "mois", year: "an" };
-  const s = rec.interval > 1 && rec.unit !== "month" && rec.unit !== "year" ? "s" : "";
+  const unitLabels: Record<RecurrenceUnit, string> = {
+    day: "jour",
+    week: "semaine",
+    month: "mois",
+    year: "an",
+  };
+  const s =
+    rec.interval > 1 && rec.unit !== "month" && rec.unit !== "year" ? "s" : "";
   return `Tous les ${rec.interval} ${unitLabels[rec.unit]}${s}`;
 }
 
-function generateDates(startStr: string, durationHours: number, rec: Recurrence): { start: Date; end: Date }[] {
+function generateDates(
+  startStr: string,
+  durationHours: number,
+  rec: Recurrence,
+): { start: Date; end: Date }[] {
   const base = parseBrusselsDateTimeString(startStr);
   if (!base) return [];
   const dur = durationHours * 3600000;
-  if (rec.freq === "none") return [{ start: base, end: new Date(base.getTime() + dur) }];
+  if (rec.freq === "none")
+    return [{ start: base, end: new Date(base.getTime() + dur) }];
   const MAX = 365;
-  const targetCount = rec.endType === "count" ? Math.max(1, Math.min(rec.count, MAX)) : MAX;
-  const endDate = rec.endType === "date" && rec.endDate ? new Date(rec.endDate + "T23:59:59") : null;
+  const targetCount =
+    rec.endType === "count" ? Math.max(1, Math.min(rec.count, MAX)) : MAX;
+  const endDate =
+    rec.endType === "date" && rec.endDate
+      ? new Date(rec.endDate + "T23:59:59")
+      : null;
   const dates: { start: Date; end: Date }[] = [];
   if (rec.freq === "weekdays") {
     let cur = new Date(base);
     while (dates.length < targetCount) {
       if (endDate && cur > endDate) break;
       const d = cur.getDay();
-      if (d >= 1 && d <= 5) dates.push({ start: new Date(cur), end: new Date(cur.getTime() + dur) });
-      cur = new Date(cur); cur.setDate(cur.getDate() + 1);
+      if (d >= 1 && d <= 5)
+        dates.push({
+          start: new Date(cur),
+          end: new Date(cur.getTime() + dur),
+        });
+      cur = new Date(cur);
+      cur.setDate(cur.getDate() + 1);
     }
     return dates;
   }
   for (let i = 0; i < targetCount; i++) {
     const s = new Date(base);
     if (i > 0) {
-      if (rec.freq === "daily")        s.setDate(s.getDate() + i);
-      else if (rec.freq === "weekly")  s.setDate(s.getDate() + 7 * i);
+      if (rec.freq === "daily") s.setDate(s.getDate() + i);
+      else if (rec.freq === "weekly") s.setDate(s.getDate() + 7 * i);
       else if (rec.freq === "monthly") s.setMonth(s.getMonth() + i);
-      else if (rec.freq === "yearly")  s.setFullYear(s.getFullYear() + i);
+      else if (rec.freq === "yearly") s.setFullYear(s.getFullYear() + i);
       else if (rec.freq === "custom") {
-        if (rec.unit === "day")        s.setDate(s.getDate() + rec.interval * i);
-        else if (rec.unit === "week")  s.setDate(s.getDate() + 7 * rec.interval * i);
-        else if (rec.unit === "month") s.setMonth(s.getMonth() + rec.interval * i);
-        else if (rec.unit === "year")  s.setFullYear(s.getFullYear() + rec.interval * i);
+        if (rec.unit === "day") s.setDate(s.getDate() + rec.interval * i);
+        else if (rec.unit === "week")
+          s.setDate(s.getDate() + 7 * rec.interval * i);
+        else if (rec.unit === "month")
+          s.setMonth(s.getMonth() + rec.interval * i);
+        else if (rec.unit === "year")
+          s.setFullYear(s.getFullYear() + rec.interval * i);
       }
     }
     if (endDate && s > endDate) break;
@@ -147,7 +224,10 @@ function generateDates(startStr: string, durationHours: number, rec: Recurrence)
 
 export default function AddInterventionScreen() {
   const router = useRouter();
-  const { id, reprise_of } = useLocalSearchParams<{ id?: string; reprise_of?: string }>();
+  const { id, reprise_of } = useLocalSearchParams<{
+    id?: string;
+    reprise_of?: string;
+  }>();
   const isEditMode = !!id && !reprise_of;
   const isRepriseMode = !!reprise_of;
 
@@ -164,14 +244,16 @@ export default function AddInterventionScreen() {
   });
 
   // Données pour edit normal
-  const { data: interventionData, isLoading: isLoadingIntervention } = useQuery({
-    queryKey: ["intervention", id],
-    queryFn: async () => {
-      if (!id) return null;
-      return (await api.get(`/api/interventions/${id}`)).data;
+  const { data: interventionData, isLoading: isLoadingIntervention } = useQuery(
+    {
+      queryKey: ["intervention", id],
+      queryFn: async () => {
+        if (!id) return null;
+        return (await api.get(`/api/interventions/${id}`)).data;
+      },
+      enabled: isEditMode,
     },
-    enabled: isEditMode,
-  });
+  );
 
   // Données pour reprise (source originale)
   const { data: repriseSource, isLoading: isLoadingReprise } = useQuery({
@@ -190,14 +272,20 @@ export default function AddInterventionScreen() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   // Services cochables par client
-  const [checkedServiceIds, setCheckedServiceIds] = useState<Set<string>>(new Set());
-  const [servicePriceOverrides, setServicePriceOverrides] = useState<Record<string, string>>({});
+  const [checkedServiceIds, setCheckedServiceIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [servicePriceOverrides, setServicePriceOverrides] = useState<
+    Record<string, string>
+  >({});
   const [adHocItems, setAdHocItems] = useState<Item[]>([]);
   const [isAddingService, setIsAddingService] = useState(false);
   const [newServiceLabel, setNewServiceLabel] = useState("");
   const [newServicePrice, setNewServicePrice] = useState("");
   const [description, setDescription] = useState("");
-  const [isInvoice, setIsInvoice] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<
+    "cash" | "invoice" | "invoice_cash"
+  >("cash");
 
   const defaultStart = useMemo(() => {
     const tomorrow = new Date();
@@ -235,29 +323,50 @@ export default function AddInterventionScreen() {
   const [ncFocused, setNcFocused] = useState<string | null>(null);
 
   // Catalogue de services du client sélectionné
-  const { data: clientServices = [], refetch: refetchClientServices } = useQuery<ClientService[]>({
-    queryKey: ["client-services", selectedClient?.id],
-    queryFn: async () => (await api.get(`/api/clients/${selectedClient!.id}/services`)).data,
-    enabled: !!selectedClient?.id,
-  });
+  const { data: clientServices = [], refetch: refetchClientServices } =
+    useQuery<ClientService[]>({
+      queryKey: ["client-services", selectedClient?.id],
+      queryFn: async () =>
+        (await api.get(`/api/clients/${selectedClient!.id}/services`)).data,
+      enabled: !!selectedClient?.id,
+    });
 
   const createClientMutation = useMutation({
-    mutationFn: async (data: any) => (await api.post("/api/clients", data)).data as Client,
+    mutationFn: async (data: any) =>
+      (await api.post("/api/clients", data)).data as Client,
     onSuccess: async (newClient) => {
       await refetchClients();
       setSelectedClient(newClient);
       setShowNewClient(false);
-      setNewClientName(""); setNewClientStreet(""); setNewClientZip("");
-      setNewClientCity(""); setNewClientPhone(""); setNewClientEmail(""); setNewClientNotes("");
-      toast.success("Client créé", newClient.name || newClient.address || "Client anonyme");
+      setNewClientName("");
+      setNewClientStreet("");
+      setNewClientZip("");
+      setNewClientCity("");
+      setNewClientPhone("");
+      setNewClientEmail("");
+      setNewClientNotes("");
+      toast.success(
+        "Client créé",
+        newClient.name || newClient.address || "Client anonyme",
+      );
     },
-    onError: (err: any) => toast.error("Erreur", err.response?.data?.detail || "Erreur inconnue"),
+    onError: (err: any) =>
+      toast.error("Erreur", err.response?.data?.detail || "Erreur inconnue"),
   });
 
   const handleCreateClient = () => {
-    if (!newClientStreet.trim() && !newClientCity.trim() && !newClientPhone.trim())
-      return toast.error("Données manquantes", "Renseigne au moins l'adresse ou le téléphone.");
-    const addressParts = [newClientStreet, newClientZip, newClientCity].filter(Boolean);
+    if (
+      !newClientStreet.trim() &&
+      !newClientCity.trim() &&
+      !newClientPhone.trim()
+    )
+      return toast.error(
+        "Données manquantes",
+        "Renseigne au moins l'adresse ou le téléphone.",
+      );
+    const addressParts = [newClientStreet, newClientZip, newClientCity].filter(
+      Boolean,
+    );
     createClientMutation.mutate({
       name: newClientName.trim() || null,
       street: newClientStreet || null,
@@ -275,26 +384,53 @@ export default function AddInterventionScreen() {
     if (isEditMode && interventionData && clients) {
       setTitle(interventionData.title);
       setDescription(interventionData.description || "");
-      setIsInvoice(interventionData.is_invoice);
-      if (interventionData.type) setIntervType(interventionData.type as IntervType);
-      if (interventionData.zone) setZone(interventionData.zone as "hainaut" | "ardennes");
+      setPaymentMode(
+        (interventionData.payment_mode as any) ??
+          (interventionData.is_invoice ? "invoice" : "cash"),
+      );
+      if (interventionData.type)
+        setIntervType(interventionData.type as IntervType);
+      if (interventionData.zone)
+        setZone(interventionData.zone as "hainaut" | "ardennes");
       const start = new Date(interventionData.start_time);
       const end = new Date(interventionData.end_time);
       setStartDateStr(toBrusselsDateTimeString(start));
-      setDurationHours(parseFloat(((end.getTime() - start.getTime()) / 3600000).toFixed(2)).toString());
-      const foundClient = clients.find((c) => c.id === interventionData.client_id);
+      setDurationHours(
+        parseFloat(
+          ((end.getTime() - start.getTime()) / 3600000).toFixed(2),
+        ).toString(),
+      );
+      const foundClient = clients.find(
+        (c) => c.id === interventionData.client_id,
+      );
       if (foundClient) setSelectedClient(foundClient);
-      else if (interventionData.client) setSelectedClient(interventionData.client);
+      else if (interventionData.client)
+        setSelectedClient(interventionData.client);
       if (interventionData.employees)
-        setSelectedEmployeeIds(interventionData.employees.map((e: any) => e.id));
+        setSelectedEmployeeIds(
+          interventionData.employees.map((e: any) => e.id),
+        );
       if (interventionData.items && interventionData.items.length > 0) {
-        const withId = interventionData.items.filter((i: any) => i.client_service_id);
-        const withoutId = interventionData.items.filter((i: any) => !i.client_service_id);
-        setCheckedServiceIds(new Set(withId.map((i: any) => i.client_service_id as string)));
+        const withId = interventionData.items.filter(
+          (i: any) => i.client_service_id,
+        );
+        const withoutId = interventionData.items.filter(
+          (i: any) => !i.client_service_id,
+        );
+        setCheckedServiceIds(
+          new Set(withId.map((i: any) => i.client_service_id as string)),
+        );
         const overrides: Record<string, string> = {};
-        withId.forEach((i: any) => { overrides[i.client_service_id] = i.price.toString(); });
+        withId.forEach((i: any) => {
+          overrides[i.client_service_id] = i.price.toString();
+        });
         setServicePriceOverrides(overrides);
-        setAdHocItems(withoutId.map((i: any) => ({ label: i.label, price: i.price.toString() })));
+        setAdHocItems(
+          withoutId.map((i: any) => ({
+            label: i.label,
+            price: i.price.toString(),
+          })),
+        );
       }
     }
   }, [isEditMode, interventionData, clients]);
@@ -304,16 +440,24 @@ export default function AddInterventionScreen() {
     if (isRepriseMode && repriseSource && clients) {
       setTitle(repriseSource.title);
       setDescription(repriseSource.description || "");
-      setIsInvoice(repriseSource.is_invoice);
+      setPaymentMode(
+        (repriseSource.payment_mode as any) ??
+          (repriseSource.is_invoice ? "invoice" : "cash"),
+      );
       if (repriseSource.type) setIntervType(repriseSource.type as IntervType);
-      if (repriseSource.zone) setZone(repriseSource.zone as "hainaut" | "ardennes");
+      if (repriseSource.zone)
+        setZone(repriseSource.zone as "hainaut" | "ardennes");
 
       const origStart = new Date(repriseSource.start_time);
       const origEnd = new Date(repriseSource.end_time);
       const nextDate = new Date(origStart);
       nextDate.setDate(nextDate.getDate() + 7); // par défaut +1 semaine
       setStartDateStr(toBrusselsDateTimeString(nextDate));
-      setDurationHours(parseFloat(((origEnd.getTime() - origStart.getTime()) / 3600000).toFixed(2)).toString());
+      setDurationHours(
+        parseFloat(
+          ((origEnd.getTime() - origStart.getTime()) / 3600000).toFixed(2),
+        ).toString(),
+      );
 
       const foundClient = clients.find((c) => c.id === repriseSource.client_id);
       if (foundClient) setSelectedClient(foundClient);
@@ -322,31 +466,54 @@ export default function AddInterventionScreen() {
       if (repriseSource.employees)
         setSelectedEmployeeIds(repriseSource.employees.map((e: any) => e.id));
       if (repriseSource.items && repriseSource.items.length > 0) {
-        const withId = repriseSource.items.filter((i: any) => i.client_service_id);
-        const withoutId = repriseSource.items.filter((i: any) => !i.client_service_id);
-        setCheckedServiceIds(new Set(withId.map((i: any) => i.client_service_id as string)));
+        const withId = repriseSource.items.filter(
+          (i: any) => i.client_service_id,
+        );
+        const withoutId = repriseSource.items.filter(
+          (i: any) => !i.client_service_id,
+        );
+        setCheckedServiceIds(
+          new Set(withId.map((i: any) => i.client_service_id as string)),
+        );
         const overrides: Record<string, string> = {};
-        withId.forEach((i: any) => { overrides[i.client_service_id] = i.price.toString(); });
+        withId.forEach((i: any) => {
+          overrides[i.client_service_id] = i.price.toString();
+        });
         setServicePriceOverrides(overrides);
-        setAdHocItems(withoutId.map((i: any) => ({ label: i.label, price: i.price.toString() })));
+        setAdHocItems(
+          withoutId.map((i: any) => ({
+            label: i.label,
+            price: i.price.toString(),
+          })),
+        );
       }
     }
   }, [isRepriseMode, repriseSource, clients]);
 
   // Reset form quand on navigue vers "nouveau" (pas edit, pas reprise)
-  useFocusEffect(useCallback(() => {
-    if (!isEditMode && !isRepriseMode) {
-      setTitle(""); setDescription(""); setIsInvoice(false);
-      setIntervType("intervention"); setZone("hainaut");
-      setSelectedClient(null); setSelectedEmployeeIds([]);
-      setCheckedServiceIds(new Set()); setServicePriceOverrides({}); setAdHocItems([]);
-      setStartDateStr(defaultStart); setDurationHours("");
-      setRecurrence(DEFAULT_RECURRENCE);
-      setNoRepriseMode(false); setNoRepriseNote("");
-      setShowRecurrenceDropdown(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEditMode, isRepriseMode]));
+  useFocusEffect(
+    useCallback(() => {
+      if (!isEditMode && !isRepriseMode) {
+        setTitle("");
+        setDescription("");
+        setIntervType("intervention");
+        setZone("hainaut");
+        setSelectedClient(null);
+        setSelectedEmployeeIds([]);
+        setCheckedServiceIds(new Set());
+        setServicePriceOverrides({});
+        setAdHocItems([]);
+        setPaymentMode("cash");
+        setStartDateStr(defaultStart);
+        setDurationHours("");
+        setRecurrence(DEFAULT_RECURRENCE);
+        setNoRepriseMode(false);
+        setNoRepriseNote("");
+        setShowRecurrenceDropdown(false);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isEditMode, isRepriseMode]),
+  );
 
   // Items finaux = services cochés + items ad-hoc
   const allItems = useMemo(() => {
@@ -361,7 +528,11 @@ export default function AddInterventionScreen() {
   }, [clientServices, checkedServiceIds, servicePriceOverrides, adHocItems]);
 
   const totalPrice = useMemo(
-    () => allItems.reduce((acc, item) => acc + (parseFloat(item.price as string) || 0), 0),
+    () =>
+      allItems.reduce(
+        (acc, item) => acc + (parseFloat(item.price as string) || 0),
+        0,
+      ),
     [allItems],
   );
 
@@ -373,18 +544,37 @@ export default function AddInterventionScreen() {
     });
   };
 
-  const addAdHocItem = () => setAdHocItems((prev) => [...prev, { label: "", price: "" }]);
-  const removeAdHocItem = (index: number) => setAdHocItems((prev) => prev.filter((_, i) => i !== index));
-  const updateAdHocItem = (index: number, field: "label" | "price", value: string) => {
-    setAdHocItems((prev) => { const n = [...prev]; n[index] = { ...n[index], [field]: value }; return n; });
+  const addAdHocItem = () =>
+    setAdHocItems((prev) => [...prev, { label: "", price: "" }]);
+  const removeAdHocItem = (index: number) =>
+    setAdHocItems((prev) => prev.filter((_, i) => i !== index));
+  const updateAdHocItem = (
+    index: number,
+    field: "label" | "price",
+    value: string,
+  ) => {
+    setAdHocItems((prev) => {
+      const n = [...prev];
+      n[index] = { ...n[index], [field]: value };
+      return n;
+    });
   };
 
   const clientItems = useMemo(
-    () => (clients ?? []).map((c) => ({ id: c.id, label: c.name || c.address || "Client anonyme" })),
+    () =>
+      (clients ?? []).map((c) => ({
+        id: c.id,
+        label: c.name || c.address || "Client anonyme",
+      })),
     [clients],
   );
   const employeeItems = useMemo(
-    () => (employees ?? []).map((e) => ({ id: e.id, label: e.full_name || e.email, color: e.color })),
+    () =>
+      (employees ?? []).map((e) => ({
+        id: e.id,
+        label: e.full_name || e.email,
+        color: e.color,
+      })),
     [employees],
   );
 
@@ -409,7 +599,8 @@ export default function AddInterventionScreen() {
         client_id: selectedClient?.id ?? null,
         employee_ids: selectedEmployeeIds,
         price_estimated: totalPrice,
-        is_invoice: isInvoice,
+        payment_mode: paymentMode,
+        is_invoice: paymentMode !== "cash",
         items: cleanItems.map((i) => ({
           label: i.label,
           price: Number(i.price) || 0,
@@ -436,7 +627,8 @@ export default function AddInterventionScreen() {
 
       // Calcul des occurrences (reprise ou création simple avec récurrence)
       const occurrences = generateDates(startDateStr, dur, recurrence);
-      if (occurrences.length === 0) return toast.error("Date", "Vérifie la date.");
+      if (occurrences.length === 0)
+        return toast.error("Date", "Vérifie la date.");
 
       const groupId = occurrences.length > 1 ? crypto.randomUUID() : undefined;
 
@@ -445,11 +637,18 @@ export default function AddInterventionScreen() {
           ...basePayload,
           start_time: occ.start.toISOString(),
           end_time: occ.end.toISOString(),
-          recurrence_rule: occurrences.length > 1 ? {
-            freq: recurrence.freq === "custom" ? recurrence.unit : recurrence.freq,
-            interval: recurrence.freq === "custom" ? recurrence.interval : 1,
-            count: occurrences.length,
-          } : null,
+          recurrence_rule:
+            occurrences.length > 1
+              ? {
+                  freq:
+                    recurrence.freq === "custom"
+                      ? recurrence.unit
+                      : recurrence.freq,
+                  interval:
+                    recurrence.freq === "custom" ? recurrence.interval : 1,
+                  count: occurrences.length,
+                }
+              : null,
           recurrence_group_id: groupId ?? null,
         });
       }
@@ -462,21 +661,29 @@ export default function AddInterventionScreen() {
           real_end_time: now,
           reprise_taken: true,
         });
-        queryClient.invalidateQueries({ queryKey: ["intervention", reprise_of] });
+        queryClient.invalidateQueries({
+          queryKey: ["intervention", reprise_of],
+        });
       }
 
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
       queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
 
-      const msg = occurrences.length > 1
-        ? `${occurrences.length} interventions créées !`
-        : isRepriseMode ? "RDV de reprise planifié !" : "Intervention créée !";
+      const msg =
+        occurrences.length > 1
+          ? `${occurrences.length} interventions créées !`
+          : isRepriseMode
+            ? "RDV de reprise planifié !"
+            : "Intervention créée !";
       toast.success("Succès", msg);
 
       if (isRepriseMode && reprise_of) {
         router.push(`/(app)/calendar/${reprise_of}` as any);
       } else {
-        router.push({ pathname: "/(app)/calendar", params: { date: startDateStr } });
+        router.push({
+          pathname: "/(app)/calendar",
+          params: { date: startDateStr },
+        });
       }
     } catch (err: any) {
       toast.error("Erreur", err.response?.data?.detail || "Erreur inconnue");
@@ -492,7 +699,9 @@ export default function AddInterventionScreen() {
     if (!reprise_of) return;
     setIsSubmittingNoReprise(true);
     try {
-      await api.post(`/api/interventions/${reprise_of}/no-reprise`, { note: noRepriseNote.trim() });
+      await api.post(`/api/interventions/${reprise_of}/no-reprise`, {
+        note: noRepriseNote.trim(),
+      });
       queryClient.invalidateQueries({ queryKey: ["intervention", reprise_of] });
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
@@ -505,9 +714,15 @@ export default function AddInterventionScreen() {
     }
   };
 
-  const contextualOptions = useMemo(() => getContextualOptions(startDateStr), [startDateStr]);
+  const contextualOptions = useMemo(
+    () => getContextualOptions(startDateStr),
+    [startDateStr],
+  );
 
-  if ((isEditMode && isLoadingIntervention) || (isRepriseMode && isLoadingReprise)) {
+  if (
+    (isEditMode && isLoadingIntervention) ||
+    (isRepriseMode && isLoadingReprise)
+  ) {
     return (
       <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950">
         <ActivityIndicator size="large" color="#3B82F6" />
@@ -529,7 +744,8 @@ export default function AddInterventionScreen() {
         <Pressable
           onPress={() => {
             if (isEditMode) router.push(`/(app)/calendar/${id}`);
-            else if (isRepriseMode) router.push(`/(app)/calendar/${reprise_of}` as any);
+            else if (isRepriseMode)
+              router.push(`/(app)/calendar/${reprise_of}` as any);
             else router.back();
           }}
           className="p-2 rounded-full hover:bg-muted active:bg-muted"
@@ -537,13 +753,16 @@ export default function AddInterventionScreen() {
           <ChevronLeft size={24} className="text-foreground dark:text-white" />
         </Pressable>
         <Text className="text-lg font-bold ml-2 text-foreground dark:text-white">
-          {isRepriseMode ? "Planifier la reprise" : isEditMode ? "Modifier l'intervention" : "Nouvelle intervention"}
+          {isRepriseMode
+            ? "Planifier la reprise"
+            : isEditMode
+              ? "Modifier l'intervention"
+              : "Nouvelle intervention"}
         </Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <Card className="max-w-2xl w-full self-center rounded-[40px] overflow-hidden">
-
           {/* BANNIÈRE "RDV NON REPRIS" (mode reprise uniquement) */}
           {isRepriseMode && (
             <View style={{ padding: 16, paddingBottom: 0 }}>
@@ -551,27 +770,61 @@ export default function AddInterventionScreen() {
                 <Pressable
                   onPress={() => setNoRepriseMode(true)}
                   style={{
-                    flexDirection: "row", alignItems: "center", justifyContent: "center",
-                    backgroundColor: "#FEF2F2", borderWidth: 1.5, borderColor: "#FECACA",
-                    borderRadius: 16, padding: 14, gap: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#FEF2F2",
+                    borderWidth: 1.5,
+                    borderColor: "#FECACA",
+                    borderRadius: 16,
+                    padding: 14,
+                    gap: 10,
                   }}
                 >
                   <AlertTriangle size={18} color="#EF4444" />
-                  <Text style={{ color: "#EF4444", fontWeight: "700", fontSize: 15 }}>
+                  <Text
+                    style={{
+                      color: "#EF4444",
+                      fontWeight: "700",
+                      fontSize: 15,
+                    }}
+                  >
                     RDV non repris
                   </Text>
                 </Pressable>
               ) : (
-                <View style={{
-                  backgroundColor: "#FEF2F2", borderWidth: 1.5, borderColor: "#FECACA",
-                  borderRadius: 20, padding: 16, gap: 12,
-                }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View
+                  style={{
+                    backgroundColor: "#FEF2F2",
+                    borderWidth: 1.5,
+                    borderColor: "#FECACA",
+                    borderRadius: 20,
+                    padding: 16,
+                    gap: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
                     <AlertTriangle size={18} color="#EF4444" />
-                    <Text style={{ color: "#EF4444", fontWeight: "700", fontSize: 15, flex: 1 }}>
+                    <Text
+                      style={{
+                        color: "#EF4444",
+                        fontWeight: "700",
+                        fontSize: 15,
+                        flex: 1,
+                      }}
+                    >
                       RDV non repris
                     </Text>
-                    <Pressable onPress={() => setNoRepriseMode(false)} style={{ padding: 4 }}>
+                    <Pressable
+                      onPress={() => setNoRepriseMode(false)}
+                      style={{ padding: 4 }}
+                    >
                       <X size={18} color="#94A3B8" />
                     </Pressable>
                   </View>
@@ -582,26 +835,46 @@ export default function AddInterventionScreen() {
                     placeholderTextColor="#CBD5E1"
                     multiline
                     numberOfLines={3}
-                    style={[{
-                      fontSize: 14, color: "#0f172a", backgroundColor: "white",
-                      borderRadius: 12, padding: 12, minHeight: 70,
-                      borderWidth: 1, borderColor: "#FECACA",
-                    }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                    style={[
+                      {
+                        fontSize: 14,
+                        color: "#0f172a",
+                        backgroundColor: "white",
+                        borderRadius: 12,
+                        padding: 12,
+                        minHeight: 70,
+                        borderWidth: 1,
+                        borderColor: "#FECACA",
+                      },
+                      Platform.OS === "web"
+                        ? ({ outlineStyle: "none" } as any)
+                        : {},
+                    ]}
                   />
                   <Pressable
                     onPress={handleNoReprise}
                     disabled={isSubmittingNoReprise}
                     style={{
-                      backgroundColor: "#EF4444", borderRadius: 12, padding: 14,
-                      alignItems: "center", opacity: isSubmittingNoReprise ? 0.6 : 1,
+                      backgroundColor: "#EF4444",
+                      borderRadius: 12,
+                      padding: 14,
+                      alignItems: "center",
+                      opacity: isSubmittingNoReprise ? 0.6 : 1,
                     }}
                   >
-                    {isSubmittingNoReprise
-                      ? <ActivityIndicator color="white" />
-                      : <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>
-                          Confirmer sans reprise
-                        </Text>
-                    }
+                    {isSubmittingNoReprise ? (
+                      <ActivityIndicator color="white" />
+                    ) : (
+                      <Text
+                        style={{
+                          color: "white",
+                          fontWeight: "700",
+                          fontSize: 15,
+                        }}
+                      >
+                        Confirmer sans reprise
+                      </Text>
+                    )}
                   </Pressable>
                 </View>
               )}
@@ -610,21 +883,28 @@ export default function AddInterventionScreen() {
 
           <CardHeader className="p-6 pb-2">
             <Text className="text-2xl font-extrabold text-foreground dark:text-white text-center">
-              {isRepriseMode ? "Reprise RDV" : isEditMode ? "Modifier" : "Planifier"}
+              {isRepriseMode
+                ? "Reprise RDV"
+                : isEditMode
+                  ? "Modifier"
+                  : "Planifier"}
             </Text>
             <Text className="mt-1 text-muted-foreground text-center font-medium">
               {isRepriseMode
                 ? "Planifie le prochain RDV pour ce client"
-                : isEditMode ? "Mise à jour intervention" : "Nouvelle intervention"}
+                : isEditMode
+                  ? "Mise à jour intervention"
+                  : "Nouvelle intervention"}
             </Text>
           </CardHeader>
 
           <CardContent className="p-6 pt-4 gap-5">
-
             {/* TYPE (admin only) */}
             {isAdmin && (
               <View className="gap-1">
-                <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">Type</Text>
+                <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">
+                  Type
+                </Text>
                 <View className="flex-row gap-2 flex-wrap">
                   {(Object.keys(TYPE_CONFIG) as IntervType[]).map((t) => {
                     const cfg = TYPE_CONFIG[t];
@@ -634,13 +914,21 @@ export default function AddInterventionScreen() {
                         key={t}
                         onPress={() => setIntervType(t)}
                         style={{
-                          paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          borderRadius: 20,
                           borderWidth: 1.5,
                           borderColor: active ? cfg.color : "#E2E8F0",
                           backgroundColor: active ? cfg.bg : "transparent",
                         }}
                       >
-                        <Text style={{ fontWeight: "600", fontSize: 13, color: active ? cfg.color : "#94A3B8" }}>
+                        <Text
+                          style={{
+                            fontWeight: "600",
+                            fontSize: 13,
+                            color: active ? cfg.color : "#94A3B8",
+                          }}
+                        >
                           {cfg.label}
                         </Text>
                       </Pressable>
@@ -653,25 +941,35 @@ export default function AddInterventionScreen() {
             {/* ZONE (admin seulement) */}
             {isAdmin && (
               <View className="gap-1">
-                <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">Zone</Text>
+                <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">
+                  Zone
+                </Text>
                 <View className="flex-row gap-2">
                   {(["hainaut", "ardennes"] as const).map((z) => {
                     const active = zone === z;
                     const color = z === "ardennes" ? "#10B981" : "#3B82F6";
-                    const bg    = z === "ardennes" ? "#D1FAE5" : "#DBEAFE";
+                    const bg = z === "ardennes" ? "#D1FAE5" : "#DBEAFE";
                     return (
                       <Pressable
                         key={z}
                         onPress={() => setZone(z)}
                         style={{
-                          flex: 1, paddingVertical: 10, borderRadius: 16,
+                          flex: 1,
+                          paddingVertical: 10,
+                          borderRadius: 16,
                           borderWidth: 1.5,
                           borderColor: active ? color : "#E2E8F0",
                           backgroundColor: active ? bg : "transparent",
                           alignItems: "center",
                         }}
                       >
-                        <Text style={{ fontWeight: "600", fontSize: 14, color: active ? color : "#94A3B8" }}>
+                        <Text
+                          style={{
+                            fontWeight: "600",
+                            fontSize: 14,
+                            color: active ? color : "#94A3B8",
+                          }}
+                        >
                           {z === "ardennes" ? "Ardennes" : "Hainaut"}
                         </Text>
                       </Pressable>
@@ -684,12 +982,24 @@ export default function AddInterventionScreen() {
             {/* CLIENT */}
             {typeNeedsClient && (
               <View className="gap-1">
-                <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">Pour qui ?</Text>
+                <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">
+                  Pour qui ?
+                </Text>
                 <View className="flex-row items-center gap-2">
                   <View className="flex-1">
                     <Select
                       title="Choisir un client"
-                      value={selectedClient ? { id: selectedClient.id, label: selectedClient.name || selectedClient.address || "Client anonyme" } : null}
+                      value={
+                        selectedClient
+                          ? {
+                              id: selectedClient.id,
+                              label:
+                                selectedClient.name ||
+                                selectedClient.address ||
+                                "Client anonyme",
+                            }
+                          : null
+                      }
                       items={clientItems}
                       onChange={(v) => {
                         const c = clients?.find((x) => x.id === v.id);
@@ -700,9 +1010,14 @@ export default function AddInterventionScreen() {
                   <Pressable
                     onPress={() => setShowNewClient(true)}
                     style={{
-                      width: 44, height: 44, borderRadius: 14, backgroundColor: "#EFF6FF",
-                      alignItems: "center", justifyContent: "center",
-                      borderWidth: 1, borderColor: "#BFDBFE",
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
+                      backgroundColor: "#EFF6FF",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1,
+                      borderColor: "#BFDBFE",
                     }}
                   >
                     <UserPlus size={20} color="#3B82F6" />
@@ -713,7 +1028,9 @@ export default function AddInterventionScreen() {
 
             {/* EMPLOYES */}
             <View className="gap-1">
-              <Text className="text-sm font-semibold text-foreground dark:text-white">Qui intervient ?</Text>
+              <Text className="text-sm font-semibold text-foreground dark:text-white">
+                Qui intervient ?
+              </Text>
               <MultiSelect
                 items={employeeItems}
                 selectedIds={selectedEmployeeIds}
@@ -745,37 +1062,62 @@ export default function AddInterventionScreen() {
             {/* RÉCURRENCE (pas en mode édition) */}
             {!isEditMode && (
               <View className="gap-1">
-                <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">Récurrence</Text>
+                <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">
+                  Récurrence
+                </Text>
 
                 {/* Dropdown trigger */}
                 <Pressable
-                  onPress={() => setShowRecurrenceDropdown(v => !v)}
+                  onPress={() => setShowRecurrenceDropdown((v) => !v)}
                   style={{
-                    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-                    borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12,
-                    borderColor: recurrence.freq !== "none" ? "#3B82F6" : "#E2E8F0",
-                    backgroundColor: recurrence.freq !== "none" ? "#EFF6FF" : "transparent",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    borderWidth: 1.5,
+                    borderRadius: 14,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    borderColor:
+                      recurrence.freq !== "none" ? "#3B82F6" : "#E2E8F0",
+                    backgroundColor:
+                      recurrence.freq !== "none" ? "#EFF6FF" : "transparent",
                   }}
                 >
-                  <Text style={{
-                    fontSize: 14, fontWeight: "600",
-                    color: recurrence.freq !== "none" ? "#3B82F6" : "#64748B",
-                  }}>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: recurrence.freq !== "none" ? "#3B82F6" : "#64748B",
+                    }}
+                  >
                     {recurrenceLabel}
                   </Text>
-                  <ChevronDown size={18} color={recurrence.freq !== "none" ? "#3B82F6" : "#94A3B8"} />
+                  <ChevronDown
+                    size={18}
+                    color={recurrence.freq !== "none" ? "#3B82F6" : "#94A3B8"}
+                  />
                 </Pressable>
 
                 {/* Dropdown options */}
                 {showRecurrenceDropdown && (
-                  <View style={{
-                    borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 14,
-                    backgroundColor: "white", overflow: "hidden", marginTop: 4,
-                    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.08, shadowRadius: 8, elevation: 4,
-                  }}>
+                  <View
+                    style={{
+                      borderWidth: 1.5,
+                      borderColor: "#E2E8F0",
+                      borderRadius: 14,
+                      backgroundColor: "white",
+                      overflow: "hidden",
+                      marginTop: 4,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.08,
+                      shadowRadius: 8,
+                      elevation: 4,
+                    }}
+                  >
                     {contextualOptions.map((opt, idx) => {
-                      const isActive = recurrence.freq === opt.freq && opt.freq !== "custom";
+                      const isActive =
+                        recurrence.freq === opt.freq && opt.freq !== "custom";
                       const isLast = idx === contextualOptions.length - 1;
                       return (
                         <Pressable
@@ -790,20 +1132,43 @@ export default function AddInterventionScreen() {
                               setCustomEndDate(recurrence.endDate);
                               setShowCustomModal(true);
                             } else {
-                              setRecurrence({ ...DEFAULT_RECURRENCE, freq: opt.freq, endType: recurrence.endType, count: recurrence.count, endDate: recurrence.endDate });
+                              setRecurrence({
+                                ...DEFAULT_RECURRENCE,
+                                freq: opt.freq,
+                                endType: recurrence.endType,
+                                count: recurrence.count,
+                                endDate: recurrence.endDate,
+                              });
                             }
                             setShowRecurrenceDropdown(false);
                           }}
-                          style={[{
-                            flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-                            paddingHorizontal: 16, paddingVertical: 13,
-                          }, !isLast ? { borderBottomWidth: 1, borderBottomColor: "#F1F5F9" } : {}]}
+                          style={[
+                            {
+                              flexDirection: "row",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              paddingHorizontal: 16,
+                              paddingVertical: 13,
+                            },
+                            !isLast
+                              ? {
+                                  borderBottomWidth: 1,
+                                  borderBottomColor: "#F1F5F9",
+                                }
+                              : {},
+                          ]}
                         >
-                          <Text style={{
-                            fontSize: 14,
-                            fontWeight: isActive ? "700" : "500",
-                            color: isActive ? "#3B82F6" : opt.freq === "custom" ? "#8B5CF6" : "#0f172a",
-                          }}>
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              fontWeight: isActive ? "700" : "500",
+                              color: isActive
+                                ? "#3B82F6"
+                                : opt.freq === "custom"
+                                  ? "#8B5CF6"
+                                  : "#0f172a",
+                            }}
+                          >
                             {opt.label}
                           </Text>
                           {isActive && <Check size={16} color="#3B82F6" />}
@@ -815,21 +1180,47 @@ export default function AddInterventionScreen() {
 
                 {/* Nombre d'occurrences si récurrence active */}
                 {recurrence.freq !== "none" && (
-                  <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, gap: 10, paddingHorizontal: 4 }}>
-                    <Text style={{ fontSize: 13, color: "#64748B", flex: 1 }}>Nombre d'occurrences :</Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginTop: 8,
+                      gap: 10,
+                      paddingHorizontal: 4,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, color: "#64748B", flex: 1 }}>
+                      Nombre d'occurrences :
+                    </Text>
                     <TextInput
                       value={String(recurrence.count)}
                       onChangeText={(v) => {
                         const n = parseInt(v);
-                        if (!isNaN(n) && n > 0) setRecurrence(r => ({ ...r, count: n, endType: "count" }));
+                        if (!isNaN(n) && n > 0)
+                          setRecurrence((r) => ({
+                            ...r,
+                            count: n,
+                            endType: "count",
+                          }));
                       }}
                       keyboardType="numeric"
-                      style={[{
-                        width: 60, borderWidth: 1.5, borderColor: "#DBEAFE",
-                        borderRadius: 10, padding: 8, textAlign: "center",
-                        fontSize: 15, fontWeight: "700", color: "#3B82F6",
-                        backgroundColor: "#F0F9FF",
-                      }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                      style={[
+                        {
+                          width: 60,
+                          borderWidth: 1.5,
+                          borderColor: "#DBEAFE",
+                          borderRadius: 10,
+                          padding: 8,
+                          textAlign: "center",
+                          fontSize: 15,
+                          fontWeight: "700",
+                          color: "#3B82F6",
+                          backgroundColor: "#F0F9FF",
+                        },
+                        Platform.OS === "web"
+                          ? ({ outlineStyle: "none" } as any)
+                          : {},
+                      ]}
                     />
                   </View>
                 )}
@@ -840,60 +1231,135 @@ export default function AddInterventionScreen() {
             {typeNeedsItems && (
               <View className="mt-2 pt-4 border-t border-border dark:border-slate-800">
                 <View className="flex-row justify-between items-center mb-3">
-                  <Text className="text-sm font-semibold text-foreground dark:text-white">Prestations</Text>
+                  <Text className="text-sm font-semibold text-foreground dark:text-white">
+                    Prestations
+                  </Text>
                   {!isAddingService && (
                     <Pressable
-                      onPress={() => { setIsAddingService(true); setNewServiceLabel(""); setNewServicePrice(""); }}
+                      onPress={() => {
+                        setIsAddingService(true);
+                        setNewServiceLabel("");
+                        setNewServicePrice("");
+                      }}
                       className="flex-row items-center bg-primary/10 px-3 py-1.5 rounded-full"
                     >
                       <PlusCircle size={16} color="#3B82F6" />
-                      <Text className="text-primary font-bold ml-1.5 text-xs">Ajouter</Text>
+                      <Text className="text-primary font-bold ml-1.5 text-xs">
+                        Ajouter
+                      </Text>
                     </Pressable>
                   )}
                 </View>
 
                 {/* Formulaire inline d'ajout */}
                 {isAddingService && (
-                  <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginBottom: 10, backgroundColor: "#F0F9FF", borderRadius: 10, padding: 8 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      gap: 8,
+                      alignItems: "center",
+                      marginBottom: 10,
+                      backgroundColor: "#F0F9FF",
+                      borderRadius: 10,
+                      padding: 8,
+                    }}
+                  >
                     <TextInput
                       autoFocus
                       placeholder="Nom (ex: RDC, Velux…)"
                       value={newServiceLabel}
                       onChangeText={setNewServiceLabel}
-                      style={[{ flex: 2, borderWidth: 1, borderColor: "#BAE6FD", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 14, backgroundColor: "#fff", color: "#1E293B" },
-                        Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                      style={[
+                        {
+                          flex: 2,
+                          borderWidth: 1,
+                          borderColor: "#BAE6FD",
+                          borderRadius: 8,
+                          paddingHorizontal: 10,
+                          paddingVertical: 7,
+                          fontSize: 14,
+                          backgroundColor: "#fff",
+                          color: "#1E293B",
+                        },
+                        Platform.OS === "web"
+                          ? ({ outlineStyle: "none" } as any)
+                          : {},
+                      ]}
                     />
                     <TextInput
                       placeholder="Prix"
                       keyboardType="numeric"
                       value={newServicePrice}
                       onChangeText={setNewServicePrice}
-                      style={[{ flex: 1, borderWidth: 1, borderColor: "#BAE6FD", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 14, backgroundColor: "#fff", color: "#1E293B" },
-                        Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                      style={[
+                        {
+                          flex: 1,
+                          borderWidth: 1,
+                          borderColor: "#BAE6FD",
+                          borderRadius: 8,
+                          paddingHorizontal: 10,
+                          paddingVertical: 7,
+                          fontSize: 14,
+                          backgroundColor: "#fff",
+                          color: "#1E293B",
+                        },
+                        Platform.OS === "web"
+                          ? ({ outlineStyle: "none" } as any)
+                          : {},
+                      ]}
                     />
                     <Pressable
                       onPress={async () => {
-                        if (!newServiceLabel.trim()) { toast.error("Nom requis", ""); return; }
+                        if (!newServiceLabel.trim()) {
+                          toast.error("Nom requis", "");
+                          return;
+                        }
                         if (selectedClient?.id) {
                           try {
-                            const newSvc: ClientService = (await api.post(`/api/clients/${selectedClient.id}/services`, {
-                              label: newServiceLabel.trim(), price: Number(newServicePrice) || 0, position: clientServices.length,
-                            })).data;
+                            const newSvc: ClientService = (
+                              await api.post(
+                                `/api/clients/${selectedClient.id}/services`,
+                                {
+                                  label: newServiceLabel.trim(),
+                                  price: Number(newServicePrice) || 0,
+                                  position: clientServices.length,
+                                },
+                              )
+                            ).data;
                             await refetchClientServices();
-                            setCheckedServiceIds((prev) => new Set([...prev, newSvc.id]));
-                          } catch { toast.error("Erreur", "Impossible d'ajouter"); }
+                            setCheckedServiceIds(
+                              (prev) => new Set([...prev, newSvc.id]),
+                            );
+                          } catch {
+                            toast.error("Erreur", "Impossible d'ajouter");
+                          }
                         } else {
                           addAdHocItem();
-                          updateAdHocItem(adHocItems.length, "label", newServiceLabel.trim());
-                          updateAdHocItem(adHocItems.length, "price", newServicePrice);
+                          updateAdHocItem(
+                            adHocItems.length,
+                            "label",
+                            newServiceLabel.trim(),
+                          );
+                          updateAdHocItem(
+                            adHocItems.length,
+                            "price",
+                            newServicePrice,
+                          );
                         }
                         setIsAddingService(false);
                       }}
-                      style={{ backgroundColor: "#3B82F6", borderRadius: 8, padding: 8 }}
+                      style={{
+                        backgroundColor: "#3B82F6",
+                        borderRadius: 8,
+                        padding: 8,
+                      }}
                     >
                       <Check size={18} color="#fff" />
                     </Pressable>
-                    <Pressable onPress={() => setIsAddingService(false)} style={{ padding: 6 }}>
+                    <Pressable
+                      onPress={() => setIsAddingService(false)}
+                      style={{ padding: 6 }}
+                    >
                       <X size={18} color="#94A3B8" />
                     </Pressable>
                   </View>
@@ -902,16 +1368,30 @@ export default function AddInterventionScreen() {
                 {/* Services du client = cases à cocher */}
                 {clientServices.map((svc) => {
                   const checked = checkedServiceIds.has(svc.id);
-                  const priceVal = servicePriceOverrides[svc.id] ?? svc.price.toString();
+                  const priceVal =
+                    servicePriceOverrides[svc.id] ?? svc.price.toString();
                   return (
-                    <View key={svc.id} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <View
+                      key={svc.id}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 8,
+                      }}
+                    >
                       <Pressable
                         onPress={() => toggleService(svc.id)}
                         style={{
-                          width: 22, height: 22, borderRadius: 6, borderWidth: 2,
+                          width: 22,
+                          height: 22,
+                          borderRadius: 6,
+                          borderWidth: 2,
                           borderColor: checked ? "#3B82F6" : "#CBD5E1",
                           backgroundColor: checked ? "#3B82F6" : "transparent",
-                          alignItems: "center", justifyContent: "center", flexShrink: 0,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
                         }}
                       >
                         {checked && <Check size={13} color="#fff" />}
@@ -921,14 +1401,30 @@ export default function AddInterventionScreen() {
                           value={svc.label}
                           placeholder="Nom du service"
                           onChangeText={async (t) => {
-                            try { await api.patch(`/api/clients/${selectedClient!.id}/services/${svc.id}`, { label: t }); await refetchClientServices(); }
-                            catch { /* silently ignore */ }
+                            try {
+                              await api.patch(
+                                `/api/clients/${selectedClient!.id}/services/${svc.id}`,
+                                { label: t },
+                              );
+                              await refetchClientServices();
+                            } catch {
+                              /* silently ignore */
+                            }
                           }}
-                          style={[{
-                            borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8,
-                            paddingHorizontal: 10, paddingVertical: 7, fontSize: 14,
-                            color: checked ? "#1E293B" : "#94A3B8",
-                          }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                          style={[
+                            {
+                              borderWidth: 1,
+                              borderColor: "#E2E8F0",
+                              borderRadius: 8,
+                              paddingHorizontal: 10,
+                              paddingVertical: 7,
+                              fontSize: 14,
+                              color: checked ? "#1E293B" : "#94A3B8",
+                            },
+                            Platform.OS === "web"
+                              ? ({ outlineStyle: "none" } as any)
+                              : {},
+                          ]}
                         />
                       </View>
                       <View style={{ flex: 1 }}>
@@ -937,23 +1433,49 @@ export default function AddInterventionScreen() {
                           placeholder="Prix"
                           keyboardType="numeric"
                           editable={checked}
-                          onChangeText={(t) => setServicePriceOverrides((prev) => ({ ...prev, [svc.id]: t }))}
-                          style={[{
-                            borderWidth: 1, borderColor: checked ? "#E2E8F0" : "#F1F5F9",
-                            borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
-                            fontSize: 14, color: checked ? "#1E293B" : "#94A3B8",
-                            backgroundColor: checked ? undefined : "#F8FAFC",
-                          }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                          onChangeText={(t) =>
+                            setServicePriceOverrides((prev) => ({
+                              ...prev,
+                              [svc.id]: t,
+                            }))
+                          }
+                          style={[
+                            {
+                              borderWidth: 1,
+                              borderColor: checked ? "#E2E8F0" : "#F1F5F9",
+                              borderRadius: 8,
+                              paddingHorizontal: 10,
+                              paddingVertical: 7,
+                              fontSize: 14,
+                              color: checked ? "#1E293B" : "#94A3B8",
+                              backgroundColor: checked ? undefined : "#F8FAFC",
+                            },
+                            Platform.OS === "web"
+                              ? ({ outlineStyle: "none" } as any)
+                              : {},
+                          ]}
                         />
                       </View>
                       <Pressable
                         onPress={async () => {
                           try {
-                            await api.delete(`/api/clients/${selectedClient!.id}/services/${svc.id}`);
-                            setCheckedServiceIds((prev) => { const n = new Set(prev); n.delete(svc.id); return n; });
-                            setServicePriceOverrides((prev) => { const n = { ...prev }; delete n[svc.id]; return n; });
+                            await api.delete(
+                              `/api/clients/${selectedClient!.id}/services/${svc.id}`,
+                            );
+                            setCheckedServiceIds((prev) => {
+                              const n = new Set(prev);
+                              n.delete(svc.id);
+                              return n;
+                            });
+                            setServicePriceOverrides((prev) => {
+                              const n = { ...prev };
+                              delete n[svc.id];
+                              return n;
+                            });
                             await refetchClientServices();
-                          } catch { toast.error("Erreur", "Impossible de supprimer"); }
+                          } catch {
+                            toast.error("Erreur", "Impossible de supprimer");
+                          }
                         }}
                         style={{ padding: 6 }}
                       >
@@ -965,22 +1487,41 @@ export default function AddInterventionScreen() {
 
                 {/* Items ad-hoc (sans client ou ajout ponctuel) */}
                 {adHocItems.map((item, index) => (
-                  <View key={`adhoc-${index}`} className="flex-row gap-2 items-center mb-2">
+                  <View
+                    key={`adhoc-${index}`}
+                    className="flex-row gap-2 items-center mb-2"
+                  >
                     <View className="flex-[2]">
-                      <Input placeholder="Ex: RDC, Velux..." value={item.label} onChangeText={(t) => updateAdHocItem(index, "label", t)} />
+                      <Input
+                        placeholder="Ex: RDC, Velux..."
+                        value={item.label}
+                        onChangeText={(t) => updateAdHocItem(index, "label", t)}
+                      />
                     </View>
                     <View className="flex-1">
-                      <Input placeholder="Prix" keyboardType="numeric" value={item.price} onChangeText={(t) => updateAdHocItem(index, "price", t)} />
+                      <Input
+                        placeholder="Prix"
+                        keyboardType="numeric"
+                        value={item.price}
+                        onChangeText={(t) => updateAdHocItem(index, "price", t)}
+                      />
                     </View>
-                    <Pressable onPress={() => removeAdHocItem(index)} className="p-2">
+                    <Pressable
+                      onPress={() => removeAdHocItem(index)}
+                      className="p-2"
+                    >
                       <Trash2 size={20} color="#EF4444" />
                     </Pressable>
                   </View>
                 ))}
 
                 <View className="flex-row justify-between items-center mt-2">
-                  <Text className="font-bold text-lg text-foreground dark:text-white">Total Estimé</Text>
-                  <Text className="font-extrabold text-2xl text-primary">{totalPrice.toFixed(2)} €</Text>
+                  <Text className="font-bold text-lg text-foreground dark:text-white">
+                    Total Estimé
+                  </Text>
+                  <Text className="font-extrabold text-2xl text-primary">
+                    {totalPrice.toFixed(2)} €
+                  </Text>
                 </View>
               </View>
             )}
@@ -998,34 +1539,85 @@ export default function AddInterventionScreen() {
               />
             </View>
 
-            {/* FACTURATION */}
+            {/* PAIEMENT */}
             {isAdmin && typeNeedsClient && (
-              <View className="flex-row items-center justify-between pt-4 mt-4 border-t border-border dark:border-slate-800">
-                <View className="flex-1 pr-4 flex-row items-center gap-3">
-                  <View className={`p-2 rounded-full ${isInvoice ? "bg-green-100 dark:bg-green-900/30" : "bg-muted/50"}`}>
-                    <FileText size={20} color={isInvoice ? "#22C55E" : "#64748B"} />
-                  </View>
-                  <View>
-                    <Text className="text-base font-medium text-foreground dark:text-white">Facturation</Text>
-                    <Text className="text-xs text-muted-foreground mt-0.5">Cocher si une facture doit être émise</Text>
-                  </View>
-                </View>
-                <Switch
-                  value={isInvoice}
-                  onValueChange={setIsInvoice}
-                  trackColor={{ false: "#767577", true: "#22C55E" }}
-                  thumbColor={Platform.OS === "ios" ? "#fff" : isInvoice ? "#fff" : "#f4f3f4"}
+              <View className="pt-4 mt-4 border-t border-border dark:border-slate-800">
+                <Text className="text-sm font-semibold text-foreground dark:text-white mb-2">
+                  Paiement
+                </Text>
+                <SlidingPillSelector
+                  options={[
+                    {
+                      id: "cash",
+                      label: "Espèces",
+                      pillColor: "#EF4444",
+                      activeTextColor: "#fff",
+                      icon: (c) => <Banknote size={14} color={c} />,
+                    },
+                    {
+                      id: "invoice",
+                      label: "FAC",
+                      pillColor: "#22C55E",
+                      activeTextColor: "#fff",
+                      icon: (c) => <FileText size={14} color={c} />,
+                    },
+                    {
+                      id: "invoice_cash",
+                      label: "FAC+Esp.",
+                      pillColor: "#F97316",
+                      activeTextColor: "#fff",
+                      icon: (c) => <Wallet size={14} color={c} />,
+                    },
+                  ]}
+                  selected={paymentMode}
+                  onSelect={(id) =>
+                    setPaymentMode(id as "cash" | "invoice" | "invoice_cash")
+                  }
+                  pillColor="#3B82F6"
+                  bgColor="#F1F5F9"
+                  activeTextColor="#fff"
+                  inactiveTextColor="#64748B"
+                  fontSize={12}
+                  itemPy={9}
                 />
+                {paymentMode === "cash" && (
+                  <Text
+                    style={{ fontSize: 11, color: "#EF4444", marginTop: 5 }}
+                  >
+                    L'employé encaisse sur place
+                  </Text>
+                )}
+                {paymentMode === "invoice" && (
+                  <Text
+                    style={{ fontSize: 11, color: "#22C55E", marginTop: 5 }}
+                  >
+                    Une facture sera émise au client
+                  </Text>
+                )}
+                {paymentMode === "invoice_cash" && (
+                  <Text
+                    style={{ fontSize: 11, color: "#F97316", marginTop: 5 }}
+                  >
+                    L'employé encaisse sur place et une facture sera émise
+                  </Text>
+                )}
               </View>
             )}
 
             {/* ACTIONS */}
             <View className="mt-6 flex-row gap-3">
-              <View style={{ flex: 1, marginLeft: isWeb ? 0 : -22, marginRight: isWeb ? 0 : 15 }}>
+              <View
+                style={{
+                  flex: 1,
+                  marginLeft: isWeb ? 0 : -22,
+                  marginRight: isWeb ? 0 : 15,
+                }}
+              >
                 <Button
                   variant="outline"
                   onPress={() => {
-                    if (isRepriseMode) router.push(`/(app)/calendar/${reprise_of}` as any);
+                    if (isRepriseMode)
+                      router.push(`/(app)/calendar/${reprise_of}` as any);
                     else router.push("/(app)/calendar");
                   }}
                   className="w-full"
@@ -1041,7 +1633,13 @@ export default function AddInterventionScreen() {
                   className="w-full"
                   style={{ borderRadius: 20 }}
                 >
-                  {isSubmitting ? "Envoi..." : isRepriseMode ? "Planifier le RDV" : isEditMode ? "Mettre à jour" : "Valider"}
+                  {isSubmitting
+                    ? "Envoi..."
+                    : isRepriseMode
+                      ? "Planifier le RDV"
+                      : isEditMode
+                        ? "Mettre à jour"
+                        : "Valider"}
                 </Button>
               </View>
             </View>
@@ -1050,41 +1648,79 @@ export default function AddInterventionScreen() {
       </ScrollView>
 
       {/* MODAL RÉCURRENCE PERSONNALISÉE */}
-      <Dialog open={showCustomModal} onClose={() => setShowCustomModal(false)} position="center">
+      <Dialog
+        open={showCustomModal}
+        onClose={() => setShowCustomModal(false)}
+        position="center"
+      >
         <View className="p-6 gap-5">
           <View className="flex-row items-center justify-between">
-            <Text className="text-lg font-bold text-foreground dark:text-white">Récurrence personnalisée</Text>
-            <Pressable onPress={() => setShowCustomModal(false)} className="p-1">
+            <Text className="text-lg font-bold text-foreground dark:text-white">
+              Récurrence personnalisée
+            </Text>
+            <Pressable
+              onPress={() => setShowCustomModal(false)}
+              className="p-1"
+            >
               <X size={20} color="#64748B" />
             </Pressable>
           </View>
 
           {/* Intervalle */}
           <View className="gap-3">
-            <Text className="text-sm font-semibold text-foreground dark:text-white">Répéter toutes les</Text>
+            <Text className="text-sm font-semibold text-foreground dark:text-white">
+              Répéter toutes les
+            </Text>
             <View className="flex-row gap-3 items-center flex-wrap">
               <TextInput
                 value={customIntervalStr}
                 onChangeText={setCustomIntervalStr}
                 keyboardType="numeric"
-                style={[{
-                  width: 60, borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 10,
-                  padding: 10, textAlign: "center", fontSize: 16, color: "#0f172a",
-                }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                style={[
+                  {
+                    width: 60,
+                    borderWidth: 1.5,
+                    borderColor: "#E2E8F0",
+                    borderRadius: 10,
+                    padding: 10,
+                    textAlign: "center",
+                    fontSize: 16,
+                    color: "#0f172a",
+                  },
+                  Platform.OS === "web"
+                    ? ({ outlineStyle: "none" } as any)
+                    : {},
+                ]}
               />
               <View className="flex-row gap-2 flex-1 flex-wrap">
-                {([["day", "Jour(s)"], ["week", "Semaine(s)"], ["month", "Mois"], ["year", "Année(s)"]] as [RecurrenceUnit, string][]).map(([u, label]) => (
+                {(
+                  [
+                    ["day", "Jour(s)"],
+                    ["week", "Semaine(s)"],
+                    ["month", "Mois"],
+                    ["year", "Année(s)"],
+                  ] as [RecurrenceUnit, string][]
+                ).map(([u, label]) => (
                   <Pressable
                     key={u}
                     onPress={() => setCustomUnit(u)}
                     style={{
-                      paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10,
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      borderRadius: 10,
                       borderWidth: 1.5,
                       borderColor: customUnit === u ? "#3B82F6" : "#E2E8F0",
-                      backgroundColor: customUnit === u ? "#EFF6FF" : "transparent",
+                      backgroundColor:
+                        customUnit === u ? "#EFF6FF" : "transparent",
                     }}
                   >
-                    <Text style={{ fontWeight: "600", fontSize: 12, color: customUnit === u ? "#3B82F6" : "#94A3B8" }}>
+                    <Text
+                      style={{
+                        fontWeight: "600",
+                        fontSize: 12,
+                        color: customUnit === u ? "#3B82F6" : "#94A3B8",
+                      }}
+                    >
                       {label}
                     </Text>
                   </Pressable>
@@ -1096,25 +1732,41 @@ export default function AddInterventionScreen() {
           {/* Jours de semaine (si semaine sélectionnée) */}
           {customUnit === "week" && (
             <View className="gap-2">
-              <Text className="text-sm font-semibold text-foreground dark:text-white">Répéter le</Text>
+              <Text className="text-sm font-semibold text-foreground dark:text-white">
+                Répéter le
+              </Text>
               <View className="flex-row gap-1.5">
                 {["D", "L", "M", "M", "J", "V", "S"].map((d, i) => {
                   const active = customDaysOfWeek.includes(i);
                   return (
                     <Pressable
                       key={i}
-                      onPress={() => setCustomDaysOfWeek(prev =>
-                        prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]
-                      )}
+                      onPress={() =>
+                        setCustomDaysOfWeek((prev) =>
+                          prev.includes(i)
+                            ? prev.filter((x) => x !== i)
+                            : [...prev, i],
+                        )
+                      }
                       style={{
-                        flex: 1, aspectRatio: 1, borderRadius: 999, maxWidth: 40,
+                        flex: 1,
+                        aspectRatio: 1,
+                        borderRadius: 999,
+                        maxWidth: 40,
                         borderWidth: 1.5,
                         borderColor: active ? "#3B82F6" : "#E2E8F0",
                         backgroundColor: active ? "#3B82F6" : "transparent",
-                        alignItems: "center", justifyContent: "center",
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
                     >
-                      <Text style={{ fontWeight: "700", fontSize: 11, color: active ? "white" : "#94A3B8" }}>
+                      <Text
+                        style={{
+                          fontWeight: "700",
+                          fontSize: 11,
+                          color: active ? "white" : "#94A3B8",
+                        }}
+                      >
                         {d}
                       </Text>
                     </Pressable>
@@ -1126,35 +1778,74 @@ export default function AddInterventionScreen() {
 
           {/* Se termine */}
           <View className="gap-3">
-            <Text className="text-sm font-semibold text-foreground dark:text-white">Se termine</Text>
-            {([["never", "Jamais", null], ["count", "Après", "occurrences"], ["date", "Le", null]] as [EndType, string, string | null][]).map(([t, lbl, suffix]) => (
+            <Text className="text-sm font-semibold text-foreground dark:text-white">
+              Se termine
+            </Text>
+            {(
+              [
+                ["never", "Jamais", null],
+                ["count", "Après", "occurrences"],
+                ["date", "Le", null],
+              ] as [EndType, string, string | null][]
+            ).map(([t, lbl, suffix]) => (
               <Pressable
                 key={t}
                 onPress={() => setCustomEndType(t)}
                 style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
               >
-                <View style={{
-                  width: 20, height: 20, borderRadius: 10, borderWidth: 2,
-                  borderColor: customEndType === t ? "#3B82F6" : "#CBD5E1",
-                  alignItems: "center", justifyContent: "center",
-                }}>
+                <View
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    borderWidth: 2,
+                    borderColor: customEndType === t ? "#3B82F6" : "#CBD5E1",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
                   {customEndType === t && (
-                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#3B82F6" }} />
+                    <View
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 5,
+                        backgroundColor: "#3B82F6",
+                      }}
+                    />
                   )}
                 </View>
-                <Text style={{ fontSize: 14, color: "#0f172a", fontWeight: "500" }}>{lbl}</Text>
+                <Text
+                  style={{ fontSize: 14, color: "#0f172a", fontWeight: "500" }}
+                >
+                  {lbl}
+                </Text>
                 {t === "count" && customEndType === "count" && (
                   <>
                     <TextInput
                       value={customCountStr}
                       onChangeText={setCustomCountStr}
                       keyboardType="numeric"
-                      style={[{
-                        width: 60, borderWidth: 1.5, borderColor: "#DBEAFE", borderRadius: 8,
-                        padding: 6, textAlign: "center", fontSize: 14, color: "#3B82F6", fontWeight: "700",
-                      }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                      style={[
+                        {
+                          width: 60,
+                          borderWidth: 1.5,
+                          borderColor: "#DBEAFE",
+                          borderRadius: 8,
+                          padding: 6,
+                          textAlign: "center",
+                          fontSize: 14,
+                          color: "#3B82F6",
+                          fontWeight: "700",
+                        },
+                        Platform.OS === "web"
+                          ? ({ outlineStyle: "none" } as any)
+                          : {},
+                      ]}
                     />
-                    <Text style={{ fontSize: 14, color: "#64748B" }}>{suffix}</Text>
+                    <Text style={{ fontSize: 14, color: "#64748B" }}>
+                      {suffix}
+                    </Text>
                   </>
                 )}
                 {t === "date" && customEndType === "date" && (
@@ -1163,10 +1854,20 @@ export default function AddInterventionScreen() {
                     onChangeText={setCustomEndDate}
                     placeholder="AAAA-MM-JJ"
                     placeholderTextColor="#CBD5E1"
-                    style={[{
-                      flex: 1, borderWidth: 1.5, borderColor: "#DBEAFE", borderRadius: 8,
-                      padding: 6, fontSize: 14, color: "#3B82F6",
-                    }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]}
+                    style={[
+                      {
+                        flex: 1,
+                        borderWidth: 1.5,
+                        borderColor: "#DBEAFE",
+                        borderRadius: 8,
+                        padding: 6,
+                        fontSize: 14,
+                        color: "#3B82F6",
+                      },
+                      Platform.OS === "web"
+                        ? ({ outlineStyle: "none" } as any)
+                        : {},
+                    ]}
                   />
                 )}
               </Pressable>
@@ -1178,9 +1879,13 @@ export default function AddInterventionScreen() {
               const interval = parseInt(customIntervalStr) || 1;
               const count = parseInt(customCountStr) || 4;
               setRecurrence({
-                freq: "custom", interval, unit: customUnit,
+                freq: "custom",
+                interval,
+                unit: customUnit,
                 daysOfWeek: customDaysOfWeek,
-                endType: customEndType, count, endDate: customEndDate,
+                endType: customEndType,
+                count,
+                endDate: customEndDate,
               });
               setShowCustomModal(false);
             }}
@@ -1193,49 +1898,285 @@ export default function AddInterventionScreen() {
       </Dialog>
 
       {/* MODAL NOUVEAU CLIENT */}
-      <Dialog open={showNewClient} onClose={() => setShowNewClient(false)} position="bottom">
+      <Dialog
+        open={showNewClient}
+        onClose={() => setShowNewClient(false)}
+        position="bottom"
+      >
         <View className="p-5">
           <View className="flex-row items-center justify-between mb-4">
-            <Text className="text-lg font-bold text-foreground dark:text-white">Nouveau client</Text>
+            <Text className="text-lg font-bold text-foreground dark:text-white">
+              Nouveau client
+            </Text>
             <Pressable onPress={() => setShowNewClient(false)} className="p-1">
               <X size={20} color="#64748B" />
             </Pressable>
           </View>
 
           <View className="gap-3">
-            <View style={{ borderWidth: 1.5, borderColor: ncFocused === "name" ? "#3B82F6" : "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "#F8FAFC" }}>
-              <Text style={{ fontSize: 11, color: ncFocused === "name" ? "#3B82F6" : "#94A3B8", fontWeight: "600", marginBottom: 4 }}>NOM / ENTREPRISE</Text>
-              <TextInput value={newClientName} onChangeText={setNewClientName} placeholder="Ex: Jean Dupont" placeholderTextColor="#CBD5E1" onFocus={() => setNcFocused("name")} onBlur={() => setNcFocused(null)} style={[{ fontSize: 15, color: "#0f172a" }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]} />
+            <View
+              style={{
+                borderWidth: 1.5,
+                borderColor: ncFocused === "name" ? "#3B82F6" : "#E2E8F0",
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: ncFocused === "name" ? "#3B82F6" : "#94A3B8",
+                  fontWeight: "600",
+                  marginBottom: 4,
+                }}
+              >
+                NOM / ENTREPRISE
+              </Text>
+              <TextInput
+                value={newClientName}
+                onChangeText={setNewClientName}
+                placeholder="Ex: Jean Dupont"
+                placeholderTextColor="#CBD5E1"
+                onFocus={() => setNcFocused("name")}
+                onBlur={() => setNcFocused(null)}
+                style={[
+                  { fontSize: 15, color: "#0f172a" },
+                  Platform.OS === "web"
+                    ? ({ outlineStyle: "none" } as any)
+                    : {},
+                ]}
+              />
             </View>
-            <View style={{ borderWidth: 1.5, borderColor: ncFocused === "street" ? "#3B82F6" : "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "#F8FAFC" }}>
-              <Text style={{ fontSize: 11, color: ncFocused === "street" ? "#3B82F6" : "#94A3B8", fontWeight: "600", marginBottom: 4 }}>RUE ET NUMÉRO *</Text>
-              <TextInput value={newClientStreet} onChangeText={setNewClientStreet} placeholder="10 Rue de la Paix" placeholderTextColor="#CBD5E1" onFocus={() => setNcFocused("street")} onBlur={() => setNcFocused(null)} style={[{ fontSize: 15, color: "#0f172a" }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]} />
+            <View
+              style={{
+                borderWidth: 1.5,
+                borderColor: ncFocused === "street" ? "#3B82F6" : "#E2E8F0",
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: ncFocused === "street" ? "#3B82F6" : "#94A3B8",
+                  fontWeight: "600",
+                  marginBottom: 4,
+                }}
+              >
+                RUE ET NUMÉRO *
+              </Text>
+              <TextInput
+                value={newClientStreet}
+                onChangeText={setNewClientStreet}
+                placeholder="10 Rue de la Paix"
+                placeholderTextColor="#CBD5E1"
+                onFocus={() => setNcFocused("street")}
+                onBlur={() => setNcFocused(null)}
+                style={[
+                  { fontSize: 15, color: "#0f172a" },
+                  Platform.OS === "web"
+                    ? ({ outlineStyle: "none" } as any)
+                    : {},
+                ]}
+              />
             </View>
             <View className="flex-row gap-3">
-              <View style={{ flex: 1, borderWidth: 1.5, borderColor: ncFocused === "zip" ? "#3B82F6" : "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "#F8FAFC" }}>
-                <Text style={{ fontSize: 11, color: ncFocused === "zip" ? "#3B82F6" : "#94A3B8", fontWeight: "600", marginBottom: 4 }}>CP</Text>
-                <TextInput value={newClientZip} onChangeText={setNewClientZip} placeholder="7000" keyboardType="numeric" placeholderTextColor="#CBD5E1" onFocus={() => setNcFocused("zip")} onBlur={() => setNcFocused(null)} style={[{ fontSize: 15, color: "#0f172a" }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]} />
+              <View
+                style={{
+                  flex: 1,
+                  borderWidth: 1.5,
+                  borderColor: ncFocused === "zip" ? "#3B82F6" : "#E2E8F0",
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  backgroundColor: "#F8FAFC",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: ncFocused === "zip" ? "#3B82F6" : "#94A3B8",
+                    fontWeight: "600",
+                    marginBottom: 4,
+                  }}
+                >
+                  CP
+                </Text>
+                <TextInput
+                  value={newClientZip}
+                  onChangeText={setNewClientZip}
+                  placeholder="7000"
+                  keyboardType="numeric"
+                  placeholderTextColor="#CBD5E1"
+                  onFocus={() => setNcFocused("zip")}
+                  onBlur={() => setNcFocused(null)}
+                  style={[
+                    { fontSize: 15, color: "#0f172a" },
+                    Platform.OS === "web"
+                      ? ({ outlineStyle: "none" } as any)
+                      : {},
+                  ]}
+                />
               </View>
-              <View style={{ flex: 2, borderWidth: 1.5, borderColor: ncFocused === "city" ? "#3B82F6" : "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "#F8FAFC" }}>
-                <Text style={{ fontSize: 11, color: ncFocused === "city" ? "#3B82F6" : "#94A3B8", fontWeight: "600", marginBottom: 4 }}>VILLE *</Text>
-                <TextInput value={newClientCity} onChangeText={setNewClientCity} placeholder="Mons" placeholderTextColor="#CBD5E1" onFocus={() => setNcFocused("city")} onBlur={() => setNcFocused(null)} style={[{ fontSize: 15, color: "#0f172a" }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]} />
+              <View
+                style={{
+                  flex: 2,
+                  borderWidth: 1.5,
+                  borderColor: ncFocused === "city" ? "#3B82F6" : "#E2E8F0",
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  backgroundColor: "#F8FAFC",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: ncFocused === "city" ? "#3B82F6" : "#94A3B8",
+                    fontWeight: "600",
+                    marginBottom: 4,
+                  }}
+                >
+                  VILLE *
+                </Text>
+                <TextInput
+                  value={newClientCity}
+                  onChangeText={setNewClientCity}
+                  placeholder="Mons"
+                  placeholderTextColor="#CBD5E1"
+                  onFocus={() => setNcFocused("city")}
+                  onBlur={() => setNcFocused(null)}
+                  style={[
+                    { fontSize: 15, color: "#0f172a" },
+                    Platform.OS === "web"
+                      ? ({ outlineStyle: "none" } as any)
+                      : {},
+                  ]}
+                />
               </View>
             </View>
-            <View style={{ borderWidth: 1.5, borderColor: ncFocused === "phone" ? "#3B82F6" : "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "#F8FAFC" }}>
-              <Text style={{ fontSize: 11, color: ncFocused === "phone" ? "#3B82F6" : "#94A3B8", fontWeight: "600", marginBottom: 4 }}>TÉLÉPHONE *</Text>
-              <TextInput value={newClientPhone} onChangeText={setNewClientPhone} placeholder="0487 12 34 56" keyboardType="phone-pad" placeholderTextColor="#CBD5E1" onFocus={() => setNcFocused("phone")} onBlur={() => setNcFocused(null)} style={[{ fontSize: 15, color: "#0f172a" }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]} />
+            <View
+              style={{
+                borderWidth: 1.5,
+                borderColor: ncFocused === "phone" ? "#3B82F6" : "#E2E8F0",
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: ncFocused === "phone" ? "#3B82F6" : "#94A3B8",
+                  fontWeight: "600",
+                  marginBottom: 4,
+                }}
+              >
+                TÉLÉPHONE *
+              </Text>
+              <TextInput
+                value={newClientPhone}
+                onChangeText={setNewClientPhone}
+                placeholder="0487 12 34 56"
+                keyboardType="phone-pad"
+                placeholderTextColor="#CBD5E1"
+                onFocus={() => setNcFocused("phone")}
+                onBlur={() => setNcFocused(null)}
+                style={[
+                  { fontSize: 15, color: "#0f172a" },
+                  Platform.OS === "web"
+                    ? ({ outlineStyle: "none" } as any)
+                    : {},
+                ]}
+              />
             </View>
-            <View style={{ borderWidth: 1.5, borderColor: ncFocused === "email" ? "#3B82F6" : "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "#F8FAFC" }}>
-              <Text style={{ fontSize: 11, color: ncFocused === "email" ? "#3B82F6" : "#94A3B8", fontWeight: "600", marginBottom: 4 }}>EMAIL</Text>
-              <TextInput value={newClientEmail} onChangeText={setNewClientEmail} placeholder="client@email.com" keyboardType="email-address" autoCapitalize="none" placeholderTextColor="#CBD5E1" onFocus={() => setNcFocused("email")} onBlur={() => setNcFocused(null)} style={[{ fontSize: 15, color: "#0f172a" }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]} />
+            <View
+              style={{
+                borderWidth: 1.5,
+                borderColor: ncFocused === "email" ? "#3B82F6" : "#E2E8F0",
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: ncFocused === "email" ? "#3B82F6" : "#94A3B8",
+                  fontWeight: "600",
+                  marginBottom: 4,
+                }}
+              >
+                EMAIL
+              </Text>
+              <TextInput
+                value={newClientEmail}
+                onChangeText={setNewClientEmail}
+                placeholder="client@email.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                placeholderTextColor="#CBD5E1"
+                onFocus={() => setNcFocused("email")}
+                onBlur={() => setNcFocused(null)}
+                style={[
+                  { fontSize: 15, color: "#0f172a" },
+                  Platform.OS === "web"
+                    ? ({ outlineStyle: "none" } as any)
+                    : {},
+                ]}
+              />
             </View>
-            <View style={{ borderWidth: 1.5, borderColor: ncFocused === "notes" ? "#3B82F6" : "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "#F8FAFC" }}>
-              <Text style={{ fontSize: 11, color: ncFocused === "notes" ? "#3B82F6" : "#94A3B8", fontWeight: "600", marginBottom: 4 }}>NOTES INTERNES</Text>
-              <TextInput value={newClientNotes} onChangeText={setNewClientNotes} placeholder="Code porte, préférences..." multiline numberOfLines={3} placeholderTextColor="#CBD5E1" onFocus={() => setNcFocused("notes")} onBlur={() => setNcFocused(null)} style={[{ fontSize: 15, color: "#0f172a", minHeight: 60 }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}]} />
+            <View
+              style={{
+                borderWidth: 1.5,
+                borderColor: ncFocused === "notes" ? "#3B82F6" : "#E2E8F0",
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: ncFocused === "notes" ? "#3B82F6" : "#94A3B8",
+                  fontWeight: "600",
+                  marginBottom: 4,
+                }}
+              >
+                NOTES INTERNES
+              </Text>
+              <TextInput
+                value={newClientNotes}
+                onChangeText={setNewClientNotes}
+                placeholder="Code porte, préférences..."
+                multiline
+                numberOfLines={3}
+                placeholderTextColor="#CBD5E1"
+                onFocus={() => setNcFocused("notes")}
+                onBlur={() => setNcFocused(null)}
+                style={[
+                  { fontSize: 15, color: "#0f172a", minHeight: 60 },
+                  Platform.OS === "web"
+                    ? ({ outlineStyle: "none" } as any)
+                    : {},
+                ]}
+              />
             </View>
           </View>
 
-          <Button onPress={handleCreateClient} loading={createClientMutation.isPending} className="mt-4" style={{ borderRadius: 16 }}>
+          <Button
+            onPress={handleCreateClient}
+            loading={createClientMutation.isPending}
+            className="mt-4"
+            style={{ borderRadius: 16 }}
+          >
             <Check size={18} color="white" />
             <Text className="text-white font-bold ml-2">Créer le client</Text>
           </Button>

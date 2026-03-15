@@ -158,6 +158,7 @@ class Intervention(Base):
     status = Column(String, default="planned")
     price_estimated = Column(Numeric(10, 2), nullable=True)
     is_invoice = Column(Boolean, default=False)
+    payment_mode = Column(String(20), default="cash", nullable=False)  # "cash" | "invoice" | "invoice_cash"
     google_event_id = Column(String, nullable=True, unique=True, index=True)
     zone = Column(String(20), nullable=True)  # "hainaut" ou "ardennes"
 
