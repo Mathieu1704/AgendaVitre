@@ -5,6 +5,7 @@ import {
   ScrollView,
   Text,
   ActivityIndicator,
+  Modal,
   useWindowDimensions,
   Platform,
   Linking,
@@ -26,6 +27,7 @@ import {
   Clock,
   MapPin,
   CalendarCheck,
+  Users,
 } from "lucide-react-native";
 import Animated, {
   FadeInDown,
@@ -65,6 +67,8 @@ import {
 import { useRawEventsByDate, useRawEventsByRange } from "../../../src/hooks/useRawEvents";
 import { useAuth } from "../../../src/hooks/useAuth";
 import { useSubZones } from "../../../src/hooks/useZones";
+import { useAssignEmployees, useBulkAssignEmployees } from "../../../src/hooks/useInterventions";
+import { useEmployees } from "../../../src/hooks/useEmployees";
 import { RawCalendarEvent } from "../../../src/types";
 
 // --- CONFIGURATION LOCALE ---
@@ -295,6 +299,16 @@ export default function CalendarScreen() {
   // Filtres actifs
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
   const [activeStatuses, setActiveStatuses] = useState<Set<string>>(new Set());
+  const [assignModal, setAssignModal] = useState<
+    | { mode: "single"; interventionId: string; currentIds: string[] }
+    | { mode: "zone"; date: string; subZone: string; label: string; color: string }
+    | null
+  >(null);
+  const [selectedAssignIds, setSelectedAssignIds] = useState<string[]>([]);
+
+  const { employees: allEmployees } = useEmployees();
+  const assignEmployees = useAssignEmployees();
+  const bulkAssign = useBulkAssignEmployees();
 
   const { subZones } = useSubZones();
   const subZoneMap = useMemo(() => {
@@ -543,16 +557,42 @@ export default function CalendarScreen() {
     const typeConfig = TYPE_CONFIG[item.type ?? "intervention"] ?? TYPE_CONFIG["intervention"];
     const hasClient = ["intervention", "devis"].includes(item.type ?? "intervention");
 
+    const employees: any[] = item.employees ?? [];
+
     return (
       <Pressable
         onPress={() => router.push(`/(app)/calendar/${item.id}?from_view=${viewMode}&from_date=${selectedDate}` as any)}
-        className={`bg-card dark:bg-slate-900 border border-border dark:border-slate-800 shadow-sm active:scale-[0.98] mb-3 ${cardPadding}`}
-        style={(() => {
-          const sz = item.sub_zone ? subZoneMap.get(item.sub_zone) : null;
-          return { borderRadius: cardRadius, ...(sz ? { borderLeftWidth: 3, borderLeftColor: sz.color } : {}) };
-        })()}
+        onLongPress={() => {
+          const currentIds = employees.map((e: any) => e.id);
+          setAssignModal({ mode: "single", interventionId: item.id, currentIds });
+          setSelectedAssignIds(currentIds);
+        }}
+        delayLongPress={400}
+        className={`border border-border dark:border-slate-800 shadow-sm active:scale-[0.98] mb-3 overflow-hidden`}
+        style={{ borderRadius: cardRadius }}
       >
-        <View className="flex-row items-center gap-3">
+        {/* Fond en bandes verticales distinctes selon les employés */}
+        {employees.length > 0 && (
+          <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, flexDirection: "row" }}>
+            {employees.map((e: any) => (
+              <View key={e.id} style={{ flex: 1, backgroundColor: (e.color ?? "#3B82F6") + "2C" }} />
+            ))}
+          </View>
+        )}
+        {/* Barre colorée avec prénoms (1 ou plusieurs employés) */}
+        {employees.length > 0 && (
+          <View style={{ flexDirection: "row", height: 18, width: "100%" }}>
+            {employees.map((emp: any) => (
+              <View key={emp.id} style={{ flex: 1, backgroundColor: emp.color ?? "#94A3B8", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: "700", color: "#fff", paddingHorizontal: 4, letterSpacing: 0.2 }}>
+                  {(emp.full_name ?? emp.email ?? "?").split(" ")[0]}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View className={`flex-row items-center gap-3 ${cardPadding}`}>
           {/* COLONNE GAUCHE : HEURE */}
           <View
             className={`items-center justify-center ${compact ? "w-11" : "w-16"} py-2.5`}
@@ -588,56 +628,34 @@ export default function CalendarScreen() {
           <View className="flex-1 justify-center">
             <View className="flex-row justify-between items-start">
               <View className="flex-1 mr-2">
-                {/* Adresse en priorité, sinon titre */}
                 <Text
-                  className={`font-extrabold text-foreground dark:text-white ${
-                    compact ? "text-sm" : "text-xl"
-                  }`}
+                  className={`font-extrabold text-foreground dark:text-white ${compact ? "text-sm" : "text-xl"}`}
                   numberOfLines={1}
                 >
-                  {hasClient && item.client?.address
-                    ? item.client.address
-                    : item.title}
+                  {hasClient && item.client?.address ? item.client.address : item.title}
                 </Text>
-
-                {/* Titre + nom client en sous-titres si adresse affichée */}
                 {hasClient && item.client?.address && (
                   <>
-                    <Text
-                      className={`text-muted-foreground dark:text-slate-400 font-medium ${
-                        compact ? "text-[10px]" : "text-sm"
-                      } mt-0.5`}
-                      numberOfLines={1}
-                    >
+                    <Text className={`text-muted-foreground dark:text-slate-400 font-medium ${compact ? "text-[10px]" : "text-sm"} mt-0.5`} numberOfLines={1}>
                       {item.title}
                     </Text>
                     {item.client?.name && (
-                      <Text
-                        className={`text-muted-foreground dark:text-slate-400 ${
-                          compact ? "text-[10px]" : "text-xs"
-                        }`}
-                        numberOfLines={1}
-                      >
+                      <Text className={`text-muted-foreground dark:text-slate-400 ${compact ? "text-[10px]" : "text-xs"}`} numberOfLines={1}>
                         {item.client.name}
                       </Text>
                     )}
                   </>
                 )}
-
-                {/* Nom client seul (pas d'adresse) */}
                 {hasClient && !item.client?.address && item.client?.name && (
-                  <Text
-                    className={`text-muted-foreground dark:text-slate-400 font-medium ${
-                      compact ? "text-[10px]" : "text-sm"
-                    } mt-0.5`}
-                    numberOfLines={1}
-                  >
+                  <Text className={`text-muted-foreground dark:text-slate-400 font-medium ${compact ? "text-[10px]" : "text-sm"} mt-0.5`} numberOfLines={1}>
                     {item.client.name}
                   </Text>
                 )}
               </View>
 
-              {!compact && <StatusBadge status={item.status} className="self-center" />}
+              <View style={{ alignItems: "flex-end", gap: 4 }}>
+                {!compact && <StatusBadge status={item.status} className="self-center" />}
+              </View>
             </View>
           </View>
         </View>
@@ -935,19 +953,45 @@ export default function CalendarScreen() {
                           return szGroups.map((sg, idx) => {
                             const sz = sg.code ? subZoneMap.get(sg.code) : null;
                             return (
-                              <View key={sg.code ?? `null-${idx}`}>
-                                {hasMultipleSubZones && sz && (
-                                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4, marginTop: idx === 0 ? 2 : 6, marginLeft: 16 }}>
-                                    <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: sz.color }} />
-                                    <Text style={{ fontSize: 9, fontWeight: "700", color: sz.color, textTransform: "uppercase", letterSpacing: 0.4 }}>
-                                      {sz.label}
+                              <View key={sg.code ?? `null-${idx}`} style={{ marginTop: idx === 0 ? 0 : 10 }}>
+                                {/* Header sous-zone horizontal + bouton assigner */}
+                                {hasMultipleSubZones && (
+                                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6, marginLeft: 8 }}>
+                                    <Text style={{ fontSize: 11, fontWeight: "800", color: sz?.color ?? "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6 }}>
+                                      {sz ? sz.label : "Sans zone"}
                                     </Text>
-                                    <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "#1E293B" : "#F1F5F9", marginLeft: 4 }} />
+                                    <View style={{ flex: 1, height: 1, backgroundColor: (sz?.color ?? "#94A3B8") + "40", marginHorizontal: 6 }} />
+                                    {sz && sg.code && (
+                                      <Pressable
+                                        hitSlop={10}
+                                        style={{ backgroundColor: sz.color + "20", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, flexDirection: "row", alignItems: "center", gap: 4 }}
+                                        onPress={() => {
+                                          // setTimeout évite la propagation du tap au backdrop de la modal
+                                          const code = sg.code!;
+                                          const label = sz.label;
+                                          const color = sz.color;
+                                          const date = selectedDate;
+                                          setTimeout(() => {
+                                            setAssignModal({ mode: "zone", date, subZone: code, label, color });
+                                            setSelectedAssignIds([]);
+                                          }, 100);
+                                        }}
+                                      >
+                                        <Users size={12} color={sz.color} />
+                                        <Text style={{ fontSize: 10, fontWeight: "700", color: sz.color }}>Assigner</Text>
+                                      </Pressable>
+                                    )}
                                   </View>
                                 )}
-                                {sg.items.map((item) => (
-                                  <InterventionCard key={item.id} item={item} />
-                                ))}
+                                {/* Barre latérale épaisse + cartes */}
+                                <View style={{ flexDirection: "row", gap: 8 }}>
+                                  <View style={{ width: 6, borderRadius: 3, backgroundColor: sz?.color ?? "#CBD5E1" }} />
+                                  <View style={{ flex: 1 }}>
+                                    {sg.items.map((item) => (
+                                      <InterventionCard key={item.id} item={item} />
+                                    ))}
+                                  </View>
+                                </View>
                               </View>
                             );
                           });
@@ -1500,6 +1544,103 @@ export default function CalendarScreen() {
       >
         <Plus size={28} color="white" />
       </Pressable>
+
+      {/* Modal assignation employés */}
+      <Modal
+        visible={!!assignModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAssignModal(null)}
+      >
+        <Pressable style={{ flex: 1, backgroundColor: "#00000066" }} onPress={() => setAssignModal(null)} />
+        <View style={{
+          backgroundColor: isDark ? "#0F172A" : "#fff",
+          borderTopLeftRadius: 24, borderTopRightRadius: 24,
+          paddingBottom: insets.bottom + 16,
+        }}>
+          {/* Header */}
+          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: isDark ? "#1E293B" : "#F1F5F9" }}>
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: isDark ? "#fff" : "#0F172A" }}>
+                {assignModal?.mode === "zone" ? `Assigner — ${assignModal.label}` : "Assigner des employés"}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>
+                {assignModal?.mode === "zone"
+                  ? "Remplace les assignations existantes"
+                  : "Sélectionner un ou plusieurs employés"}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => setAssignModal(null)}
+              hitSlop={12}
+              style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: isDark ? "#334155" : "#F1F5F9", alignItems: "center", justifyContent: "center" }}
+            >
+              <Text style={{ fontSize: 14, color: "#94A3B8", fontWeight: "700" }}>✕</Text>
+            </Pressable>
+          </View>
+
+          {/* Liste employés */}
+          <ScrollView style={{ maxHeight: 320 }}>
+            {(allEmployees ?? []).filter((e: any) => e.role !== "admin" || true).map((emp: any) => {
+              const isSelected = selectedAssignIds.includes(emp.id);
+              return (
+                <Pressable
+                  key={emp.id}
+                  onPress={() => setSelectedAssignIds(prev =>
+                    prev.includes(emp.id) ? prev.filter(id => id !== emp.id) : [...prev, emp.id]
+                  )}
+                  style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 12, gap: 12, borderBottomWidth: 1, borderBottomColor: isDark ? "#1E293B" : "#F8FAFC" }}
+                >
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: emp.color ?? "#3B82F6", alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>
+                      {(emp.full_name ?? emp.email ?? "?").charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: isDark ? "#fff" : "#0F172A" }}>
+                    {emp.full_name ?? emp.email}
+                  </Text>
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 11,
+                    borderWidth: 2, borderColor: isSelected ? "#3B82F6" : "#CBD5E1",
+                    backgroundColor: isSelected ? "#3B82F6" : "transparent",
+                    alignItems: "center", justifyContent: "center",
+                  }}>
+                    {isSelected && <Text style={{ color: "#fff", fontSize: 12, fontWeight: "800" }}>✓</Text>}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {/* Bouton confirmer */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
+            <Pressable
+              onPress={async () => {
+                if (!assignModal) return;
+                try {
+                  if (assignModal.mode === "single") {
+                    await assignEmployees.mutateAsync({ interventionId: assignModal.interventionId, employeeIds: selectedAssignIds });
+                  } else {
+                    await bulkAssign.mutateAsync({ date: assignModal.date, subZone: assignModal.subZone, employeeIds: selectedAssignIds, skipAssigned: false });
+                  }
+                  setAssignModal(null);
+                } catch {
+                  // toast handled by mutation
+                }
+              }}
+              disabled={assignEmployees.isPending || bulkAssign.isPending}
+              style={{ backgroundColor: "#3B82F6", borderRadius: 14, paddingVertical: 14, alignItems: "center" }}
+            >
+              {(assignEmployees.isPending || bulkAssign.isPending)
+                ? <ActivityIndicator color="white" size="small" />
+                : <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
+                    {selectedAssignIds.length === 0 ? "Retirer tous les employés" : `Assigner (${selectedAssignIds.length})`}
+                  </Text>
+              }
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

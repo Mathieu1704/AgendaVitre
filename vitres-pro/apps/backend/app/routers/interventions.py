@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.sql import func
 from typing import List, Optional
 from uuid import UUID
+from datetime import datetime
 import uuid
 
 from app.models.models import (
@@ -113,6 +115,44 @@ def create_intervention(
     db.commit()
     db.refresh(new_intervention)
     return new_intervention
+
+
+@router.patch("/bulk-assign")
+def bulk_assign_employees(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Assigne des employés à toutes les interventions d'une sous-zone pour un jour donné.
+    skip_assigned=True (défaut) : saute les interventions qui ont déjà des employés assignés."""
+    try:
+        target_date = datetime.strptime(body["date"], "%Y-%m-%d").date()
+    except (KeyError, ValueError):
+        raise HTTPException(status_code=400, detail="date manquant ou invalide (YYYY-MM-DD)")
+
+    sub_zone = body.get("sub_zone")
+    employee_ids = body.get("employee_ids", [])
+    skip_assigned = body.get("skip_assigned", True)
+
+    if not sub_zone:
+        raise HTTPException(status_code=400, detail="sub_zone manquant")
+
+    interventions = db.query(Intervention).options(selectinload(Intervention.employees)).filter(
+        func.date(Intervention.start_time) == target_date,
+        Intervention.sub_zone == sub_zone,
+    ).all()
+
+    employees = db.query(Employee).filter(Employee.id.in_([UUID(eid) for eid in employee_ids])).all()
+
+    updated = 0
+    for intervention in interventions:
+        if skip_assigned and len(intervention.employees) > 0:
+            continue
+        intervention.employees = employees
+        updated += 1
+
+    db.commit()
+    return {"ok": True, "updated": updated, "skipped": len(interventions) - updated}
 
 
 @router.patch("/{intervention_id}", response_model=InterventionOut)
