@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from typing import List
 from uuid import UUID
+import re
 
 from app.models.models import get_db, SubZone, CitySubZone, Client, Intervention
 from app.schemas.schemas import SubZoneOut
@@ -13,6 +14,11 @@ router = APIRouter()
 
 class LabelUpdate(BaseModel):
     label: str
+
+
+class SubZoneCreate(BaseModel):
+    label: str
+    parent_zone: str  # "hainaut" | "ardennes"
 
 
 class CityReassign(BaseModel):
@@ -36,6 +42,50 @@ def list_zones(db: Session = Depends(get_db), current_user=Depends(get_current_u
         )
         result.append(out)
     return result
+
+
+@router.post("/zones", response_model=SubZoneOut)
+def create_zone(body: SubZoneCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    if body.parent_zone not in ("hainaut", "ardennes"):
+        raise HTTPException(status_code=400, detail="parent_zone doit être 'hainaut' ou 'ardennes'")
+
+    # Générer un code unique depuis le label
+    slug = re.sub(r"[^a-z0-9]+", "_", body.label.lower().strip()).strip("_")
+    code = f"{body.parent_zone.upper()}_{slug.upper()}"
+    # S'assurer de l'unicité
+    existing_codes = {z.code for z in db.query(SubZone.code).all()}
+    base_code = code
+    i = 2
+    while code in existing_codes:
+        code = f"{base_code}_{i}"
+        i += 1
+
+    # Position = max existant + 1 pour ce parent
+    max_pos = db.query(SubZone).filter(SubZone.parent_zone == body.parent_zone).count()
+
+    zone = SubZone(code=code, label=body.label.strip(), parent_zone=body.parent_zone, position=max_pos)
+    db.add(zone)
+    db.commit()
+    db.refresh(zone)
+    return SubZoneOut(id=zone.id, code=zone.code, label=zone.label,
+                      parent_zone=zone.parent_zone, position=zone.position, cities=[])
+
+
+@router.delete("/zones/{zone_id}")
+def delete_zone(zone_id: UUID, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    zone = db.query(SubZone).filter(SubZone.id == zone_id).first()
+    if not zone:
+        raise HTTPException(status_code=404, detail="Sous-zone introuvable")
+    city_count = db.query(CitySubZone).filter(CitySubZone.sub_zone_id == zone_id).count()
+    if city_count > 0:
+        raise HTTPException(status_code=400, detail=f"Impossible de supprimer : {city_count} ville(s) rattachée(s). Déplace-les d'abord.")
+    db.delete(zone)
+    db.commit()
+    return {"ok": True}
 
 
 @router.patch("/zones/{zone_id}/label", response_model=SubZoneOut)

@@ -28,6 +28,23 @@ export const useRenameZone = () => {
   });
 };
 
+export const useDeleteZone = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/api/settings/zones/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sub-zones"] }),
+  });
+};
+
+export const useCreateZone = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ label, parent_zone }: { label: string; parent_zone: "hainaut" | "ardennes" }) =>
+      api.post("/api/settings/zones", { label, parent_zone }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sub-zones"] }),
+  });
+};
+
 export const useReassignCity = () => {
   const qc = useQueryClient();
   return useMutation({
