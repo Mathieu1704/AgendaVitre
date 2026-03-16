@@ -4,8 +4,8 @@ from typing import List
 from uuid import UUID
 import re
 
-from app.models.models import get_db, SubZone, CitySubZone, Client, Intervention
-from app.schemas.schemas import SubZoneOut
+from app.models.models import get_db, SubZone, CitySubZone, Client, Intervention, HourlyRate
+from app.schemas.schemas import SubZoneOut, HourlyRateOut, HourlyRateCreate
 from app.core.deps import get_current_user
 from pydantic import BaseModel
 
@@ -134,3 +134,44 @@ def reassign_city(city: str, body: CityReassign, db: Session = Depends(get_db), 
 
     db.commit()
     return {"ok": True, "city": city, "new_sub_zone": new_zone.code}
+
+
+# --- TAUX HORAIRES ---
+
+@router.get("/hourly-rates", response_model=List[HourlyRateOut])
+def list_hourly_rates(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return db.query(HourlyRate).order_by(HourlyRate.rate).all()
+
+
+@router.post("/hourly-rates", response_model=HourlyRateOut)
+def create_hourly_rate(
+    body: HourlyRateCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin uniquement.")
+    hr = HourlyRate(rate=body.rate, label=body.label)
+    db.add(hr)
+    db.commit()
+    db.refresh(hr)
+    return hr
+
+
+@router.delete("/hourly-rates/{rate_id}")
+def delete_hourly_rate(
+    rate_id: UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin uniquement.")
+    hr = db.query(HourlyRate).filter(HourlyRate.id == rate_id).first()
+    if not hr:
+        raise HTTPException(status_code=404, detail="Introuvable.")
+    db.delete(hr)
+    db.commit()
+    return {"ok": True}

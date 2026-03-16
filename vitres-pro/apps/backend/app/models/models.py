@@ -56,6 +56,16 @@ class CompanySettings(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     overtime_tolerance_hours = Column(Float, default=3.0) # Ex: 3h de dépassement autorisé
 
+
+class HourlyRate(Base):
+    """Taux horaire réutilisable (ex: 50 €/h, 70 €/h)."""
+    __tablename__ = "hourly_rates"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    label = Column(String, nullable=True)    # ex: "Standard", "Premium" (optionnel)
+    rate = Column(Float, nullable=False)     # €/h
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 class Employee(Base):
     """
     Extension du profil utilisateur Supabase.
@@ -183,6 +193,8 @@ class Intervention(Base):
     zone = Column(String(20), nullable=True)      # "hainaut" ou "ardennes"
     sub_zone = Column(String(60), nullable=True)  # code sous-zone ex: "HAINAUT_BRAINE_TUBIZE"
     time_tbd = Column(Boolean, default=False, nullable=False, server_default="false")
+    hourly_rate_id = Column(UUID(as_uuid=True), ForeignKey("hourly_rates.id", ondelete="SET NULL"), nullable=True)
+    hourly_rate = relationship("HourlyRate")
 
     # Reprise RDV
     reprise_taken = Column(Boolean, nullable=True)

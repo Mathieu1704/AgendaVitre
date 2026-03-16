@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from datetime import date, datetime, timedelta
 from typing import List, Dict, Optional
 from sqlalchemy.sql import func
@@ -71,7 +71,10 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
             if hours > 0:
                 present_count += 1
 
-    int_query = db.query(Intervention).filter(
+    int_query = db.query(Intervention).options(
+        selectinload(Intervention.employees),
+        selectinload(Intervention.hourly_rate),
+    ).filter(
         func.date(Intervention.start_time) == target_date
     )
     if sub_zone:
@@ -80,14 +83,30 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
         int_query = int_query.filter(Intervention.zone == zone)
     interventions = int_query.all()
 
+    def _intervention_hours(interv) -> float:
+        """
+        Règle métier :
+        - hourly_rate_id set + price_estimated > 0 → prix / taux
+        - time_tbd = True (reprise non-admin) → durée stockée (end - start)
+        - Tout le reste → 0 (exclu du total planifié)
+        """
+        if (interv.hourly_rate_id
+                and interv.hourly_rate
+                and interv.price_estimated
+                and float(interv.price_estimated) > 0
+                and interv.hourly_rate.rate > 0):
+            return float(interv.price_estimated) / interv.hourly_rate.rate
+        if getattr(interv, "time_tbd", False):
+            return (interv.end_time - interv.start_time).total_seconds() / 3600
+        return 0.0
+
     total_planned = 0
     for inter in interventions:
-        duration = (inter.end_time - inter.start_time).total_seconds() / 3600
+        hours = _intervention_hours(inter)
+        if hours <= 0:
+            continue
         nb_assigned = len(inter.employees)
-        if nb_assigned > 0:
-            total_planned += (duration * nb_assigned)
-        else:
-            total_planned += duration
+        total_planned += hours * (nb_assigned if nb_assigned > 0 else 1)
 
     status = "ok"
     if total_planned > (total_capacity + tolerance):

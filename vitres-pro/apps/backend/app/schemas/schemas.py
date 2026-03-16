@@ -122,6 +122,18 @@ class InterventionItemOut(InterventionItemBase):
     class Config:
         from_attributes = True
 
+# --- HOURLY RATE ---
+class HourlyRateCreate(BaseModel):
+    rate: float
+    label: Optional[str] = None
+
+class HourlyRateOut(BaseModel):
+    id: UUID
+    rate: float
+    label: Optional[str] = None
+    class Config:
+        from_attributes = True
+
 # --- INTERVENTION ---
 class InterventionBase(BaseModel):
     type: str = "intervention"
@@ -140,6 +152,7 @@ class InterventionBase(BaseModel):
     recurrence_rule: Optional[Dict[str, Any]] = None
     recurrence_group_id: Optional[UUID] = None
     time_tbd: bool = False
+    hourly_rate_id: Optional[UUID] = None
 
 class InterventionCreate(InterventionBase):
     pass
@@ -172,6 +185,8 @@ class InterventionOut(BaseModel):
     recurrence_rule: Optional[Dict[str, Any]] = None
     recurrence_group_id: Optional[UUID] = None
     time_tbd: bool = False
+    hourly_rate_id: Optional[UUID] = None
+    hourly_rate: Optional[HourlyRateOut] = None
     client: Optional[ClientOutLite] = None
     employees: List[EmployeeOut] = []
     items: List[InterventionItemOut] = []

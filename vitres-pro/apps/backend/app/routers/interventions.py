@@ -24,6 +24,7 @@ def _load_intervention(intervention_id: UUID, db: Session) -> Intervention:
         selectinload(Intervention.client),
         selectinload(Intervention.employees),
         selectinload(Intervention.items),
+        selectinload(Intervention.hourly_rate),
     ).filter(Intervention.id == intervention_id).first()
 
 def _add_audit(db: Session, action_type: str, employee_id, intervention_id=None, description="", metadata=None):
@@ -48,6 +49,7 @@ def read_interventions(
         selectinload(Intervention.client),
         selectinload(Intervention.employees),
         selectinload(Intervention.items),
+        selectinload(Intervention.hourly_rate),
     )
     if current_user.role != 'admin':
         query = query.filter(
