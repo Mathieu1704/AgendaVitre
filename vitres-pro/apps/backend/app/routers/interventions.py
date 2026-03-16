@@ -168,6 +168,11 @@ def update_intervention(
 
     old_status = db_intervention.status
 
+    # Si l'admin fixe une vraie heure, lever le flag time_tbd en avance
+    # (la boucle ci-dessous peut le remettre à True si time_tbd est explicitement envoyé)
+    if "start_time" in intervention_update or "end_time" in intervention_update:
+        db_intervention.time_tbd = False
+
     for key, value in intervention_update.items():
         if key == "employee_ids":
             employees = db.query(Employee).filter(Employee.id.in_(value)).all()

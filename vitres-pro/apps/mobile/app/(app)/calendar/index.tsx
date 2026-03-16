@@ -549,6 +549,14 @@ export default function CalendarScreen() {
       ? new Date(item.end_time)
       : new Date(startTime.getTime() + 60 * 60 * 1000);
 
+    // Durée affichée si time_tbd
+    const durationMs = endTime.getTime() - startTime.getTime();
+    const durationH = Math.floor(durationMs / 3600000);
+    const durationMin = Math.round((durationMs % 3600000) / 60000);
+    const durationLabel = durationMin > 0
+      ? `${durationH}h${String(durationMin).padStart(2, "0")}`
+      : `${durationH}h`;
+
     const TYPE_CONFIG: Record<string, { bg: string; text: string; label: string }> = {
       intervention: { bg: "#EFF6FF", text: "#3B82F6", label: "Intervention" },
       devis:        { bg: "#F5F3FF", text: "#8B5CF6", label: "Devis" },
@@ -600,24 +608,42 @@ export default function CalendarScreen() {
             className={`items-center justify-center ${compact ? "w-11" : "w-16"} py-2.5`}
             style={{ borderRadius: 16, backgroundColor: typeConfig.bg }}
           >
-            <Text
-              style={{ color: typeConfig.text }}
-              className={`font-bold ${compact ? "text-xs" : "text-base"}`}
-            >
-              {startTime.toLocaleTimeString("fr-FR", {
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone: "Europe/Brussels",
-              })}
-            </Text>
-            {!compact && (
-              <Text className="text-[10px] text-muted-foreground mt-0.5 font-medium">
-                {endTime.toLocaleTimeString("fr-FR", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  timeZone: "Europe/Brussels",
-                })}
-              </Text>
+            {item.time_tbd ? (
+              <>
+                <Text
+                  style={{ color: typeConfig.text }}
+                  className={`font-bold ${compact ? "text-xs" : "text-base"}`}
+                >
+                  {durationLabel}
+                </Text>
+                {!compact && (
+                  <Text className="text-[10px] text-muted-foreground mt-0.5 font-medium">
+                    durée
+                  </Text>
+                )}
+              </>
+            ) : (
+              <>
+                <Text
+                  style={{ color: typeConfig.text }}
+                  className={`font-bold ${compact ? "text-xs" : "text-base"}`}
+                >
+                  {startTime.toLocaleTimeString("fr-FR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone: "Europe/Brussels",
+                  })}
+                </Text>
+                {!compact && (
+                  <Text className="text-[10px] text-muted-foreground mt-0.5 font-medium">
+                    {endTime.toLocaleTimeString("fr-FR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      timeZone: "Europe/Brussels",
+                    })}
+                  </Text>
+                )}
+              </>
             )}
             {!compact && item.type && item.type !== "intervention" && (
               <Text style={{ color: typeConfig.text }} className="text-[8px] font-bold uppercase mt-0.5 tracking-wide">

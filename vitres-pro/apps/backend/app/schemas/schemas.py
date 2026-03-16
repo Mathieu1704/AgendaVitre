@@ -139,6 +139,7 @@ class InterventionBase(BaseModel):
     items: List[InterventionItemCreate] = []
     recurrence_rule: Optional[Dict[str, Any]] = None
     recurrence_group_id: Optional[UUID] = None
+    time_tbd: bool = False
 
 class InterventionCreate(InterventionBase):
     pass
@@ -170,6 +171,7 @@ class InterventionOut(BaseModel):
     reprise_note: Optional[str] = None
     recurrence_rule: Optional[Dict[str, Any]] = None
     recurrence_group_id: Optional[UUID] = None
+    time_tbd: bool = False
     client: Optional[ClientOutLite] = None
     employees: List[EmployeeOut] = []
     items: List[InterventionItemOut] = []

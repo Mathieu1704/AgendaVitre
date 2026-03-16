@@ -21,6 +21,7 @@ interface DateTimePickerProps {
   label?: string;
   className?: string;
   style?: StyleProp<ViewStyle>;
+  dateOnly?: boolean;
 }
 
 export function DateTimePicker({
@@ -29,6 +30,7 @@ export function DateTimePicker({
   label = "Date et Heure",
   className,
   style,
+  dateOnly = false,
 }: DateTimePickerProps) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -142,24 +144,26 @@ export function DateTimePicker({
         </Pressable>
 
         {/* BOUTON HEURE */}
-        <Pressable
-          onPress={() => setShowTimePicker(true)}
-          style={[{ borderRadius: 16, overflow: "hidden" }, style]}
-          className={cn(
-            "h-12 flex-row items-center px-4 border",
-            "bg-background border-border",
-            "dark:bg-slate-900 dark:border-slate-700",
-            "active:opacity-80",
-            className,
-          )}
-        >
-          <View className="flex-row items-center gap-3">
-            <Clock size={18} color="#3B82F6" />
-            <Text className="text-foreground dark:text-white font-medium">
-              {timePart}
-            </Text>
-          </View>
-        </Pressable>
+        {!dateOnly && (
+          <Pressable
+            onPress={() => setShowTimePicker(true)}
+            style={[{ borderRadius: 16, overflow: "hidden" }, style]}
+            className={cn(
+              "h-12 flex-row items-center px-4 border",
+              "bg-background border-border",
+              "dark:bg-slate-900 dark:border-slate-700",
+              "active:opacity-80",
+              className,
+            )}
+          >
+            <View className="flex-row items-center gap-3">
+              <Clock size={18} color="#3B82F6" />
+              <Text className="text-foreground dark:text-white font-medium">
+                {timePart}
+              </Text>
+            </View>
+          </Pressable>
+        )}
       </View>
 
       {/* DIALOG DATE (Calendrier) */}
@@ -195,7 +199,7 @@ export function DateTimePicker({
       </Dialog>
 
       {/* DIALOG HEURE */}
-      <Dialog
+      {!dateOnly && <Dialog
         open={showTimePicker}
         onClose={() => setShowTimePicker(false)}
         // ✅ WEB : Modale centrée. MOBILE : En bas.
@@ -359,7 +363,7 @@ export function DateTimePicker({
             </Button>
           </View>
         </View>
-      </Dialog>
+      </Dialog>}
     </>
   );
 }

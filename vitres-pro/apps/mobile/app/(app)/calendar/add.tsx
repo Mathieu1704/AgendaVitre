@@ -609,13 +609,24 @@ export default function AddInterventionScreen() {
       };
 
       if (isEditMode) {
-        const start = parseBrusselsDateTimeString(startDateStr);
-        if (!start) return toast.error("Date", "Vérifie la date.");
-        const end = new Date(start.getTime() + dur * 3600000);
+        let startIso: string, endIso: string;
+        if (!isAdmin) {
+          const datePart = startDateStr.split("T")[0];
+          const startUtc = new Date(`${datePart}T00:00:00Z`);
+          const endUtc = new Date(startUtc.getTime() + dur * 3600000);
+          startIso = startUtc.toISOString();
+          endIso = endUtc.toISOString();
+        } else {
+          const start = parseBrusselsDateTimeString(startDateStr);
+          if (!start) return toast.error("Date", "Vérifie la date.");
+          startIso = start.toISOString();
+          endIso = new Date(start.getTime() + dur * 3600000).toISOString();
+        }
         await api.patch(`/api/interventions/${id}`, {
           ...basePayload,
-          start_time: start.toISOString(),
-          end_time: end.toISOString(),
+          start_time: startIso,
+          end_time: endIso,
+          ...(isAdmin ? {} : { time_tbd: true }),
         });
         queryClient.invalidateQueries({ queryKey: ["interventions"] });
         queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
@@ -626,7 +637,16 @@ export default function AddInterventionScreen() {
       }
 
       // Calcul des occurrences (reprise ou création simple avec récurrence)
-      const occurrences = generateDates(startDateStr, dur, recurrence);
+      // Non-admin : date-only, pas de récurrence, time_tbd = true
+      let occurrences: { start: Date; end: Date }[];
+      if (!isAdmin) {
+        const datePart = startDateStr.split("T")[0];
+        const startUtc = new Date(`${datePart}T00:00:00Z`);
+        const endUtc = new Date(startUtc.getTime() + dur * 3600000);
+        occurrences = [{ start: startUtc, end: endUtc }];
+      } else {
+        occurrences = generateDates(startDateStr, dur, recurrence);
+      }
       if (occurrences.length === 0)
         return toast.error("Date", "Vérifie la date.");
 
@@ -637,6 +657,7 @@ export default function AddInterventionScreen() {
           ...basePayload,
           start_time: occ.start.toISOString(),
           end_time: occ.end.toISOString(),
+          ...(isAdmin ? {} : { time_tbd: true }),
           recurrence_rule:
             occurrences.length > 1
               ? {
@@ -1050,6 +1071,7 @@ export default function AddInterventionScreen() {
                 value={startDateStr}
                 onChange={setStartDateStr}
                 label="Début de l'intervention"
+                dateOnly={!isAdmin}
               />
               <Input
                 label="Durée (heures)"

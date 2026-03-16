@@ -182,6 +182,7 @@ class Intervention(Base):
     google_event_id = Column(String, nullable=True, unique=True, index=True)
     zone = Column(String(20), nullable=True)      # "hainaut" ou "ardennes"
     sub_zone = Column(String(60), nullable=True)  # code sous-zone ex: "HAINAUT_BRAINE_TUBIZE"
+    time_tbd = Column(Boolean, default=False, nullable=False, server_default="false")
 
     # Reprise RDV
     reprise_taken = Column(Boolean, nullable=True)
