@@ -235,8 +235,15 @@ export default function AddInterventionScreen() {
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
+  const { isDark } = useTheme();
 
   const { employees } = useEmployees();
+
+  const { data: hourlyRates } = useQuery({
+    queryKey: ["hourly-rates"],
+    queryFn: async () => (await api.get("/api/settings/hourly-rates")).data,
+    enabled: isAdmin,
+  });
 
   const { data: clients, refetch: refetchClients } = useQuery({
     queryKey: ["clients"],
@@ -295,6 +302,7 @@ export default function AddInterventionScreen() {
   }, []);
   const [startDateStr, setStartDateStr] = useState(defaultStart);
   const [durationHours, setDurationHours] = useState("");
+  const [selectedRateId, setSelectedRateId] = useState<string | null>(null);
 
   // --- Récurrence ---
   const [recurrence, setRecurrence] = useState<Recurrence>(DEFAULT_RECURRENCE);
@@ -410,6 +418,8 @@ export default function AddInterventionScreen() {
         setSelectedEmployeeIds(
           interventionData.employees.map((e: any) => e.id),
         );
+      if (interventionData.hourly_rate_id)
+        setSelectedRateId(interventionData.hourly_rate_id);
       if (interventionData.items && interventionData.items.length > 0) {
         const withId = interventionData.items.filter(
           (i: any) => i.client_service_id,
@@ -536,6 +546,11 @@ export default function AddInterventionScreen() {
     [allItems],
   );
 
+  const selectedRate = (hourlyRates as any[])?.find((r: any) => r.id === selectedRateId) ?? null;
+  const computedHours = selectedRate && totalPrice > 0
+    ? (totalPrice / selectedRate.rate).toFixed(2)
+    : null;
+
   const toggleService = (id: string) => {
     setCheckedServiceIds((prev) => {
       const next = new Set(prev);
@@ -606,6 +621,7 @@ export default function AddInterventionScreen() {
           price: Number(i.price) || 0,
           client_service_id: i.client_service_id ?? null,
         })),
+        hourly_rate_id: isAdmin ? (selectedRateId ?? null) : null,
       };
 
       if (isEditMode) {
@@ -1545,6 +1561,45 @@ export default function AddInterventionScreen() {
                     {totalPrice.toFixed(2)} €
                   </Text>
                 </View>
+              </View>
+            )}
+
+            {/* TAUX HORAIRE (admin uniquement) */}
+            {isAdmin && Array.isArray(hourlyRates) && hourlyRates.length > 0 && (
+              <View className="pt-4 mt-4 border-t border-border dark:border-slate-800">
+                <Text className="text-sm font-semibold text-foreground dark:text-white mb-2">
+                  Taux horaire
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2">
+                  <View className="flex-row gap-2">
+                    {[null, ...hourlyRates].map((r: any) => {
+                      const isSelected = selectedRateId === (r?.id ?? null);
+                      return (
+                        <Pressable
+                          key={r?.id ?? "none"}
+                          onPress={() => setSelectedRateId(r?.id ?? null)}
+                          style={{
+                            paddingHorizontal: 14,
+                            paddingVertical: 8,
+                            borderRadius: 20,
+                            backgroundColor: isSelected ? "#3B82F6" : (isDark ? "#1E293B" : "#F1F5F9"),
+                            borderWidth: 1,
+                            borderColor: isSelected ? "#3B82F6" : (isDark ? "#334155" : "#E2E8F0"),
+                          }}
+                        >
+                          <Text style={{ color: isSelected ? "#fff" : (isDark ? "#94A3B8" : "#64748B"), fontWeight: "600", fontSize: 13 }}>
+                            {r ? `${r.label ? r.label + " — " : ""}${r.rate} €/h` : "Aucun"}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+                {computedHours && (
+                  <Text className="text-sm text-muted-foreground">
+                    → {computedHours}h calculées ({totalPrice.toFixed(2)} € ÷ {selectedRate?.rate} €/h)
+                  </Text>
+                )}
               </View>
             )}
 

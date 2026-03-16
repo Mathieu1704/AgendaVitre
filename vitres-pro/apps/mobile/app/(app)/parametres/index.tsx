@@ -19,6 +19,7 @@ import {
   Info,
   History,
   MapPin,
+  Clock,
 } from "lucide-react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -275,6 +276,30 @@ export default function ParametresScreen() {
                         </Text>
                         <Text className="text-sm text-muted-foreground leading-tight">
                           Gérer les sous-zones et villes
+                        </Text>
+                      </View>
+                    </View>
+                    <ChevronRight size={20} color={isDark ? "white" : "black"} />
+                  </CardContent>
+                </Card>
+              </Pressable>
+              {/* Taux horaires */}
+              <Pressable
+                onPress={() => router.push("/(app)/parametres/tarifs" as any)}
+                className="mb-3"
+              >
+                <Card className="rounded-[32px] bg-blue-500/5 border-blue-200 dark:border-blue-900 active:scale-[0.99] transition-transform overflow-hidden">
+                  <CardContent className="p-4 flex-row items-center justify-between">
+                    <View className="flex-row items-center gap-4 flex-1">
+                      <View className="bg-blue-500 rounded-full w-12 h-12 items-center justify-center">
+                        <Clock size={24} color="white" />
+                      </View>
+                      <View className="flex-1 justify-center">
+                        <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                          Taux horaires
+                        </Text>
+                        <Text className="text-sm text-muted-foreground leading-tight">
+                          Gérer les tarifs €/h
                         </Text>
                       </View>
                     </View>
