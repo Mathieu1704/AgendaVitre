@@ -97,6 +97,7 @@ export default function AppLayout() {
               <Tabs.Screen name="notifications/index" options={{ href: null }} />
               <Tabs.Screen name="calendar/add" options={{ href: null }} />
               <Tabs.Screen name="calendar/[id]" options={{ href: null }} />
+              <Tabs.Screen name="calendar/rate-session" options={{ href: null }} />
               <Tabs.Screen name="clients/add" options={{ href: null }} />
               <Tabs.Screen name="clients/[id]" options={{ href: null }} />
               <Tabs.Screen name="facturation/add" options={{ href: null }} />
@@ -206,6 +207,7 @@ export default function AppLayout() {
         {/* Écrans cachés de la tab bar */}
         <Tabs.Screen name="calendar/add" options={{ href: null }} />
         <Tabs.Screen name="calendar/[id]" options={{ href: null }} />
+        <Tabs.Screen name="calendar/rate-session" options={{ href: null }} />
         <Tabs.Screen name="calendar/raw-event/[id]" options={{ href: null }} />
         <Tabs.Screen name="clients/add" options={{ href: null }} />
         <Tabs.Screen name="clients/[id]" options={{ href: null }} />

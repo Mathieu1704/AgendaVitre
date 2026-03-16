@@ -1,9 +1,18 @@
 import React from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator, Pressable } from "react-native";
 import { usePlanningStats } from "../../hooks/usePlanning";
 import { cn } from "../cn";
+import { Zap } from "lucide-react-native";
 
-export function PlanningHeader({ dateStr, zone }: { dateStr: string; zone?: string }) {
+function fmtH(h: number): string {
+  const rounded = Math.round(h * 2) / 2;
+  const hours = Math.floor(rounded);
+  const mins = Math.round((rounded % 1) * 60);
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h${mins.toString().padStart(2, "0")}`;
+}
+
+export function PlanningHeader({ dateStr, zone, onRateSession }: { dateStr: string; zone?: string; onRateSession?: () => void }) {
   const { stats, isLoading } = usePlanningStats(dateStr, zone);
 
   if (isLoading) {
@@ -29,14 +38,23 @@ export function PlanningHeader({ dateStr, zone }: { dateStr: string; zone?: stri
 
   return (
     <View className="mb-4">
-      {/* 1. Les Textes (Ex: 67h00 = totale...) */}
-      <View className="flex-row justify-between items-end mb-2 px-1">
-        <View>
+      {/* 1. Les Textes */}
+      <View className="flex-row items-center mb-2 px-1 gap-3">
+        {onRateSession && (
+          <Pressable
+            onPress={onRateSession}
+            className="w-11 h-11 rounded-full items-center justify-center active:opacity-60"
+            style={{ backgroundColor: "#3B82F6" + "18" }}
+          >
+            <Zap size={20} color="#3B82F6" />
+          </Pressable>
+        )}
+        <View className="flex-1">
           <Text className="text-2xl font-extrabold text-foreground dark:text-white">
-            {stats.planned_hours.toFixed(1)}h
+            {fmtH(Math.round(stats.planned_hours * 2) / 2)}
             <Text className="text-sm font-normal text-muted-foreground">
               {" / "}
-              {stats.capacity_hours.toFixed(1)}h dispo
+              {fmtH(stats.capacity_hours)} dispo
             </Text>
           </Text>
           <Text className="text-xs text-muted-foreground font-medium uppercase tracking-wider">

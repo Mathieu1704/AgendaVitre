@@ -5,7 +5,6 @@ import {
   Text,
   Platform,
   Pressable,
-  Switch,
   ActivityIndicator,
   TextInput,
 } from "react-native";
@@ -547,8 +546,15 @@ export default function AddInterventionScreen() {
   );
 
   const selectedRate = (hourlyRates as any[])?.find((r: any) => r.id === selectedRateId) ?? null;
-  const computedHours = selectedRate && totalPrice > 0
-    ? (totalPrice / selectedRate.rate).toFixed(2)
+  const computedHoursRaw = selectedRate && totalPrice > 0
+    ? Math.round((totalPrice / selectedRate.rate) * 2) / 2
+    : null;
+  const computedHours = computedHoursRaw != null
+    ? (() => {
+        const h = Math.floor(computedHoursRaw);
+        const m = Math.round((computedHoursRaw % 1) * 60);
+        return m === 0 ? `${h}h` : `${h}h${m.toString().padStart(2, "0")}`;
+      })()
     : null;
 
   const toggleService = (id: string) => {
@@ -1597,7 +1603,7 @@ export default function AddInterventionScreen() {
                 </ScrollView>
                 {computedHours && (
                   <Text className="text-sm text-muted-foreground">
-                    → {computedHours}h calculées ({totalPrice.toFixed(2)} € ÷ {selectedRate?.rate} €/h)
+                    → {computedHours} calculées ({totalPrice.toFixed(2)} € ÷ {selectedRate?.rate} €/h)
                   </Text>
                 )}
               </View>

@@ -4,6 +4,7 @@ import {
   Text,
   Pressable,
   ScrollView,
+  TextInput,
   ViewStyle,
   StyleProp,
 } from "react-native";
@@ -30,6 +31,11 @@ export function MultiSelect({
   style?: StyleProp<ViewStyle>;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filteredItems = search.trim()
+    ? items.filter((i) => i.label.toLowerCase().includes(search.toLowerCase()))
+    : items;
 
   const toggle = (id: string) => {
     if (selectedIds.includes(id)) {
@@ -89,13 +95,20 @@ export function MultiSelect({
         </View>
       </Pressable>
 
-      <Dialog open={open} onClose={() => setOpen(false)} position="bottom">
+      <Dialog open={open} onClose={() => { setOpen(false); setSearch(""); }} position="center">
         <View className="p-5">
           <Text className="text-lg font-bold mb-4 text-foreground dark:text-white text-center">
             Assigner à...
           </Text>
-          <ScrollView style={{ maxHeight: 400 }}>
-            {items.map((item) => {
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Rechercher..."
+            placeholderTextColor="#94A3B8"
+            className="h-11 px-4 mb-4 rounded-2xl border border-border bg-muted dark:bg-slate-800 dark:border-slate-700 text-foreground dark:text-white text-base"
+          />
+          <ScrollView style={{ maxHeight: 360 }}>
+            {filteredItems.map((item) => {
               const isSelected = selectedIds.includes(item.id);
               return (
                 <Pressable

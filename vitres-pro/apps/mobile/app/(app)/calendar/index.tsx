@@ -28,6 +28,7 @@ import {
   MapPin,
   CalendarCheck,
   Users,
+  Zap,
 } from "lucide-react-native";
 import Animated, {
   FadeInDown,
@@ -249,6 +250,14 @@ function SlidingPillSelector({
   );
 }
 
+function fmtH(h: number): string {
+  const rounded = Math.round(h * 2) / 2;
+  const hours = Math.floor(rounded);
+  const mins = Math.round((rounded % 1) * 60);
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h${mins.toString().padStart(2, "0")}`;
+}
+
 const DailyStatsBadge = ({ dateStr, zone }: { dateStr: string; zone?: string }) => {
   const { stats, isLoading } = usePlanningStats(dateStr, zone);
 
@@ -268,7 +277,7 @@ const DailyStatsBadge = ({ dateStr, zone }: { dateStr: string; zone?: string }) 
   return (
     <View className={`px-3 py-1.5 rounded-full ${bgClass}`}>
       <Text className={`text-sm font-bold ${textClass}`}>
-        {stats.planned_hours}h / {stats.capacity_hours}h
+        {fmtH(Math.round(stats.planned_hours * 2) / 2)} / {fmtH(stats.capacity_hours)}
       </Text>
     </View>
   );
@@ -984,16 +993,27 @@ export default function CalendarScreen() {
 
         <View className="pt-6 pb-24">
           {/* ✅ DATE + HEURES : Alignés sur la même ligne */}
-          <View className="flex-row items-center px-6 mb-4">
-            <Text className="text-xl font-bold text-foreground dark:text-white capitalize mr-3">
+          <View className="flex-row items-center px-6 mb-4 gap-3">
+            {isAdmin && (
+              <Pressable
+                onPress={() =>
+                  router.push(
+                    `/(app)/calendar/rate-session?date=${selectedDate}&zone=${effectiveZone}` as any
+                  )
+                }
+                className="w-11 h-11 rounded-full items-center justify-center active:opacity-60"
+                style={{ backgroundColor: "#3B82F6" + "18" }}
+              >
+                <Zap size={20} color="#3B82F6" />
+              </Pressable>
+            )}
+            <Text className="text-xl font-bold text-foreground dark:text-white capitalize mr-2">
               {new Date(selectedDate).toLocaleDateString("fr-FR", {
                 weekday: "long",
                 day: "numeric",
                 month: "long",
               })}
             </Text>
-
-            {/* Badge aligné juste à droite */}
             <DailyStatsBadge dateStr={selectedDate} zone={effectiveZone} />
           </View>
 
@@ -1103,7 +1123,7 @@ export default function CalendarScreen() {
                     className={`mt-2 py-1 px-2 rounded-md items-center justify-center ${badgeBg}`}
                   >
                     <Text className={`text-[10px] font-bold ${badgeText}`}>
-                      {stat.planned_hours}h / {stat.capacity_hours}h
+                      {fmtH(Math.round(stat.planned_hours * 2) / 2)} / {fmtH(stat.capacity_hours)}
                     </Text>
                   </View>
                 )}
@@ -1157,7 +1177,15 @@ export default function CalendarScreen() {
 
     return (
       <View className="px-4 w-full">
-        <PlanningHeader dateStr={iso} zone={effectiveZone} />
+        <PlanningHeader
+          dateStr={iso}
+          zone={effectiveZone}
+          onRateSession={
+            isAdmin
+              ? () => router.push(`/(app)/calendar/rate-session?date=${iso}&zone=${effectiveZone}` as any)
+              : undefined
+          }
+        />
 
         {/* Lane : Non assigné (raw events sans employé) */}
         {unassigned.length > 0 && (
