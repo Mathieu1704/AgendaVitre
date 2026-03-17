@@ -8,7 +8,9 @@ import {
   ActivityIndicator,
   Platform,
   TextInput,
+  useWindowDimensions,
 } from "react-native";
+import { format, parseISO } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,6 +34,7 @@ import { Card, CardContent } from "../../../src/ui/components/Card";
 import { Button } from "../../../src/ui/components/Button";
 import { Input } from "../../../src/ui/components/Input";
 import { Dialog } from "../../../src/ui/components/Dialog";
+import { StatusBadge } from "../../../src/ui/components/StatusBadge";
 import { toast } from "../../../src/ui/toast";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useAuth } from "../../../src/hooks/useAuth";
@@ -45,9 +48,13 @@ export default function ClientDetailScreen() {
   const isWeb = Platform.OS === "web";
   const queryClient = useQueryClient();
 
+  const { width: screenWidth } = useWindowDimensions();
+  const dialogPosition = isWeb && screenWidth >= 768 ? "center" : "bottom";
+
   const [menuOpen, setMenuOpen]           = useState(false);
   const [editing, setEditing]             = useState(false);
   const [deleteDialog, setDeleteDialog]   = useState(false);
+  const [showHistory, setShowHistory]     = useState(false);
 
   // Form state
   const [name, setName]       = useState("");
@@ -271,7 +278,7 @@ export default function ClientDetailScreen() {
 
             <Button
               variant="outline"
-              onPress={() => alert("Historique bientôt disponible")}
+              onPress={() => setShowHistory(true)}
               className="w-full h-12 rounded-[24px]"
             >
               <ExternalLink size={18} color={isDark ? "white" : "black"} />
@@ -307,6 +314,51 @@ export default function ClientDetailScreen() {
           </View>
         </Dialog>
       )}
+
+      {/* Historique des interventions */}
+      {showHistory && (() => {
+        const sorted = [...(client?.interventions ?? [])].sort(
+          (a: any, b: any) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
+        );
+        return (
+          <Dialog open onClose={() => setShowHistory(false)} position={dialogPosition}>
+            <View
+              className="p-4"
+              style={isWeb && screenWidth >= 768 ? ({ width: 500, maxWidth: "100%", maxHeight: "80vh" } as any) : {}}
+            >
+              <Text className="text-lg font-bold mb-4 text-foreground dark:text-white text-center">
+                Historique ({sorted.length})
+              </Text>
+              <ScrollView showsVerticalScrollIndicator style={{ maxHeight: 400 }}>
+                {sorted.length === 0 && (
+                  <Text className="text-center text-muted-foreground py-8">Aucune intervention</Text>
+                )}
+                {sorted.map((item: any) => (
+                  <Pressable
+                    key={item.id}
+                    onPress={() => { setShowHistory(false); router.push(`/(app)/calendar/${item.id}`); }}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                    className="flex-row items-center justify-between py-3 border-b border-border dark:border-slate-700"
+                  >
+                    <View className="flex-1 mr-3">
+                      <Text className="text-xs text-muted-foreground mb-0.5">
+                        {format(parseISO(item.start_time), "dd/MM/yyyy")}
+                      </Text>
+                      <Text className="font-medium text-foreground dark:text-white" numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                    </View>
+                    <StatusBadge status={item.status} />
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <Button variant="ghost" onPress={() => setShowHistory(false)} className="mt-3">
+                Fermer
+              </Button>
+            </View>
+          </Dialog>
+        );
+      })()}
 
       {/* Confirmation suppression */}
       {deleteDialog && (
