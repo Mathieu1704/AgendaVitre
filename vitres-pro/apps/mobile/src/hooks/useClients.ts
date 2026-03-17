@@ -8,6 +8,7 @@ export const useClients = () => {
       const res = await api.get("/api/clients");
       return res.data || [];
     },
+    staleTime: 5 * 60 * 1000, // 5 min — les clients changent rarement
   });
 
   return {

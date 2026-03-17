@@ -9,6 +9,7 @@ export const useInterventions = () => {
       const res = await api.get("/api/interventions");
       return res.data || [];
     },
+    staleTime: 2 * 60 * 1000, // 2 min — données changent régulièrement
   });
 
   return {
@@ -24,7 +25,20 @@ export const useAssignEmployees = () => {
   return useMutation({
     mutationFn: ({ interventionId, employeeIds }: { interventionId: string; employeeIds: string[] }) =>
       api.patch(`/api/interventions/${interventionId}`, { employee_ids: employeeIds }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["interventions"] }),
+    onMutate: async ({ interventionId, employeeIds }) => {
+      await qc.cancelQueries({ queryKey: ["interventions"] });
+      const prev = qc.getQueryData(["interventions"]);
+      const allEmployees = qc.getQueryData<any[]>(["employees"]) ?? [];
+      const selectedEmps = allEmployees.filter((e) => employeeIds.includes(e.id));
+      qc.setQueryData<any[]>(["interventions"], (old) =>
+        old ? old.map((i) => i.id === interventionId ? { ...i, employees: selectedEmps } : i) : old
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx: any) => {
+      if (ctx?.prev) qc.setQueryData(["interventions"], ctx.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["interventions"] }),
   });
 };
 

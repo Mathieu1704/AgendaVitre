@@ -12,14 +12,21 @@ export const api = axios.create({
   },
 });
 
+// Cache du token en mémoire — mis à jour via onAuthStateChange (une seule lecture I/O au lieu d'une par requête)
+let _cachedToken: string | null = null;
+supabase.auth.onAuthStateChange((_event, session) => {
+  _cachedToken = session?.access_token ?? null;
+});
+// Initialisation synchrone depuis le cache Supabase au démarrage
+supabase.auth.getSession().then(({ data }) => {
+  _cachedToken = data.session?.access_token ?? null;
+});
+
 // Intercepteur : Ajoute le token Supabase avant chaque envoi
-api.interceptors.request.use(async (config) => {
-  const { data } = await supabase.auth.getSession();
-
-  if (data.session?.access_token) {
-    config.headers.Authorization = `Bearer ${data.session.access_token}`;
+api.interceptors.request.use((config) => {
+  if (_cachedToken) {
+    config.headers.Authorization = `Bearer ${_cachedToken}`;
   }
-
   return config;
 });
 

@@ -9,6 +9,7 @@ export const useEmployees = () => {
       const res = await api.get("/api/employees");
       return res.data as Employee[];
     },
+    staleTime: 5 * 60 * 1000, // 5 min — les employés changent très rarement
   });
 
   return {

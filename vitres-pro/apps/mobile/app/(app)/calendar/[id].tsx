@@ -76,13 +76,34 @@ export default function InterventionDetailScreen() {
 
       return await api.patch(`/api/interventions/${id}`, payload);
     },
+    onMutate: async (newStatus: string) => {
+      await queryClient.cancelQueries({ queryKey: ["intervention", id] });
+      const prev = queryClient.getQueryData(["intervention", id]);
+      const now = new Date().toISOString();
+      queryClient.setQueryData(["intervention", id], (old: any) => {
+        if (!old) return old;
+        const update: any = { ...old, status: newStatus };
+        if (newStatus === "in_progress") update.real_start_time = now;
+        if (newStatus === "done") update.real_end_time = now;
+        return update;
+      });
+      // Mise à jour optimiste dans la liste aussi
+      queryClient.setQueryData<any[]>(["interventions"], (old) =>
+        old ? old.map((i) => i.id === id ? { ...i, status: newStatus } : i) : old
+      );
+      return { prev };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
-      queryClient.invalidateQueries({ queryKey: ["interventions"] });
       toast.success("Statut mis à jour", "L'intervention a été modifiée.");
     },
-    onError: () => {
+    onError: (_err, _vars, ctx: any) => {
+      if (ctx?.prev) queryClient.setQueryData(["intervention", id], ctx.prev);
+      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
       toast.error("Erreur", "Impossible de mettre à jour le statut.");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
     },
   });
 

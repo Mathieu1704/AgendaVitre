@@ -250,6 +250,13 @@ function SlidingPillSelector({
   );
 }
 
+const TYPE_CONFIG: Record<string, { bg: string; text: string; label: string }> = {
+  intervention: { bg: "#EFF6FF", text: "#3B82F6", label: "Intervention" },
+  devis:        { bg: "#F5F3FF", text: "#8B5CF6", label: "Devis" },
+  tournee:      { bg: "#FFF7ED", text: "#F97316", label: "Tournée" },
+  note:         { bg: "#F8FAFC", text: "#64748B", label: "Note" },
+};
+
 function fmtH(h: number): string {
   const rounded = Math.round(h * 2) / 2;
   const hours = Math.floor(rounded);
@@ -566,12 +573,6 @@ export default function CalendarScreen() {
       ? `${durationH}h${String(durationMin).padStart(2, "0")}`
       : `${durationH}h`;
 
-    const TYPE_CONFIG: Record<string, { bg: string; text: string; label: string }> = {
-      intervention: { bg: "#EFF6FF", text: "#3B82F6", label: "Intervention" },
-      devis:        { bg: "#F5F3FF", text: "#8B5CF6", label: "Devis" },
-      tournee:      { bg: "#FFF7ED", text: "#F97316", label: "Tournée" },
-      note:         { bg: "#F8FAFC", text: "#64748B", label: "Note" },
-    };
     const typeConfig = TYPE_CONFIG[item.type ?? "intervention"] ?? TYPE_CONFIG["intervention"];
     const hasClient = ["intervention", "devis"].includes(item.type ?? "intervention");
 

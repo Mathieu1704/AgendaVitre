@@ -2,12 +2,14 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { Session } from "@supabase/supabase-js";
 import { api } from "../lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 
 export const useAuth = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userZone, setUserZone] = useState<"hainaut" | "ardennes">("hainaut");
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const checkRole = async (email: string | undefined) => {
@@ -17,12 +19,13 @@ export const useAuth = () => {
         return;
       }
       try {
-        const res = await api.get("/api/employees");
-        const me = res.data.find((e: any) => e.email === email);
+        // Utilise le cache React Query si disponible (évite une requête réseau supplémentaire)
+        const cached = queryClient.getQueryData<any[]>(["employees"]);
+        const employees = cached ?? (await api.get("/api/employees")).data;
+        const me = employees.find((e: any) => e.email === email);
         setIsAdmin(me?.role === "admin");
         setUserZone(me?.zone === "ardennes" ? "ardennes" : "hainaut");
-      } catch (e) {
-        console.log("Erreur rôle:", e);
+      } catch {
         setIsAdmin(false);
       } finally {
         setLoading(false);

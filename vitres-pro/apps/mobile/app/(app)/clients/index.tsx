@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   FlatList,
@@ -58,7 +58,7 @@ export default function ClientsListScreen() {
         (c.address ?? "").toLowerCase().includes(searchQuery.toLowerCase()),
     ) || [];
 
-  const renderItem = ({ item }: { item: Client }) => (
+  const renderItem = useCallback(({ item }: { item: Client }) => (
     <Pressable
       onPress={() => router.push(`/(app)/clients/${item.id}` as any)}
       className="mx-4 mb-3"
@@ -116,7 +116,7 @@ export default function ClientsListScreen() {
         </View>
       </Card>
     </Pressable>
-  );
+  ), [isDark, router]);
 
   return (
     <View
