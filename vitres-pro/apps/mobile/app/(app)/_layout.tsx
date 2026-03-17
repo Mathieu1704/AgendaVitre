@@ -7,6 +7,7 @@ import { api } from "../../src/lib/api";
 import { Sidebar } from "../../src/ui/layout/Sidebar";
 import { Header } from "../../src/ui/layout/Header";
 import { useNotifications } from "../../src/hooks/useNotifications";
+import { useAuth } from "../../src/hooks/useAuth";
 
 import {
   LayoutDashboard,
@@ -24,6 +25,7 @@ export default function AppLayout() {
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
   const { unreadCount } = useNotifications();
+  const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const prefetchedRef = useRef(false);
 
@@ -167,6 +169,7 @@ export default function AppLayout() {
           name="facturation/index"
           options={{
             title: "Factures",
+            href: isAdmin ? undefined : null,
             tabBarIcon: ({ color, size }) => (
               <FileText size={size} color={color} />
             ),

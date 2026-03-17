@@ -143,6 +143,8 @@ def list_hourly_rates(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Réservé aux admins.")
     return db.query(HourlyRate).order_by(HourlyRate.rate).all()
 
 

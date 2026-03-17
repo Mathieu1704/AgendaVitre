@@ -873,7 +873,7 @@ export default function CalendarScreen() {
                             {sz ? sz.label : "Sans zone"}
                           </Text>
                           <View style={{ flex:1, height:1, backgroundColor:(sz?.color??"#94A3B8")+"40", marginHorizontal:6 }} />
-                          {sz && sg.code && (
+                          {sz && sg.code && isAdmin && (
                             <Pressable hitSlop={10}
                               style={{ backgroundColor:sz.color+"20", borderRadius:8, paddingHorizontal:8, paddingVertical:4, flexDirection:"row", alignItems:"center", gap:4 }}
                               onPress={() => {
@@ -1517,13 +1517,15 @@ export default function CalendarScreen() {
         </ScrollView>
       )}
 
-      {/* FAB */}
-      <Pressable
-        onPress={() => router.push("/(app)/calendar/add")}
-        className="absolute bottom-6 right-6 h-14 w-14 bg-primary items-center justify-center shadow-lg shadow-primary/30 active:scale-90 transition-transform rounded-full"
-      >
-        <Plus size={28} color="white" />
-      </Pressable>
+      {/* FAB — admin uniquement */}
+      {isAdmin && (
+        <Pressable
+          onPress={() => router.push("/(app)/calendar/add")}
+          className="absolute bottom-6 right-6 h-14 w-14 bg-primary items-center justify-center shadow-lg shadow-primary/30 active:scale-90 transition-transform rounded-full"
+        >
+          <Plus size={28} color="white" />
+        </Pressable>
+      )}
 
       {/* Modal assignation employés */}
       <Modal

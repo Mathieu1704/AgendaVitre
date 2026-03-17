@@ -84,6 +84,9 @@ def create_intervention(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
+    if current_user.role != 'admin':
+        raise HTTPException(status_code=403, detail="Réservé aux admins.")
+
     if intervention.client_id:
         client = db.query(Client).filter(Client.id == intervention.client_id).first()
         if not client:
@@ -134,6 +137,8 @@ def bulk_assign_employees(
 ):
     """Assigne des employés à toutes les interventions d'une sous-zone pour un jour donné.
     skip_assigned=True (défaut) : saute les interventions qui ont déjà des employés assignés."""
+    if current_user.role != 'admin':
+        raise HTTPException(status_code=403, detail="Réservé aux admins.")
     interventions = db.query(Intervention).options(selectinload(Intervention.employees)).filter(
         func.date(Intervention.start_time) == body.date,
         Intervention.sub_zone == body.sub_zone,
@@ -162,6 +167,11 @@ def update_intervention(
     db_intervention = db.query(Intervention).filter(Intervention.id == intervention_id).first()
     if not db_intervention:
         raise HTTPException(status_code=404, detail="Introuvable")
+
+    # Filtrage des champs autorisés pour les non-admins
+    if current_user.role != 'admin':
+        EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time"}
+        intervention_update = {k: v for k, v in intervention_update.items() if k in EMPLOYEE_ALLOWED}
 
     old_status = db_intervention.status
 

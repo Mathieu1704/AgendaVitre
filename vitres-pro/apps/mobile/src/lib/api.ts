@@ -23,7 +23,12 @@ supabase.auth.getSession().then(({ data }) => {
 });
 
 // Intercepteur : Ajoute le token Supabase avant chaque envoi
-api.interceptors.request.use((config) => {
+// Si le token n'est pas encore en cache (premier chargement), on attend getSession()
+api.interceptors.request.use(async (config) => {
+  if (!_cachedToken) {
+    const { data } = await supabase.auth.getSession();
+    _cachedToken = data.session?.access_token ?? null;
+  }
   if (_cachedToken) {
     config.headers.Authorization = `Bearer ${_cachedToken}`;
   }

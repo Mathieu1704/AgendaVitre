@@ -28,7 +28,7 @@ import {
   isWithinInterval,
 } from "date-fns";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect, Redirect } from "expo-router";
 
 // Composants UI
 import {
@@ -43,10 +43,16 @@ import { useTheme } from "../../../src/ui/components/ThemeToggle";
 
 // Hooks
 import { useInterventions } from "../../../src/hooks/useInterventions";
+import { useAuth } from "../../../src/hooks/useAuth";
 
 export default function FacturationScreen() {
   const router = useRouter();
+  const { isAdmin, loading: authLoading } = useAuth();
   const { interventions, isLoading } = useInterventions();
+
+  if (!authLoading && !isAdmin) {
+    return <Redirect href="/(app)" />;
+  }
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();

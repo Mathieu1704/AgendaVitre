@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
 from app.models.models import get_db, Client, Intervention, ClientService
-from app.schemas.schemas import ClientCreate, ClientOut, ClientServiceCreate, ClientServiceOut, ClientServiceUpdate
+from app.schemas.schemas import ClientCreate, ClientOut, ClientOutLite, ClientServiceCreate, ClientServiceOut, ClientServiceUpdate
 from app.core.deps import get_current_user
 from pydantic import BaseModel
 
@@ -33,7 +33,7 @@ def create_client(
     db.refresh(new_client)
     return new_client
 
-@router.get("", response_model=List[ClientOut])
+@router.get("", response_model=List[ClientOutLite])
 def read_clients(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)

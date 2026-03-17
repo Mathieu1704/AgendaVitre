@@ -10,12 +10,23 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const THEME_KEY = "@lvmagenda_theme";
 
+// Lecture synchrone depuis localStorage sur web (évite le flash clair→sombre au reload)
+function getInitialTheme(): "light" | "dark" {
+  if (Platform.OS === "web" && typeof localStorage !== "undefined") {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === "dark" || saved === "light") return saved;
+  }
+  return "light";
+}
+
 // ✅ Hook personnalisé qui fonctionne partout
 export function useTheme() {
-  const [colorScheme, setColorScheme] = useState<"light" | "dark">("light");
+  const [colorScheme, setColorScheme] = useState<"light" | "dark">(getInitialTheme);
 
   useEffect(() => {
-    loadTheme();
+    // Sur web le thème est déjà appliqué via getInitialTheme, on ne recharge que sur natif
+    if (Platform.OS !== "web") loadTheme();
+    else applyTheme(colorScheme);
   }, []);
 
   const loadTheme = async () => {
