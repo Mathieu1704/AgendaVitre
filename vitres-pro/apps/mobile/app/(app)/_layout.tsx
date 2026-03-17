@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, useWindowDimensions, ActivityIndicator } from "react-native";
+import { View, Text, useWindowDimensions, ActivityIndicator, Platform } from "react-native";
 import { Tabs, Redirect } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../src/lib/supabase";
@@ -124,7 +124,7 @@ export default function AppLayout() {
             borderTopWidth: 1,
             borderTopColor: "#E4E4E7",
             height: 80,
-            paddingBottom: 20,
+            paddingBottom: Platform.OS === "web" ? 8 : 20,
             paddingTop: 10,
           },
           tabBarActiveTintColor: "#3B82F6",
@@ -132,6 +132,7 @@ export default function AppLayout() {
           tabBarLabelStyle: {
             fontSize: 11,
             fontWeight: "600",
+            lineHeight: 14,
           },
         }}
       >
@@ -172,15 +173,6 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen
-          name="parametres/index"
-          options={{
-            title: "Réglages",
-            tabBarIcon: ({ color, size }) => (
-              <Settings size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
           name="notifications/index"
           options={{
             title: "Alertes",
@@ -201,6 +193,15 @@ export default function AppLayout() {
                   </View>
                 )}
               </View>
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="parametres/index"
+          options={{
+            title: "Réglages",
+            tabBarIcon: ({ color, size }) => (
+              <Settings size={size} color={color} />
             ),
           }}
         />

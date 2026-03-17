@@ -7,6 +7,7 @@ import {
   Platform,
   ViewStyle,
   StyleProp,
+  useWindowDimensions,
 } from "react-native";
 import { Calendar as CalendarIcon, Clock } from "lucide-react-native";
 import { Calendar, DateData } from "react-native-calendars";
@@ -36,6 +37,8 @@ export function DateTimePicker({
   const [showTimePicker, setShowTimePicker] = useState(false);
   const { isDark } = useTheme();
   const isWeb = Platform.OS === "web";
+  const { width: screenWidth } = useWindowDimensions();
+  const dialogPosition = isWeb && screenWidth >= 768 ? "center" : "bottom";
   const hoursScrollRef = useRef<ScrollView>(null);
   const minutesScrollRef = useRef<ScrollView>(null);
   const [datePart, timePart = "09:00"] = value.split("T");
@@ -171,7 +174,7 @@ export function DateTimePicker({
         open={showCalendar}
         onClose={() => setShowCalendar(false)}
         // ✅ FIX WEB : Centré sur Web, Bottom sur Mobile
-        position={isWeb ? "center" : "bottom"}
+        position={dialogPosition}
       >
         <View className="p-2">
           <Text className="text-lg font-bold mb-4 text-foreground dark:text-white text-center">
@@ -203,13 +206,13 @@ export function DateTimePicker({
         open={showTimePicker}
         onClose={() => setShowTimePicker(false)}
         // ✅ WEB : Modale centrée. MOBILE : En bas.
-        position={isWeb ? "center" : "bottom"}
+        position={dialogPosition}
       >
         <View
           className="p-4"
           // ✅ FIX WEB : On limite la hauteur max sur PC pour éviter que ça dépasse de l'écran
           style={
-            isWeb
+            isWeb && screenWidth >= 768
               ? ({ maxHeight: "80vh", width: 500, maxWidth: "100%" } as any)
               : {}
           }

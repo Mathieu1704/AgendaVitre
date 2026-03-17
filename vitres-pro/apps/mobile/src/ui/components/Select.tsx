@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Pressable, Text, View, ViewStyle, StyleProp, ScrollView, TextInput, Platform } from "react-native";
+import { Pressable, Text, View, ViewStyle, StyleProp, ScrollView, TextInput, Platform, useWindowDimensions } from "react-native";
 import { Dialog } from "./Dialog";
 import { Button } from "./Button";
 import { cn } from "../cn";
@@ -26,6 +26,7 @@ export function Select<T extends { id: string; label: string }>({
   containerStyle?: StyleProp<ViewStyle>; // ✅ 2. On la type
   label?: string;
 }) {
+  const { height: screenHeight } = useWindowDimensions();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -110,7 +111,7 @@ export function Select<T extends { id: string; label: string }>({
           </View>
 
           <ScrollView
-            style={{ maxHeight: 320 }}
+            style={{ maxHeight: Math.min(320, screenHeight * 0.4) }}
             showsVerticalScrollIndicator={true}
             persistentScrollbar={true}
             contentContainerStyle={{ paddingRight: 10 }}

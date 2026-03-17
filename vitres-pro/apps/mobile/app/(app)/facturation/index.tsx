@@ -186,7 +186,7 @@ export default function FacturationScreen() {
         <View className="flex-row flex-wrap gap-3 mb-8">
           {kpiStats.map((stat, index) => {
             // ✅ FIX WEB : Sur Web on met 24% (pour en avoir 4 par ligne), sur Mobile on garde le calcul précis (2 par ligne)
-            const cardWidth = isWeb ? "24%" : (width - 32 - 12) / 2;
+            const cardWidth = isWeb ? ("calc(50% - 6px)" as any) : (width - 32 - 12) / 2;
 
             return (
               <Animated.View

@@ -29,7 +29,8 @@ export function ToastHost() {
               width: "auto", // Permet de réduire la largeur
               minWidth: 280, // Largeur minimum
               maxWidth: "90%", // Pas trop large sur mobile
-              height: 60,
+              minHeight: 52,
+              paddingVertical: 14,
               paddingRight: 20,
               // Ombre portée pour le côté flottant
               shadowColor: "#000",
@@ -56,7 +57,8 @@ export function ToastHost() {
               width: "auto",
               minWidth: 280,
               maxWidth: "90%",
-              height: 60,
+              minHeight: 52,
+              paddingVertical: 14,
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.1,
@@ -81,7 +83,8 @@ export function ToastHost() {
               width: "auto",
               minWidth: 280,
               maxWidth: "90%",
-              height: 60,
+              minHeight: 52,
+              paddingVertical: 14,
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.1,
