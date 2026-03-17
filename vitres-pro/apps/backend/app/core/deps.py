@@ -42,10 +42,9 @@ def get_current_user(
             
         return employee #  On renvoie l'objet complet
 
-    except JWTError as e:
-        print(f"JWT Validation Error: {e}")
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Erreur d'authentification: {str(e)}",
+            detail="Token invalide ou expiré",
             headers={"WWW-Authenticate": "Bearer"},
         )

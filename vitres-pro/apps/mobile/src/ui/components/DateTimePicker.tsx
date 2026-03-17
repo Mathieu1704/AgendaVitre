@@ -58,8 +58,8 @@ export function DateTimePicker({
             y: (minutes / 5) * 48,
             animated: true,
           });
-        } catch (e) {
-          console.log(e);
+        } catch {
+          // scroll échoué silencieusement
         }
       }, 100);
     }

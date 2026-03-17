@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import func
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, date
 import uuid
+from pydantic import BaseModel
 
 from app.models.models import (
     get_db, Intervention, Client, Employee, InterventionItem,
@@ -14,6 +15,12 @@ from app.schemas.schemas import InterventionCreate, InterventionOut
 from app.core.deps import get_current_user
 
 router = APIRouter()
+
+class BulkAssignBody(BaseModel):
+    date: date
+    sub_zone: str
+    employee_ids: List[UUID] = []
+    skip_assigned: bool = True
 
 def is_admin(user_id: str, db: Session) -> bool:
     emp = db.query(Employee).filter(Employee.id == user_id).first()
@@ -121,34 +128,22 @@ def create_intervention(
 
 @router.patch("/bulk-assign")
 def bulk_assign_employees(
-    body: dict,
+    body: BulkAssignBody,
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
     """Assigne des employés à toutes les interventions d'une sous-zone pour un jour donné.
     skip_assigned=True (défaut) : saute les interventions qui ont déjà des employés assignés."""
-    try:
-        target_date = datetime.strptime(body["date"], "%Y-%m-%d").date()
-    except (KeyError, ValueError):
-        raise HTTPException(status_code=400, detail="date manquant ou invalide (YYYY-MM-DD)")
-
-    sub_zone = body.get("sub_zone")
-    employee_ids = body.get("employee_ids", [])
-    skip_assigned = body.get("skip_assigned", True)
-
-    if not sub_zone:
-        raise HTTPException(status_code=400, detail="sub_zone manquant")
-
     interventions = db.query(Intervention).options(selectinload(Intervention.employees)).filter(
-        func.date(Intervention.start_time) == target_date,
-        Intervention.sub_zone == sub_zone,
+        func.date(Intervention.start_time) == body.date,
+        Intervention.sub_zone == body.sub_zone,
     ).all()
 
-    employees = db.query(Employee).filter(Employee.id.in_([UUID(eid) for eid in employee_ids])).all()
+    employees = db.query(Employee).filter(Employee.id.in_(body.employee_ids)).all()
 
     updated = 0
     for intervention in interventions:
-        if skip_assigned and len(intervention.employees) > 0:
+        if body.skip_assigned and len(intervention.employees) > 0:
             continue
         intervention.employees = employees
         updated += 1

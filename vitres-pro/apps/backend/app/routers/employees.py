@@ -112,10 +112,7 @@ def update_employee(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    # Vérification Admin (Optionnel mais conseillé)
-    admin_id = UUID(current_user["sub"])
-    admin = db.query(Employee).filter(Employee.id == admin_id).first()
-    if not admin or admin.role != "admin":
+    if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Seul un admin peut modifier un employé")
 
     db_obj = db.query(Employee).filter(Employee.id == employee_id).first()

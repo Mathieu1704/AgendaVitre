@@ -96,7 +96,6 @@ export default function TeamManagementScreen() {
     },
     onError: (err: any) => {
       // ✅ MODIF ICI : On affiche le vrai message du serveur
-      console.log("Erreur suppression:", err.response?.data);
       const message = err.response?.data?.detail || "Erreur inconnue";
       toast.error("Erreur", message);
     },

@@ -71,6 +71,7 @@ resend==2.19.0
 rich==14.2.0
 rsa==4.9.1
 six==1.17.0
+slowapi==0.1.9
 sortedcontainers==2.4.0
 SQLAlchemy==2.0.45
 starlette==0.50.0

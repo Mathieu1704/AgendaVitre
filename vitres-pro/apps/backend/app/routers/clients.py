@@ -21,10 +21,12 @@ router = APIRouter()
 
 @router.post("", response_model=ClientOut)
 def create_client(
-    client: ClientCreate, 
+    client: ClientCreate,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
     new_client = Client(**client.model_dump())
     db.add(new_client)
     db.commit()
@@ -33,8 +35,8 @@ def create_client(
 
 @router.get("", response_model=List[ClientOut])
 def read_clients(
-    db: Session = Depends(get_db), 
-    # current_user = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     return db.query(Client).all()
 
@@ -56,6 +58,8 @@ def update_client(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
     client = db.query(Client).filter(Client.id == client_id).first()
     if client is None:
         raise HTTPException(status_code=404, detail="Client introuvable")
@@ -71,6 +75,8 @@ def delete_client(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
     client = db.query(Client).filter(Client.id == client_id).first()
     if client is None:
         raise HTTPException(status_code=404, detail="Client introuvable")
@@ -101,6 +107,8 @@ def create_client_service(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client introuvable")
@@ -119,6 +127,8 @@ def update_client_service(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
     service = db.query(ClientService).filter(
         ClientService.id == service_id, ClientService.client_id == client_id
     ).first()
@@ -138,6 +148,8 @@ def delete_client_service(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
     service = db.query(ClientService).filter(
         ClientService.id == service_id, ClientService.client_id == client_id
     ).first()
