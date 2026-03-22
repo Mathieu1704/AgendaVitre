@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { Session } from "@supabase/supabase-js";
 import { api } from "../lib/api";
 import { useQueryClient } from "@tanstack/react-query";
+import { router } from "expo-router";
 
 export const useAuth = () => {
   const [session, setSession] = useState<Session | null>(null);
@@ -32,8 +33,13 @@ export const useAuth = () => {
       }
     };
 
-    // 1. Session initiale
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // 1. Session initiale — si le refresh token est invalide, on déconnecte proprement
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error || !session) {
+        if (error) supabase.auth.signOut(); // nettoie le token corrompu du SecureStore
+        setLoading(false);
+        return;
+      }
       setSession(session);
       if (session?.user) checkRole(session.user.email);
       else setLoading(false);
@@ -42,7 +48,16 @@ export const useAuth = () => {
     // 2. Écoute des changements
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED" && !session) {
+        // Token expiré ou révoqué : nettoyer et rediriger silencieusement
+        setSession(null);
+        setIsAdmin(false);
+        setLoading(false);
+        queryClient.clear();
+        router.replace("/(auth)/login");
+        return;
+      }
       setSession(session);
       if (session?.user) checkRole(session.user.email);
       else {

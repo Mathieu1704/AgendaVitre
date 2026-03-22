@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import {
   User,
@@ -151,6 +152,10 @@ export default function ParametresScreen() {
           <ActivityIndicator color="#3B82F6" />
         </View>
       ) : (
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
         <ScrollView
           ref={scrollRef}
           contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
@@ -427,6 +432,7 @@ export default function ParametresScreen() {
             </Text>
           </Pressable>
         </ScrollView>
+        </KeyboardAvoidingView>
       )}
     </View>
   );

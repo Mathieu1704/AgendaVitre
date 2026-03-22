@@ -7,6 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
   TextInput,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -804,6 +805,10 @@ export default function AddInterventionScreen() {
         </Text>
       </View>
 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <Card className="max-w-2xl w-full self-center rounded-[40px] overflow-hidden">
           {/* BANNIÈRE "RDV NON REPRIS" (mode reprise uniquement) */}
@@ -1729,6 +1734,7 @@ export default function AddInterventionScreen() {
           </CardContent>
         </Card>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* MODAL RÉCURRENCE PERSONNALISÉE */}
       <Dialog

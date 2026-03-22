@@ -1,5 +1,7 @@
 import axios from "axios";
+import { router } from "expo-router";
 import { supabase } from "./supabase";
+import { toast } from "../ui/toast";
 
 // Pour le WEB, localhost marche.
 // Pour ANDROID Emulator, il faudra peut-être utiliser 'http://10.0.2.2:8000' plus tard.
@@ -10,6 +12,7 @@ export const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  timeout: 15000,
 });
 
 // Cache du token en mémoire — mis à jour via onAuthStateChange (une seule lecture I/O au lieu d'une par requête)
@@ -37,5 +40,15 @@ api.interceptors.request.use(async (config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => Promise.reject(error),
+  (error) => {
+    if (error.code === "ECONNABORTED") {
+      toast.error("Délai dépassé", "Le serveur ne répond pas. Réessaie.");
+    } else if (error.response?.status === 401) {
+      _cachedToken = null;
+      router.replace("/(auth)/login");
+    } else if (!error.response) {
+      toast.error("Hors ligne", "Vérifie ta connexion internet.");
+    }
+    return Promise.reject(error);
+  },
 );

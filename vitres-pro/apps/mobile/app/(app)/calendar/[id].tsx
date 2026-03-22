@@ -121,7 +121,10 @@ export default function InterventionDetailScreen() {
       toast.success("Supprimé", "Intervention supprimée.");
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
       queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
-      router.back();
+      router.push({
+        pathname: "/(app)/calendar",
+        params: from_view ? { view: from_view, date: from_date } : {},
+      });
     },
     onError: () => {
       // En cas d'erreur, on recharge pour restaurer l'état correct

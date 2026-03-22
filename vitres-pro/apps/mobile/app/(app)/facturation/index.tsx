@@ -49,10 +49,6 @@ export default function FacturationScreen() {
   const router = useRouter();
   const { isAdmin, loading: authLoading } = useAuth();
   const { interventions, isLoading } = useInterventions();
-
-  if (!authLoading && !isAdmin) {
-    return <Redirect href="/(app)" />;
-  }
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -71,6 +67,10 @@ export default function FacturationScreen() {
       }
     }, []),
   );
+
+  if (!authLoading && !isAdmin) {
+    return <Redirect href="/(app)" />;
+  }
 
   // --- LOGIQUE MÉTIER ---
   const currentMonthStart = startOfMonth(new Date());

@@ -9,6 +9,7 @@ import {
   Platform,
   TextInput,
   useWindowDimensions,
+  KeyboardAvoidingView,
 } from "react-native";
 import { format, parseISO } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -178,6 +179,10 @@ export default function ClientDetailScreen() {
         )}
       </View>
 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
       <ScrollView contentContainerStyle={{ padding: 20 }}>
         {editing ? (
           /* ── Mode édition ── */
@@ -289,6 +294,7 @@ export default function ClientDetailScreen() {
           </>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Menu contextuel (admin) */}
       {menuOpen && (
