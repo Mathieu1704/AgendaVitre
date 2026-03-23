@@ -21,11 +21,95 @@ export type InterventionGroupsCtx = {
 // ─── renderInterventionGroups ─────────────────────────────────────────────────
 
 const STATUS_ORDER: Record<string, number> = { in_progress: 0, planned: 1, done: 2 };
-const STATUS_LABELS: Record<string, string> = { in_progress: "En cours", planned: "Planifié", done: "Terminé" };
-const STATUS_COLORS: Record<string, string> = { in_progress: "#F97316", planned: "#3B82F6", done: "#22C55E" };
+export const STATUS_LABELS: Record<string, string> = { in_progress: "En cours", planned: "Planifié", done: "Terminé" };
+export const STATUS_COLORS: Record<string, string> = { in_progress: "#F97316", planned: "#3B82F6", done: "#22C55E" };
 const TYPE_ORDER: Record<string, number> = { intervention: 0, devis: 1, tournee: 2, note: 3 };
-const TYPE_LABELS: Record<string, string> = { intervention: "Intervention", devis: "Devis", tournee: "Tournée", note: "Note" };
-const TYPE_COLORS: Record<string, string> = { intervention: "#3B82F6", devis: "#8B5CF6", tournee: "#F97316", note: "#64748B" };
+export const TYPE_LABELS: Record<string, string> = { intervention: "Intervention", devis: "Devis", tournee: "Tournée", note: "Note" };
+export const TYPE_COLORS: Record<string, string> = { intervention: "#3B82F6", devis: "#8B5CF6", tournee: "#F97316", note: "#64748B" };
+
+// ─── FlatList support ─────────────────────────────────────────────────────────
+
+export type FlatRow =
+  | { kind: "status-header"; status: string; count: number; key: string }
+  | { kind: "type-header"; type: string; key: string }
+  | { kind: "zone-header"; code: string; label: string; color: string; items: any[]; dateStr: string; key: string }
+  | { kind: "card"; item: any; barColor: string; key: string };
+
+export function buildFlatRows(
+  list: any[],
+  dateStr: string,
+  subZoneMap: Map<string, { label: string; color: string }>,
+): FlatRow[] {
+  if (list.length === 0) return [];
+
+  const sorted = [...list].sort((a, b) => {
+    const sd = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
+    if (sd !== 0) return sd;
+    const td = (TYPE_ORDER[a.type ?? "intervention"] ?? 9) - (TYPE_ORDER[b.type ?? "intervention"] ?? 9);
+    if (td !== 0) return td;
+    return (a.sub_zone ?? "").localeCompare(b.sub_zone ?? "");
+  });
+
+  const rows: FlatRow[] = [];
+
+  const statusGroups: { status: string; items: any[] }[] = [];
+  for (const item of sorted) {
+    const last = statusGroups[statusGroups.length - 1];
+    if (last && last.status === item.status) last.items.push(item);
+    else statusGroups.push({ status: item.status, items: [item] });
+  }
+
+  for (const sg of statusGroups) {
+    rows.push({ kind: "status-header", status: sg.status, count: sg.items.length, key: `sh-${sg.status}` });
+
+    const typeGroups: { type: string; items: any[] }[] = [];
+    for (const item of sg.items) {
+      const t = item.type ?? "intervention";
+      const last = typeGroups[typeGroups.length - 1];
+      if (last && last.type === t) last.items.push(item);
+      else typeGroups.push({ type: t, items: [item] });
+    }
+    const multipleTypes = typeGroups.length > 1;
+
+    for (const tg of typeGroups) {
+      if (multipleTypes || tg.type !== "intervention") {
+        rows.push({ kind: "type-header", type: tg.type, key: `th-${sg.status}-${tg.type}` });
+      }
+
+      const szGroups: { code: string | null; items: any[] }[] = [];
+      for (const item of tg.items) {
+        const code = item.sub_zone ?? null;
+        const last = szGroups[szGroups.length - 1];
+        if (last && last.code === code) last.items.push(item);
+        else szGroups.push({ code, items: [item] });
+      }
+      const hasMultipleSubZones = szGroups.length > 1 || (szGroups.length === 1 && szGroups[0].code !== null);
+
+      for (const zg of szGroups) {
+        const sz = zg.code ? subZoneMap.get(zg.code) : null;
+        const barColor = sz?.color ?? "#CBD5E1";
+
+        if (hasMultipleSubZones && zg.code) {
+          rows.push({
+            kind: "zone-header",
+            code: zg.code,
+            label: sz?.label ?? "Sans zone",
+            color: barColor,
+            items: zg.items,
+            dateStr,
+            key: `zh-${sg.status}-${tg.type}-${zg.code}`,
+          });
+        }
+
+        for (const item of zg.items) {
+          rows.push({ kind: "card", item, barColor, key: `card-${item.id}` });
+        }
+      }
+    }
+  }
+
+  return rows;
+}
 
 export function renderInterventionGroups(
   list: any[],

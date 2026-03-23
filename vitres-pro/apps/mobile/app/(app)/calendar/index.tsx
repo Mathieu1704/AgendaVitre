@@ -627,87 +627,90 @@ export default function CalendarScreen() {
           )}
         </View>
       ) : (
-        <ScrollView
-          className="flex-1"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 100 }}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
-        >
-          {viewMode === "month" && (
-            <MonthView
-              cursorDate={cursorDate}
-              selectedDate={selectedDate}
-              setCursorDate={setCursorDate}
-              setSelectedDate={setSelectedDate}
-              setViewMode={setViewMode}
-              isDark={isDark}
-              isAdmin={isAdmin}
-              itemsByDate={itemsByDate}
-              effectiveZone={effectiveZone}
-              filterItem={filterItem}
-              subZoneMap={subZoneMap}
-              viewMode={viewMode}
-              activeTypes={activeTypes}
-              activeStatuses={activeStatuses}
-              toggleType={toggleType}
-              toggleStatus={toggleStatus}
-              setActiveTypes={setActiveTypes}
-              setActiveStatuses={setActiveStatuses}
-              setAssignModal={setAssignModal}
-              setSelectedAssignIds={setSelectedAssignIds}
-              setInitialAssignIds={setInitialAssignIds}
-            />
-          )}
-          {viewMode === "week" && (
-            <WeekView
-              cursorDate={cursorDate}
-              isDark={isDark}
-              isAdmin={isAdmin}
-              isDesktop={isDesktop}
-              itemsByDate={itemsByDate}
-              effectiveZone={effectiveZone}
-              viewMode={viewMode}
-              selectedDate={selectedDate}
-              filterItem={filterItem}
-              subZoneMap={subZoneMap}
-              setAssignModal={setAssignModal}
-              setSelectedAssignIds={setSelectedAssignIds}
-              setInitialAssignIds={setInitialAssignIds}
-            />
-          )}
-          {viewMode === "day" && (
-            <DayView
-              cursorDate={cursorDate}
-              isDark={isDark}
-              isAdmin={isAdmin}
-              itemsByDate={itemsByDate}
-              effectiveZone={effectiveZone}
-              viewMode={viewMode}
-              selectedDate={selectedDate}
-              filterItem={filterItem}
-              subZoneMap={subZoneMap}
-              activeTypes={activeTypes}
-              activeStatuses={activeStatuses}
-              toggleType={toggleType}
-              toggleStatus={toggleStatus}
-              setActiveTypes={setActiveTypes}
-              setActiveStatuses={setActiveStatuses}
-              setAssignModal={setAssignModal}
-              setSelectedAssignIds={setSelectedAssignIds}
-              setInitialAssignIds={setInitialAssignIds}
-            />
-          )}
-          {viewMode === "year" && (
-            <YearView
-              cursorDate={cursorDate}
-              isDark={isDark}
-              interventions={interventions}
-              dayKeyFromDateTime={dayKeyFromDateTime}
-              setCursorDate={setCursorDate}
-              setViewMode={setViewMode}
-            />
-          )}
-        </ScrollView>
+        <>{viewMode === "day" ? (
+          <DayView
+            cursorDate={cursorDate}
+            isDark={isDark}
+            isAdmin={isAdmin}
+            itemsByDate={itemsByDate}
+            effectiveZone={effectiveZone}
+            viewMode={viewMode}
+            selectedDate={selectedDate}
+            filterItem={filterItem}
+            subZoneMap={subZoneMap}
+            activeTypes={activeTypes}
+            activeStatuses={activeStatuses}
+            toggleType={toggleType}
+            toggleStatus={toggleStatus}
+            setActiveTypes={setActiveTypes}
+            setActiveStatuses={setActiveStatuses}
+            setAssignModal={setAssignModal}
+            setSelectedAssignIds={setSelectedAssignIds}
+            setInitialAssignIds={setInitialAssignIds}
+            isRefreshing={isRefreshing}
+            onRefresh={onRefresh}
+          />
+        ) : (
+          <ScrollView
+            className="flex-1"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 100 }}
+            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+          >
+            {viewMode === "month" && (
+              <MonthView
+                cursorDate={cursorDate}
+                selectedDate={selectedDate}
+                setCursorDate={setCursorDate}
+                setSelectedDate={setSelectedDate}
+                setViewMode={setViewMode}
+                isDark={isDark}
+                isAdmin={isAdmin}
+                itemsByDate={itemsByDate}
+                effectiveZone={effectiveZone}
+                filterItem={filterItem}
+                subZoneMap={subZoneMap}
+                viewMode={viewMode}
+                activeTypes={activeTypes}
+                activeStatuses={activeStatuses}
+                toggleType={toggleType}
+                toggleStatus={toggleStatus}
+                setActiveTypes={setActiveTypes}
+                setActiveStatuses={setActiveStatuses}
+                setAssignModal={setAssignModal}
+                setSelectedAssignIds={setSelectedAssignIds}
+                setInitialAssignIds={setInitialAssignIds}
+              />
+            )}
+            {viewMode === "week" && (
+              <WeekView
+                cursorDate={cursorDate}
+                isDark={isDark}
+                isAdmin={isAdmin}
+                isDesktop={isDesktop}
+                itemsByDate={itemsByDate}
+                effectiveZone={effectiveZone}
+                viewMode={viewMode}
+                selectedDate={selectedDate}
+                filterItem={filterItem}
+                subZoneMap={subZoneMap}
+                setAssignModal={setAssignModal}
+                setSelectedAssignIds={setSelectedAssignIds}
+                setInitialAssignIds={setInitialAssignIds}
+              />
+            )}
+            {viewMode === "year" && (
+              <YearView
+                cursorDate={cursorDate}
+                isDark={isDark}
+                interventions={interventions}
+                dayKeyFromDateTime={dayKeyFromDateTime}
+                setCursorDate={setCursorDate}
+                setViewMode={setViewMode}
+              />
+            )}
+          </ScrollView>
+        )}</>
       )}
 
       {/* FAB — admin uniquement */}

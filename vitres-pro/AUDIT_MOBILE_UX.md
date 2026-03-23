@@ -32,6 +32,7 @@
 - **`useTransition` sur les pills** — animation 60 FPS pendant les re-renders lourds — `calendar/index.tsx`
 - **`clients/[id].tsx`** — dialog historique `maxHeight: "60%"` + labels textuels sur boutons phone/mail/maps
 - **`_layout.tsx`** — `paddingBottom` remplacé par `Math.max(insets.bottom, 8)`
+- **Virtualisation `DayView`** — `FlatList` auto-scroll avec groupes aplatis, `removeClippedSubviews`, `initialNumToRender=12`
 
 ---
 
@@ -57,13 +58,9 @@
 
 ---
 
-### `calendar/index.tsx` — virtualisation
+### `calendar/add.tsx` — ~30 useState, re-renders massifs
 
-**Fichier :** `app/(app)/calendar/index.tsx`
-**Problèmes restants :**
-
-- Zéro virtualisation dans les vues Mois et Semaine — tout en `View.map()`
-- Filter chips avec touch target ~30px (sous les 44px minimum)
-
-**Fix :** Remplacer les `View.map()` par `FlashList`/`FlatList`. Agrandir les chips à 44px min.
+**Fichier :** `app/(app)/calendar/add.tsx`
+**Problème :** Chaque frappe dans n'importe quel champ re-render le composant entier (1300+ lignes). Lag perceptible sur mobile mid-range.
+**Fix :** Migrer vers `react-hook-form` (isole les re-renders par champ).
 **Statut :** 🔲 À faire

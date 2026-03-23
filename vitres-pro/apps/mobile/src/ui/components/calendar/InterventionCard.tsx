@@ -20,6 +20,7 @@ interface InterventionCardProps {
   compact?: boolean;
   viewMode: string;
   selectedDate: string;
+  leftBarColor?: string;
   setAssignModal: React.Dispatch<React.SetStateAction<AssignModalState>>;
   setSelectedAssignIds: React.Dispatch<React.SetStateAction<string[]>>;
   setInitialAssignIds: React.Dispatch<React.SetStateAction<string[]>>;
@@ -30,6 +31,7 @@ export const InterventionCard = React.memo(function InterventionCard({
   compact = false,
   viewMode,
   selectedDate,
+  leftBarColor,
   setAssignModal,
   setSelectedAssignIds,
   setInitialAssignIds,
@@ -58,7 +60,7 @@ export const InterventionCard = React.memo(function InterventionCard({
     (a: any, b: any) => (a.id as string).localeCompare(b.id as string)
   );
 
-  return (
+  const card = (
     <Pressable
       onPress={() => router.push(`/(app)/calendar/${item.id}?from_view=${viewMode}&from_date=${selectedDate}` as any)}
       onLongPress={() => {
@@ -68,8 +70,8 @@ export const InterventionCard = React.memo(function InterventionCard({
         setInitialAssignIds(currentIds);
       }}
       delayLongPress={400}
-      className="border border-border dark:border-slate-800 shadow-sm active:scale-[0.98] mb-3 overflow-hidden"
-      style={{ borderRadius: cardRadius }}
+      className={`border border-border dark:border-slate-800 shadow-sm active:scale-[0.98] overflow-hidden${leftBarColor ? "" : " mb-3"}`}
+      style={{ borderRadius: cardRadius, flex: leftBarColor ? 1 : undefined }}
     >
       {employees.length > 0 && (
         <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, flexDirection: "row" }}>
@@ -161,4 +163,14 @@ export const InterventionCard = React.memo(function InterventionCard({
       </View>
     </Pressable>
   );
+
+  if (leftBarColor) {
+    return (
+      <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+        <View style={{ width: 6, borderRadius: 3, backgroundColor: leftBarColor }} />
+        {card}
+      </View>
+    );
+  }
+  return card;
 });
