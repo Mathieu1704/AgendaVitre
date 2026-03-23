@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import React, { useMemo, useState, useCallback, useEffect, useRef, useTransition } from "react";
 import {
   View,
   Pressable,
@@ -246,6 +246,8 @@ export default function CalendarScreen() {
   // Breakpoint pour Desktop
   const isDesktop = width >= 1024;
 
+  const [, startTransition] = useTransition();
+
   // --- ÉTATS ---
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [displayMode, setDisplayMode] = useState<DisplayMode>("list");
@@ -488,7 +490,7 @@ export default function CalendarScreen() {
                 { id: "calendar", label: "Calendrier" },
               ]}
               selected={displayMode}
-              onSelect={(id) => setDisplayMode(id as DisplayMode)}
+              onSelect={(id) => startTransition(() => setDisplayMode(id as DisplayMode))}
               pillColor="#3B82F6"
               bgColor={isDark ? "#1E293B" : "#E2E8F0"}
               activeTextColor="#FFFFFF"
@@ -516,7 +518,7 @@ export default function CalendarScreen() {
               { id: "year",  label: "Année" },
             ]}
             selected={viewMode}
-            onSelect={(id) => setViewMode(id as ViewMode)}
+            onSelect={(id) => startTransition(() => setViewMode(id as ViewMode))}
             pillColor={isDark ? "#475569" : "#FFFFFF"}
             bgColor={isDark ? "#1E293B" : "#E2E8F0"}
             activeTextColor={isDark ? "#FFFFFF" : "#09090B"}
@@ -531,7 +533,7 @@ export default function CalendarScreen() {
               { id: "week", label: "Semaine" },
             ]}
             selected={calView}
-            onSelect={(id) => setCalView(id as CalView)}
+            onSelect={(id) => startTransition(() => setCalView(id as CalView))}
             pillColor={isDark ? "#475569" : "#FFFFFF"}
             bgColor={isDark ? "#1E293B" : "#E2E8F0"}
             activeTextColor={isDark ? "#FFFFFF" : "#09090B"}
@@ -566,7 +568,7 @@ export default function CalendarScreen() {
                   { id: "ardennes", label: "Ardennes", pillColor: "#10B981", activeTextColor: "#FFFFFF" },
                 ]}
                 selected={selectedZone}
-                onSelect={(id) => setSelectedZone(id as "all" | "hainaut" | "ardennes")}
+                onSelect={(id) => startTransition(() => setSelectedZone(id as "all" | "hainaut" | "ardennes"))}
                 pillColor={isDark ? "#475569" : "#FFFFFF"}
                 bgColor={isDark ? "#0F172A" : "#F1F5F9"}
                 activeTextColor={isDark ? "#FFFFFF" : "#09090B"}
