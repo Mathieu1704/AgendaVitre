@@ -63,7 +63,17 @@ def read_interventions(
             Intervention.zone == current_user.zone,
             Intervention.employees.any(id=current_user.id),
         )
-    return query.order_by(Intervention.start_time.desc()).all()
+    if start:
+        try:
+            query = query.filter(Intervention.start_time >= datetime.fromisoformat(start.replace("Z", "+00:00")))
+        except ValueError:
+            pass
+    if end:
+        try:
+            query = query.filter(Intervention.start_time <= datetime.fromisoformat(end.replace("Z", "+00:00")))
+        except ValueError:
+            pass
+    return query.order_by(Intervention.start_time.asc()).all()
 
 
 @router.get("/{intervention_id}", response_model=InterventionOut)

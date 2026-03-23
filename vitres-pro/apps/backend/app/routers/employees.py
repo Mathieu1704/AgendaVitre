@@ -29,10 +29,16 @@ class PasswordResetRequest(BaseModel):
 
 @router.get("", response_model=List[EmployeeOut])
 def read_employees(
-    db: Session = Depends(get_db), 
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
     return db.query(Employee).all()
+
+@router.get("/me", response_model=EmployeeOut)
+def read_me(
+    current_user: Employee = Depends(get_current_user),
+):
+    return current_user
 
 @router.post("", response_model=EmployeeOut)
 def create_employee(

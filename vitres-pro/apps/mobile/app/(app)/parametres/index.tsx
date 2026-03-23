@@ -29,6 +29,7 @@ import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
 import { Button } from "../../../src/ui/components/Button";
 import { Input } from "../../../src/ui/components/Input";
 import { Avatar } from "../../../src/ui/components/Avatar";
+import { Dialog } from "../../../src/ui/components/Dialog";
 import { toast } from "../../../src/ui/toast";
 import { supabase } from "../../../src/lib/supabase";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
@@ -49,6 +50,7 @@ export default function ParametresScreen() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loadingPass, setLoadingPass] = useState(false);
+  const [logoutDialog, setLogoutDialog] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -71,13 +73,18 @@ export default function ParametresScreen() {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        // On récupère aussi les infos étendues (role, nom) depuis notre API
         try {
-          const res = await api.get("/api/employees"); // Idéalement endpoint /me, mais on filtre ici
-          const myProfile = res.data.find((e: any) => e.email === user.email);
-          setProfile({ ...user, ...myProfile });
-        } catch (e) {
-          setProfile(user); // Fallback sur user auth
+          const res = await api.get("/api/employees/me");
+          setProfile({ ...user, ...res.data });
+        } catch {
+          // Fallback si /me pas encore déployé
+          try {
+            const res = await api.get("/api/employees");
+            const myProfile = res.data.find((e: any) => e.email === user.email);
+            setProfile({ ...user, ...myProfile });
+          } catch {
+            setProfile(user);
+          }
         }
       }
       setLoadingProfile(false);
@@ -86,8 +93,8 @@ export default function ParametresScreen() {
   }, []);
 
   const handleChangePassword = async () => {
-    if (!newPassword || newPassword.length < 6) {
-      return toast.error("Erreur", "Minimum 6 caractères.");
+    if (!newPassword || newPassword.length < 8) {
+      return toast.error("Erreur", "Minimum 8 caractères.");
     }
     if (newPassword !== confirmPassword) {
       return toast.error("Erreur", "Les mots de passe ne correspondent pas.");
@@ -134,7 +141,7 @@ export default function ParametresScreen() {
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
-      style={{ paddingTop: insets.top }}
+      style={{ paddingTop: insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
     >
       <Stack.Screen options={{ headerShown: false }} />
 
@@ -423,7 +430,7 @@ export default function ParametresScreen() {
 
           {/* 4. DÉCONNEXION (Arrondi) */}
           <Pressable
-            onPress={handleLogout}
+            onPress={() => setLogoutDialog(true)}
             className="flex-row items-center justify-center p-4 rounded-[28px] border border-destructive/30 bg-destructive/5 active:bg-destructive/10 h-14"
           >
             <LogOut size={18} color="#EF4444" />
@@ -433,6 +440,40 @@ export default function ParametresScreen() {
           </Pressable>
         </ScrollView>
         </KeyboardAvoidingView>
+      )}
+
+      {/* Confirmation déconnexion */}
+      {logoutDialog && (
+        <Dialog open onClose={() => setLogoutDialog(false)}>
+          <View className="p-5">
+            <Text className="text-lg font-bold text-foreground dark:text-white mb-2">
+              Se déconnecter ?
+            </Text>
+            <Text className="text-muted-foreground dark:text-slate-400 mb-6">
+              Vous devrez vous reconnecter pour accéder à l'application.
+            </Text>
+            <View className="flex-row gap-3">
+              <View style={{ flex: 1 }}>
+                <Pressable
+                  onPress={() => setLogoutDialog(false)}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  className="h-12 rounded-[24px] border border-border dark:border-slate-700 items-center justify-center"
+                >
+                  <Text className="font-bold text-foreground dark:text-white">Annuler</Text>
+                </Pressable>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Pressable
+                  onPress={handleLogout}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  className="h-12 rounded-[24px] bg-red-500 items-center justify-center"
+                >
+                  <Text className="font-bold text-white">Se déconnecter</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Dialog>
       )}
     </View>
   );

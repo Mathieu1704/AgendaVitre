@@ -235,6 +235,9 @@ function SlidingPillSelector({
             }}
           >
             <Animated.Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
               style={{
                 fontSize,
                 fontWeight: "600",
@@ -354,11 +357,32 @@ export default function CalendarScreen() {
     }
   }, [params.date]);
 
+  // --- PLAGE DE DATES selon la vue active ---
+  const rangeStart = useMemo(() => {
+    if (viewMode === "year") return new Date(cursorDate.getFullYear(), 0, 1).toISOString();
+    const d = new Date(cursorDate);
+    d.setMonth(d.getMonth() - 1);
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString();
+  }, [viewMode, cursorDate.getFullYear(), cursorDate.getMonth()]);
+
+  const rangeEnd = useMemo(() => {
+    if (viewMode === "year") return new Date(cursorDate.getFullYear(), 11, 31, 23, 59, 59).toISOString();
+    const d = new Date(cursorDate);
+    d.setMonth(d.getMonth() + 2);
+    d.setDate(0);
+    d.setHours(23, 59, 59, 999);
+    return d.toISOString();
+  }, [viewMode, cursorDate.getFullYear(), cursorDate.getMonth()]);
+
   // --- DATA ---
   const { data: interventions, isLoading } = useQuery({
-    queryKey: ["interventions"],
+    queryKey: ["interventions", rangeStart, rangeEnd],
     queryFn: async () => {
-      const res = await api.get("/api/interventions");
+      const res = await api.get("/api/interventions", {
+        params: { start: rangeStart, end: rangeEnd },
+      });
       return Array.isArray(res.data) ? res.data : [];
     },
     staleTime: 30 * 1000,
@@ -1347,7 +1371,7 @@ export default function CalendarScreen() {
   };
 
   return (
-    <View className="flex-1 bg-background dark:bg-slate-950">
+    <View className="flex-1 bg-background dark:bg-slate-950" style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
       {/* === HEADER PRINCIPAL === */}
       <View
         className="px-6 pb-2 bg-background dark:bg-slate-950 z-10"
@@ -1520,7 +1544,7 @@ export default function CalendarScreen() {
       {/* FAB — admin uniquement */}
       {isAdmin && (
         <Pressable
-          onPress={() => router.push("/(app)/calendar/add")}
+          onPress={() => router.push(`/(app)/calendar/add?from_view=${viewMode}&from_date=${selectedDate}` as any)}
           className="absolute bottom-6 right-6 h-14 w-14 bg-primary items-center justify-center shadow-lg shadow-primary/30 active:scale-90 transition-transform rounded-full"
         >
           <Plus size={28} color="white" />

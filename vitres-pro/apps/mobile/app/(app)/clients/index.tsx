@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   FlatList,
@@ -41,6 +41,14 @@ export default function ClientsListScreen() {
   const insets = useSafeAreaInsets(); // ✅ Gestion Notch
   const isWeb = Platform.OS === "web";
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedQuery(searchQuery), 150);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [searchQuery]);
 
   const { data: clients, isLoading } = useQuery({
     queryKey: ["clients"],
@@ -54,8 +62,8 @@ export default function ClientsListScreen() {
   const filteredClients =
     clients?.filter(
       (c) =>
-        (c.name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (c.address ?? "").toLowerCase().includes(searchQuery.toLowerCase()),
+        (c.name ?? "").toLowerCase().includes(debouncedQuery.toLowerCase()) ||
+        (c.address ?? "").toLowerCase().includes(debouncedQuery.toLowerCase()),
     ) || [];
 
   const renderItem = useCallback(({ item }: { item: Client }) => (
@@ -122,7 +130,7 @@ export default function ClientsListScreen() {
     <View
       className="flex-1 bg-background dark:bg-slate-950"
       // ✅ Padding Top dynamique pour éviter l'encoche
-      style={{ paddingTop: isWeb ? 0 : insets.top }}
+      style={{ paddingTop: isWeb ? 0 : insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
     >
       {/* Header avec Recherche */}
       <View
@@ -141,6 +149,7 @@ export default function ClientsListScreen() {
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
+            returnKeyType="search"
             className="flex-1 ml-3 text-foreground dark:text-white text-base h-full"
           />
         </View>
@@ -158,6 +167,10 @@ export default function ClientsListScreen() {
           renderItem={renderItem}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={15}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews
         />
       ) : (
         <View className="flex-1 justify-center items-center px-10">
@@ -178,8 +191,8 @@ export default function ClientsListScreen() {
       {/* FAB (Bouton Ajouter) */}
       <Pressable
         onPress={() => router.push("/(app)/clients/add")}
-        // rounded-full pour un cercle parfait
-        className="absolute bottom-6 right-6 h-14 w-14 bg-primary rounded-full items-center justify-center shadow-lg shadow-primary/30 active:scale-90 transition-transform"
+        className="absolute right-6 h-14 w-14 bg-primary rounded-full items-center justify-center shadow-lg shadow-primary/30 active:scale-90 transition-transform"
+        style={{ bottom: Math.max(insets.bottom, 24) }}
       >
         <Plus size={28} color="white" />
       </Pressable>
