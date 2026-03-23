@@ -3,6 +3,7 @@ import {
   View,
   Pressable,
   ScrollView,
+  RefreshControl,
   Text,
   ActivityIndicator,
   Modal,
@@ -377,7 +378,8 @@ export default function CalendarScreen() {
   }, [viewMode, cursorDate.getFullYear(), cursorDate.getMonth()]);
 
   // --- DATA ---
-  const { data: interventions, isLoading } = useQuery({
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { data: interventions, isLoading, refetch } = useQuery({
     queryKey: ["interventions", rangeStart, rangeEnd],
     queryFn: async () => {
       const res = await api.get("/api/interventions", {
@@ -387,6 +389,12 @@ export default function CalendarScreen() {
     },
     staleTime: 30 * 1000,
   });
+
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
+  }, [refetch]);
 
   // --- HELPERS ---
   const dayKeyFromDateTime = useCallback((isoDateTime: string) => {
@@ -1533,6 +1541,7 @@ export default function CalendarScreen() {
           className="flex-1"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 100 }}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
         >
           {viewMode === "month" && <RenderMonth />}
           {viewMode === "week" && <RenderWeek />}

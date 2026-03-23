@@ -224,9 +224,11 @@ function generateDates(
 
 export default function AddInterventionScreen() {
   const router = useRouter();
-  const { id, reprise_of } = useLocalSearchParams<{
+  const { id, reprise_of, from_view, from_date } = useLocalSearchParams<{
     id?: string;
     reprise_of?: string;
+    from_view?: string;
+    from_date?: string;
   }>();
   const isEditMode = !!id && !reprise_of;
   const isRepriseMode = !!reprise_of;
@@ -726,7 +728,7 @@ export default function AddInterventionScreen() {
       } else {
         router.push({
           pathname: "/(app)/calendar",
-          params: { date: startDateStr },
+          params: { date: startDateStr, ...(from_view ? { view: from_view } : {}) },
         });
       }
     } catch (err: any) {
@@ -768,7 +770,7 @@ export default function AddInterventionScreen() {
     (isRepriseMode && isLoadingReprise)
   ) {
     return (
-      <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950">
+      <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950" style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
         <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
@@ -782,7 +784,7 @@ export default function AddInterventionScreen() {
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
-      style={{ paddingTop: isWeb ? 0 : insets.top }}
+      style={{ paddingTop: isWeb ? 0 : insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
     >
       <View className="px-4 py-2 flex-row items-center">
         <Pressable
@@ -790,7 +792,10 @@ export default function AddInterventionScreen() {
             if (isEditMode) router.push(`/(app)/calendar/${id}`);
             else if (isRepriseMode)
               router.push(`/(app)/calendar/${reprise_of}` as any);
-            else router.back();
+            else router.push({
+              pathname: "/(app)/calendar",
+              params: from_view ? { view: from_view, date: from_date } : {},
+            });
           }}
           className="p-2 rounded-full hover:bg-muted active:bg-muted"
         >
@@ -809,7 +814,7 @@ export default function AddInterventionScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <ScrollView keyboardDismissMode="on-drag" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <Card className="max-w-2xl w-full self-center rounded-[40px] overflow-hidden">
           {/* BANNIÈRE "RDV NON REPRIS" (mode reprise uniquement) */}
           {isRepriseMode && (
@@ -886,8 +891,8 @@ export default function AddInterventionScreen() {
                     style={[
                       {
                         fontSize: 14,
-                        color: "#0f172a",
-                        backgroundColor: "white",
+                        color: isDark ? "#F1F5F9" : "#0f172a",
+                        backgroundColor: isDark ? "#1E293B" : "white",
                         borderRadius: 12,
                         padding: 12,
                         minHeight: 70,
@@ -1127,9 +1132,9 @@ export default function AddInterventionScreen() {
                     paddingHorizontal: 16,
                     paddingVertical: 12,
                     borderColor:
-                      recurrence.freq !== "none" ? "#3B82F6" : "#E2E8F0",
+                      recurrence.freq !== "none" ? "#3B82F6" : (isDark ? "#334155" : "#E2E8F0"),
                     backgroundColor:
-                      recurrence.freq !== "none" ? "#EFF6FF" : "transparent",
+                      recurrence.freq !== "none" ? (isDark ? "#1E3A5F" : "#EFF6FF") : "transparent",
                   }}
                 >
                   <Text
@@ -1152,9 +1157,9 @@ export default function AddInterventionScreen() {
                   <View
                     style={{
                       borderWidth: 1.5,
-                      borderColor: "#E2E8F0",
+                      borderColor: isDark ? "#334155" : "#E2E8F0",
                       borderRadius: 14,
-                      backgroundColor: "white",
+                      backgroundColor: isDark ? "#1E293B" : "white",
                       overflow: "hidden",
                       marginTop: 4,
                       shadowColor: "#000",
@@ -1202,7 +1207,7 @@ export default function AddInterventionScreen() {
                             !isLast
                               ? {
                                   borderBottomWidth: 1,
-                                  borderBottomColor: "#F1F5F9",
+                                  borderBottomColor: isDark ? "#334155" : "#F1F5F9",
                                 }
                               : {},
                           ]}
@@ -1215,7 +1220,7 @@ export default function AddInterventionScreen() {
                                 ? "#3B82F6"
                                 : opt.freq === "custom"
                                   ? "#8B5CF6"
-                                  : "#0f172a",
+                                  : isDark ? "#F1F5F9" : "#0f172a",
                             }}
                           >
                             {opt.label}
@@ -1322,13 +1327,13 @@ export default function AddInterventionScreen() {
                         {
                           flex: 2,
                           borderWidth: 1,
-                          borderColor: "#BAE6FD",
+                          borderColor: isDark ? "#1E40AF" : "#BAE6FD",
                           borderRadius: 8,
                           paddingHorizontal: 10,
                           paddingVertical: 7,
                           fontSize: 14,
-                          backgroundColor: "#fff",
-                          color: "#1E293B",
+                          backgroundColor: isDark ? "#1E293B" : "#fff",
+                          color: isDark ? "#F1F5F9" : "#1E293B",
                         },
                         Platform.OS === "web"
                           ? ({ outlineStyle: "none" } as any)
@@ -1344,13 +1349,13 @@ export default function AddInterventionScreen() {
                         {
                           flex: 1,
                           borderWidth: 1,
-                          borderColor: "#BAE6FD",
+                          borderColor: isDark ? "#1E40AF" : "#BAE6FD",
                           borderRadius: 8,
                           paddingHorizontal: 10,
                           paddingVertical: 7,
                           fontSize: 14,
-                          backgroundColor: "#fff",
-                          color: "#1E293B",
+                          backgroundColor: isDark ? "#1E293B" : "#fff",
+                          color: isDark ? "#F1F5F9" : "#1E293B",
                         },
                         Platform.OS === "web"
                           ? ({ outlineStyle: "none" } as any)
@@ -1706,7 +1711,10 @@ export default function AddInterventionScreen() {
                   onPress={() => {
                     if (isRepriseMode)
                       router.push(`/(app)/calendar/${reprise_of}` as any);
-                    else router.push("/(app)/calendar");
+                    else router.push({
+                      pathname: "/(app)/calendar",
+                      params: from_view ? { view: from_view, date: from_date } : {},
+                    });
                   }}
                   className="w-full"
                   style={{ borderRadius: 20 }}

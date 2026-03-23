@@ -143,7 +143,7 @@ export default function ClientDetailScreen() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950">
+      <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950" style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
         <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
@@ -154,7 +154,7 @@ export default function ClientDetailScreen() {
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
-      style={{ paddingTop: isWeb ? 0 : insets.top }}
+      style={{ paddingTop: isWeb ? 0 : insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
     >
       {/* Header */}
       <View className="flex-row items-center px-4 py-2 border-b border-border dark:border-slate-800">
@@ -183,7 +183,7 @@ export default function ClientDetailScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-      <ScrollView contentContainerStyle={{ padding: 20 }}>
+      <ScrollView keyboardDismissMode="on-drag" contentContainerStyle={{ padding: 20 }}>
         {editing ? (
           /* ── Mode édition ── */
           <>
@@ -275,7 +275,7 @@ export default function ClientDetailScreen() {
                   <FileText size={18} color="#94A3B8" className="mt-1 mr-3" />
                   <View className="flex-1">
                     <Text className="text-xs text-muted-foreground uppercase font-bold">Notes</Text>
-                    <Text className="text-base text-foreground dark:text-white mt-1 leading-relaxed">{client.notes || "Aucune note particulière."}</Text>
+                    <Text className="text-base text-foreground dark:text-white mt-1 leading-relaxed" numberOfLines={5}>{client.notes || "Aucune note particulière."}</Text>
                   </View>
                 </View>
               </CardContent>
