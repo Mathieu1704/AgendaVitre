@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, useWindowDimensions, ActivityIndicator, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Tabs, Redirect } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../src/lib/supabase";
@@ -8,12 +9,12 @@ import { Sidebar } from "../../src/ui/layout/Sidebar";
 import { Header } from "../../src/ui/layout/Header";
 import { useNotifications } from "../../src/hooks/useNotifications";
 import { useAuth } from "../../src/hooks/useAuth";
+import { useTheme } from "../../src/ui/components/ThemeToggle";
 
 import {
   LayoutDashboard,
   Calendar,
   Users,
-  FileText,
   Settings,
   Bell,
 } from "lucide-react-native";
@@ -21,11 +22,13 @@ import {
 export default function AppLayout() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
+  const insets = useSafeAreaInsets();
 
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
   const { unreadCount } = useNotifications();
   const { isAdmin } = useAuth();
+  const { isDark } = useTheme();
   const queryClient = useQueryClient();
   const prefetchedRef = useRef(false);
 
@@ -66,7 +69,7 @@ export default function AppLayout() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
         <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
@@ -94,7 +97,7 @@ export default function AppLayout() {
               <Tabs.Screen name="index" />
               <Tabs.Screen name="calendar/index" />
               <Tabs.Screen name="clients/index" />
-              <Tabs.Screen name="facturation/index" />
+              <Tabs.Screen name="facturation/index" options={{ href: null }} />
               <Tabs.Screen name="parametres/index" />
               <Tabs.Screen name="notifications/index" options={{ href: null }} />
               <Tabs.Screen name="calendar/add" options={{ href: null }} />
@@ -117,20 +120,20 @@ export default function AppLayout() {
 
   // --- RENDU MOBILE ---
   return (
-    <View className="flex-1 bg-background">
+    <View style={{ flex: 1, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
       <Tabs
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: "#FFFFFF",
+            backgroundColor: isDark ? "#0F172A" : "#FFFFFF",
             borderTopWidth: 1,
-            borderTopColor: "#E4E4E7",
+            borderTopColor: isDark ? "#1E293B" : "#E4E4E7",
             height: 80,
-            paddingBottom: Platform.OS === "web" ? 8 : 20,
+            paddingBottom: Platform.OS === "web" ? 8 : Math.max(insets.bottom, 8),
             paddingTop: 10,
           },
           tabBarActiveTintColor: "#3B82F6",
-          tabBarInactiveTintColor: "#71717A",
+          tabBarInactiveTintColor: isDark ? "#94A3B8" : "#71717A",
           tabBarLabelStyle: {
             fontSize: 11,
             fontWeight: "600",
@@ -167,13 +170,7 @@ export default function AppLayout() {
         />
         <Tabs.Screen
           name="facturation/index"
-          options={{
-            title: "Factures",
-            href: isAdmin ? undefined : null,
-            tabBarIcon: ({ color, size }) => (
-              <FileText size={size} color={color} />
-            ),
-          }}
+          options={{ href: null }}
         />
         <Tabs.Screen
           name="notifications/index"

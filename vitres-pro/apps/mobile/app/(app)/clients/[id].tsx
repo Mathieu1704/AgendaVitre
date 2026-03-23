@@ -235,22 +235,25 @@ export default function ClientDetailScreen() {
               <Pressable
                 onPress={handleCall}
                 disabled={!client.phone}
-                className={`items-center justify-center h-14 w-14 rounded-full ${client.phone ? "bg-green-500/10" : "bg-muted opacity-50"}`}
+                className={`items-center gap-1 px-4 py-3 rounded-2xl ${client.phone ? "bg-green-500/10" : "bg-muted opacity-50"}`}
               >
-                <Phone size={24} color={client.phone ? "#22C55E" : "#94A3B8"} />
+                <Phone size={22} color={client.phone ? "#22C55E" : "#94A3B8"} />
+                <Text className="text-xs font-semibold" style={{ color: client.phone ? "#22C55E" : "#94A3B8" }}>Appeler</Text>
               </Pressable>
               <Pressable
                 onPress={handleEmail}
                 disabled={!client.email}
-                className={`items-center justify-center h-14 w-14 rounded-full ${client.email ? "bg-blue-500/10" : "bg-muted opacity-50"}`}
+                className={`items-center gap-1 px-4 py-3 rounded-2xl ${client.email ? "bg-blue-500/10" : "bg-muted opacity-50"}`}
               >
-                <Mail size={24} color={client.email ? "#3B82F6" : "#94A3B8"} />
+                <Mail size={22} color={client.email ? "#3B82F6" : "#94A3B8"} />
+                <Text className="text-xs font-semibold" style={{ color: client.email ? "#3B82F6" : "#94A3B8" }}>Email</Text>
               </Pressable>
               <Pressable
                 onPress={handleMaps}
-                className="items-center justify-center h-14 w-14 rounded-full bg-orange-500/10"
+                className="items-center gap-1 px-4 py-3 rounded-2xl bg-orange-500/10"
               >
-                <MapPin size={24} color="#F97316" />
+                <MapPin size={22} color="#F97316" />
+                <Text className="text-xs font-semibold" style={{ color: "#F97316" }}>Maps</Text>
               </Pressable>
             </View>
 
@@ -335,7 +338,7 @@ export default function ClientDetailScreen() {
               <Text className="text-lg font-bold mb-4 text-foreground dark:text-white text-center">
                 Historique ({sorted.length})
               </Text>
-              <ScrollView showsVerticalScrollIndicator style={{ maxHeight: 400 }}>
+              <ScrollView showsVerticalScrollIndicator style={{ maxHeight: "60%" }}>
                 {sorted.length === 0 && (
                   <Text className="text-center text-muted-foreground py-8">Aucune intervention</Text>
                 )}

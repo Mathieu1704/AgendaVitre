@@ -28,6 +28,10 @@
 - **`keyboardDismissMode="on-drag"`** sur les ScrollView — `add.tsx` + `clients/[id].tsx`
 - **Notes `numberOfLines={5}`** en lecture — `clients/[id].tsx`
 - **Pull-to-refresh** — `calendar/index.tsx`
+- **Composants extraits + `React.memo`** — `InterventionCard`, `RawEventCard`, `FilterChipsBar`, `DailyStatsBadge`, `MonthView`, `WeekView`, `DayView`, `YearView` sortis de `calendar/index.tsx`
+- **`useTransition` sur les pills** — animation 60 FPS pendant les re-renders lourds — `calendar/index.tsx`
+- **`clients/[id].tsx`** — dialog historique `maxHeight: "60%"` + labels textuels sur boutons phone/mail/maps
+- **`_layout.tsx`** — `paddingBottom` remplacé par `Math.max(insets.bottom, 8)`
 
 ---
 
@@ -53,48 +57,13 @@
 
 ---
 
-### `calendar/index.tsx` — composants inline, pas de virtualisation
+### `calendar/index.tsx` — virtualisation
 
 **Fichier :** `app/(app)/calendar/index.tsx`
-**Problèmes :**
-- `InterventionCard`, `RawEventCard`, `FilterChipsBar` définis inline → React ne peut pas les mémoïser
+**Problèmes restants :**
+
 - Zéro virtualisation dans les vues Mois et Semaine — tout en `View.map()`
 - Filter chips avec touch target ~30px (sous les 44px minimum)
-- Pas de pull-to-refresh
 
-**Fix :** Extraire les sous-composants en fichiers séparés avec `React.memo`. Remplacer les `View.map()` par `FlashList`/`FlatList`. Ajouter `onRefresh`.
+**Fix :** Remplacer les `View.map()` par `FlashList`/`FlatList`. Agrandir les chips à 44px min.
 **Statut :** 🔲 À faire
-
----
-
-### `clients/[id].tsx` — petits problèmes UX restants
-
-**Problèmes :**
-- Dialog historique avec `maxHeight: 400` fixe — ne s'adapte pas à l'iPhone SE
-- Boutons phone/mail/maps sans label textuel
-
-**Statut :** 🔲 À faire (mineur)
-
----
-
-### Navigation — pas de `<Redirect>` centralisé pour les routes admin
-
-**Fichier :** `_layout.tsx`
-**Problème :** Chaque écran gère individuellement la protection admin au lieu d'un guard centralisé.
-**Statut :** 🔲 À faire (mineur)
-
----
-
-### `_layout.tsx` — magic number padding
-
-**Problème :** `paddingBottom: Platform.OS === "web" ? 8 : 20` ne correspond pas à `insets.bottom`.
-**Statut :** 🔲 À faire (mineur)
-
----
-
-## Quick wins restants
-
-| #   | Correction                              | Fichier                  |
-| --- | --------------------------------------- | ------------------------ |
-| 1   | Extraire sous-composants + `React.memo` | `calendar/index.tsx`     |
-| 2   | `react-hook-form`                       | `calendar/add.tsx`       |
