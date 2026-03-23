@@ -374,20 +374,20 @@ export default function CalendarScreen() {
     return true;
   }, [activeTypes, activeStatuses]);
 
-  const toggleType = (id: string) => {
+  const toggleType = useCallback((id: string) => {
     setActiveTypes(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
-  const toggleStatus = (id: string) => {
+  }, []);
+  const toggleStatus = useCallback((id: string) => {
     setActiveStatuses(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
+  }, []);
   // Interventions filtrées par zone pour la vue calendrier grille
   const calendarInterventions = useMemo(() => {
     if (!interventions) return [];
@@ -399,23 +399,23 @@ export default function CalendarScreen() {
   const effectiveView = displayMode === "calendar" ? calView : viewMode;
 
   // --- NAVIGATION ---
-  const handlePrev = () => {
+  const handlePrev = useCallback(() => {
     setCursorDate((d) => {
       if (effectiveView === "day") return addDays(d, -1);
       if (effectiveView === "week") return addDays(d, -7);
       if (effectiveView === "year") return new Date(d.getFullYear() - 1, 0, 1);
       return addMonths(d, -1);
     });
-  };
+  }, [effectiveView]);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     setCursorDate((d) => {
       if (effectiveView === "day") return addDays(d, 1);
       if (effectiveView === "week") return addDays(d, 7);
       if (effectiveView === "year") return new Date(d.getFullYear() + 1, 0, 1);
       return addMonths(d, 1);
     });
-  };
+  }, [effectiveView]);
 
   // --- MISE À JOUR ÉVÉNEMENT (optimistic update + rollback) ---
   const handleEventUpdate = useCallback(async (id: string, newStart: string, newEnd: string) => {
@@ -430,11 +430,11 @@ export default function CalendarScreen() {
     }
   }, [queryClient]);
 
-  const handleToday = () => {
+  const handleToday = useCallback(() => {
     const now = new Date();
     setCursorDate(now);
     setSelectedDate(toISODate(now));
-  };
+  }, []);
 
   // Titre dynamique
   const headerTitle = useMemo(() => {
