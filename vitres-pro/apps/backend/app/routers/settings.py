@@ -38,7 +38,7 @@ def list_zones(db: Session = Depends(get_db), current_user=Depends(get_current_u
             label=z.label,
             parent_zone=z.parent_zone,
             position=z.position,
-            cities=[c.city for c in z.cities],
+            cities=sorted(set(normalize_city(c.city) for c in z.cities)),
         )
         result.append(out)
     return result
@@ -102,7 +102,7 @@ def rename_zone(zone_id: UUID, body: LabelUpdate, db: Session = Depends(get_db),
     return SubZoneOut(
         id=zone.id, code=zone.code, label=zone.label,
         parent_zone=zone.parent_zone, position=zone.position,
-        cities=[c.city for c in cities],
+        cities=sorted(set(normalize_city(c.city) for c in cities)),
     )
 
 
