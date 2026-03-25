@@ -1,7 +1,19 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
+import unicodedata
+
+
+def normalize_city(v: Optional[str]) -> Optional[str]:
+    """Normalise un nom de ville : trim + apostrophes uniformes."""
+    if not v:
+        return v
+    v = v.strip()
+    # Remplace toutes les variantes d'apostrophe par l'apostrophe droite standard
+    for char in ("\u2019", "\u2018", "\u02bc", "\u0060", "\u00b4"):
+        v = v.replace(char, "'")
+    return v
 
 # --- EMPLOYEE ---
 class EmployeeBase(BaseModel):
@@ -78,6 +90,11 @@ class ClientBase(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     notes: Optional[str] = None
+
+    @field_validator("city", mode="before")
+    @classmethod
+    def normalize_city_field(cls, v):
+        return normalize_city(v)
 
 class ClientCreate(ClientBase):
     pass

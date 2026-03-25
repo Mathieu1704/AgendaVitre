@@ -5,7 +5,7 @@ from uuid import UUID
 import re
 
 from app.models.models import get_db, SubZone, CitySubZone, Client, Intervention, HourlyRate
-from app.schemas.schemas import SubZoneOut, HourlyRateOut, HourlyRateCreate
+from app.schemas.schemas import SubZoneOut, HourlyRateOut, HourlyRateCreate, normalize_city
 from app.core.deps import get_current_user
 from pydantic import BaseModel
 
@@ -112,9 +112,9 @@ def list_unassigned_cities(db: Session = Depends(get_db), current_user=Depends(g
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Accès réservé aux admins")
     from sqlalchemy import select
-    assigned = {row.city for row in db.query(CitySubZone.city).all()}
+    assigned = {normalize_city(row.city) for row in db.query(CitySubZone.city).all()}
     cities = db.query(Client.city).filter(Client.city != None, Client.city != "").distinct().all()
-    unassigned = sorted({c.city for c in cities if c.city not in assigned})
+    unassigned = sorted({normalize_city(c.city) for c in cities if normalize_city(c.city) not in assigned})
     return unassigned
 
 
@@ -123,6 +123,7 @@ def reassign_city(city: str, body: CityReassign, db: Session = Depends(get_db), 
     """Réassigne une ville à une nouvelle sous-zone et met à jour clients + interventions."""
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    city = normalize_city(city)
     new_zone = db.query(SubZone).filter(SubZone.id == body.sub_zone_id).first()
     if not new_zone:
         raise HTTPException(status_code=404, detail="Sous-zone cible introuvable")
