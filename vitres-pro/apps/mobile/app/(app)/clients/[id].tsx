@@ -96,6 +96,7 @@ export default function ClientDetailScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["client", id] });
       queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["unassigned-cities"] });
       toast.success("Succès", "Client mis à jour.");
       setEditing(false);
     },
@@ -111,6 +112,7 @@ export default function ClientDetailScreen() {
         old ? old.filter((c) => c.id !== id) : []
       );
       queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["unassigned-cities"] });
       toast.success("Supprimé", "Client supprimé.");
       router.push("/(app)/clients");
     },

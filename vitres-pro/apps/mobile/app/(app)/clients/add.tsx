@@ -50,6 +50,7 @@ export default function AddClientScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["unassigned-cities"] });
       toast.success("Succès", "Client créé avec succès !");
       router.push("/(app)/clients");
     },
