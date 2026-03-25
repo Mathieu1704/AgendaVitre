@@ -119,7 +119,7 @@ export default function LogsScreen() {
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
-      style={{ paddingTop: insets.top }}
+      style={{ paddingTop: insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
     >
       {/* Header */}
       <View className="px-4 pt-4 pb-3 flex-row items-center border-b border-border dark:border-slate-800">

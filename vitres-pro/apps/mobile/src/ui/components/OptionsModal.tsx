@@ -29,9 +29,11 @@ export const OptionsModal = ({
       <Pressable className="flex-1 bg-black/20" onPress={onClose}>
         {/* LE MENU (Positionné en haut à droite) */}
         <View
-          className="absolute right-4 bg-card dark:bg-slate-900 rounded-2xl shadow-xl border border-border dark:border-slate-800 overflow-hidden min-w-[200px]"
+          className="absolute right-4 bg-card dark:bg-slate-900 shadow-xl border border-border dark:border-slate-800 min-w-[200px]"
           style={{
-            top: Platform.OS === "web" ? 60 : insets.top + 50, // Ajustement position sous le header
+            top: Platform.OS === "web" ? 60 : insets.top + 50,
+            borderRadius: 20,
+            overflow: "hidden",
           }}
         >
           {/* Option MODIFIER */}

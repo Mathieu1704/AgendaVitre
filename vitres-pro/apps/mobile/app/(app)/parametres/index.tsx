@@ -124,12 +124,14 @@ export default function ParametresScreen() {
   const SectionTitle = ({
     icon: Icon,
     title,
+    color = "#3B82F6",
   }: {
     icon: any;
     title: string;
+    color?: string;
   }) => (
     <View className="flex-row items-center mb-1 mt-1 gap-3">
-      <Icon size={24} color="#3B82F6" />
+      <Icon size={24} color={color} />
       <Text className="text-lg font-bold text-foreground dark:text-white">
         {title}
       </Text>
@@ -141,7 +143,10 @@ export default function ParametresScreen() {
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
-      style={{ paddingTop: insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
+      style={{
+        paddingTop: insets.top,
+        backgroundColor: isDark ? "#020817" : "#FFFFFF",
+      }}
     >
       <Stack.Screen options={{ headerShown: false }} />
 
@@ -163,282 +168,323 @@ export default function ParametresScreen() {
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-        >
-          {/* 2. PROFIL */}
-          <Card className="mb-6 rounded-[32px] overflow-hidden">
-            <CardHeader className="p-6 pb-4">
-              <SectionTitle icon={User} title="Mon Profil" />
-            </CardHeader>
-            <CardContent className="p-6 pt-0">
-              <View className="flex-row items-center mb-6">
-                <Avatar
-                  name={profile?.full_name || profile?.email || "?"}
-                  size="lg"
+          <ScrollView
+            ref={scrollRef}
+            contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+          >
+            {/* 2. PROFIL */}
+            <Card className="mb-6 rounded-[32px] overflow-hidden">
+              <CardHeader className="p-6 pb-4">
+                <SectionTitle
+                  icon={User}
+                  title="Mon Profil"
+                  color={profile?.color || "#3B82F6"}
                 />
-                <View className="ml-4 flex-1">
-                  <Text className="text-xl font-bold text-foreground dark:text-white">
-                    {profile?.full_name || "Utilisateur"}
-                  </Text>
-                  <View className="flex-row items-center mt-1">
-                    <Briefcase size={14} color="#94A3B8" />
-                    <Text className="text-muted-foreground ml-1 capitalize">
-                      {profile?.role === "admin" ? "Administrateur" : "Employé"}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Bloc Email arrondi */}
-              <View className="bg-muted/50 p-4 rounded-[24px]">
-                <Text className="text-xs text-muted-foreground uppercase font-bold mb-1">
-                  Email de connexion
-                </Text>
-                <Text className="text-base font-medium text-foreground dark:text-white">
-                  {profile?.email}
-                </Text>
-              </View>
-            </CardContent>
-          </Card>
-
-          {/* === SECTION ADMIN (Visible seulement si Admin) === */}
-          {isAdmin && (
-            <View className="mb-8">
-              <Text className="text-xs font-bold uppercase text-muted-foreground mb-3 px-4">
-                Administration
-              </Text>
-
-              {/* Ajouter Employé */}
-              <Pressable
-                onPress={() =>
-                  router.push("/(app)/parametres/create-employee" as any)
-                }
-                className="mb-3"
-              >
-                {/* ✅ Card arrondie */}
-                <Card className="rounded-[32px] bg-blue-500/5 border-blue-200 dark:border-blue-900 active:scale-[0.99] transition-transform overflow-hidden">
-                  <CardContent className="p-4 flex-row items-center justify-between">
-                    <View className="flex-row items-center gap-4 flex-1">
-                      {/* Icône Ronde */}
-                      <View className="bg-blue-500 rounded-full w-12 h-12 items-center justify-center">
-                        <UserPlus size={24} color="white" />
-                      </View>
-                      {/* Textes Centrés */}
-                      <View className="flex-1 justify-center">
-                        <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
-                          Ajouter un employé
-                        </Text>
-                        <Text className="text-sm text-muted-foreground leading-tight">
-                          Créer un nouveau compte
-                        </Text>
-                      </View>
-                    </View>
-                    <ChevronRight
-                      size={20}
-                      color={isDark ? "white" : "black"}
-                    />
-                  </CardContent>
-                </Card>
-              </Pressable>
-
-              {/* Gérer Équipe */}
-              <Pressable
-                onPress={() => router.push("/(app)/parametres/team" as any)}
-                className="mb-3"
-              >
-                {/* ✅ Card arrondie */}
-                <Card className="rounded-[32px] bg-purple-500/5 border-purple-200 dark:border-purple-900 active:scale-[0.99] transition-transform overflow-hidden">
-                  <CardContent className="p-4 flex-row items-center justify-between">
-                    <View className="flex-row items-center gap-4 flex-1">
-                      <View className="bg-purple-500 rounded-full w-12 h-12 items-center justify-center">
-                        <Users size={24} color="white" />
-                      </View>
-                      <View className="flex-1 justify-center">
-                        <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
-                          Gérer l'équipe
-                        </Text>
-                        <Text className="text-sm text-muted-foreground leading-tight">
-                          Horaires, Reset MDP...
-                        </Text>
-                      </View>
-                    </View>
-                    <ChevronRight
-                      size={20}
-                      color={isDark ? "white" : "black"}
-                    />
-                  </CardContent>
-                </Card>
-              </Pressable>
-              {/* Zones géographiques */}
-              <Pressable
-                onPress={() => router.push("/(app)/parametres/zones" as any)}
-                className="mb-3"
-              >
-                <Card className="rounded-[32px] bg-emerald-500/5 border-emerald-200 dark:border-emerald-900 active:scale-[0.99] transition-transform overflow-hidden">
-                  <CardContent className="p-4 flex-row items-center justify-between">
-                    <View className="flex-row items-center gap-4 flex-1">
-                      <View className="bg-emerald-500 rounded-full w-12 h-12 items-center justify-center">
-                        <MapPin size={24} color="white" />
-                      </View>
-                      <View className="flex-1 justify-center">
-                        <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
-                          Zones géographiques
-                        </Text>
-                        <Text className="text-sm text-muted-foreground leading-tight">
-                          Gérer les sous-zones et villes
-                        </Text>
-                      </View>
-                    </View>
-                    <ChevronRight size={20} color={isDark ? "white" : "black"} />
-                  </CardContent>
-                </Card>
-              </Pressable>
-              {/* Taux horaires */}
-              <Pressable
-                onPress={() => router.push("/(app)/parametres/tarifs" as any)}
-                className="mb-3"
-              >
-                <Card className="rounded-[32px] bg-blue-500/5 border-blue-200 dark:border-blue-900 active:scale-[0.99] transition-transform overflow-hidden">
-                  <CardContent className="p-4 flex-row items-center justify-between">
-                    <View className="flex-row items-center gap-4 flex-1">
-                      <View className="bg-blue-500 rounded-full w-12 h-12 items-center justify-center">
-                        <Clock size={24} color="white" />
-                      </View>
-                      <View className="flex-1 justify-center">
-                        <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
-                          Taux horaires
-                        </Text>
-                        <Text className="text-sm text-muted-foreground leading-tight">
-                          Gérer les tarifs €/h
-                        </Text>
-                      </View>
-                    </View>
-                    <ChevronRight size={20} color={isDark ? "white" : "black"} />
-                  </CardContent>
-                </Card>
-              </Pressable>
-              {/* Historique des actions */}
-              <Pressable
-                onPress={() => router.push("/(app)/parametres/logs" as any)}
-              >
-                <Card className="rounded-[32px] bg-amber-500/5 border-amber-200 dark:border-amber-900 active:scale-[0.99] transition-transform overflow-hidden">
-                  <CardContent className="p-4 flex-row items-center justify-between">
-                    <View className="flex-row items-center gap-4 flex-1">
-                      <View className="bg-amber-500 rounded-full w-12 h-12 items-center justify-center">
-                        <History size={24} color="white" />
-                      </View>
-                      <View className="flex-1 justify-center">
-                        <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
-                          Historique
-                        </Text>
-                        <Text className="text-sm text-muted-foreground leading-tight">
-                          Actions, modifications, statuts
-                        </Text>
-                      </View>
-                    </View>
-                    <ChevronRight size={20} color={isDark ? "white" : "black"} />
-                  </CardContent>
-                </Card>
-              </Pressable>
-            </View>
-          )}
-
-          {/* 3. SECURITÉ */}
-          <Card className="mb-8 rounded-[32px] overflow-hidden">
-            <CardHeader className="p-6 pb-4">
-              <SectionTitle icon={Lock} title="Sécurité" />
-            </CardHeader>
-            <CardContent className="p-6 pt-0">
-              <Text className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                Pour changer votre mot de passe, entrez le nouveau ci-dessous.
-              </Text>
-
-              <View className="gap-2 w-full">
-                {/* Champ Nouveau MDP */}
-                <View className="w-full">
-                  <Input
-                    placeholder="Nouveau mot de passe"
-                    secureTextEntry
-                    value={newPassword}
-                    onChangeText={setNewPassword}
-                    className="w-full"
+              </CardHeader>
+              <CardContent className="p-6 pt-0">
+                <View className="flex-row items-center mb-6">
+                  <Avatar
+                    name={profile?.full_name || profile?.email || "?"}
+                    size="lg"
+                    color={profile?.color}
                   />
-                  {newPassword.length > 0 && newPassword.length < 8 && (
-                    <View className="flex-row items-center mt-2 ml-1">
-                      <Info size={14} color="#EF4444" />
-                      <Text className="text-xs text-destructive ml-1.5 font-medium">
-                        8 caractères minimum requis
+                  <View className="ml-4 flex-1">
+                    <Text className="text-xl font-bold text-foreground dark:text-white">
+                      {profile?.full_name || "Utilisateur"}
+                    </Text>
+                    <View className="flex-row items-center mt-1">
+                      <Briefcase size={14} color="#94A3B8" />
+                      <Text className="text-muted-foreground ml-1 capitalize">
+                        {profile?.role === "admin"
+                          ? "Administrateur"
+                          : "Employé"}
                       </Text>
                     </View>
-                  )}
+                  </View>
                 </View>
 
-                {/* Champ Confirmation */}
-                <View className="w-full">
-                  <Input
-                    placeholder="Confirmer le nouveau mot de passe"
-                    secureTextEntry
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    className="w-full"
-                  />
-                  {confirmPassword.length > 0 &&
-                    newPassword !== confirmPassword && (
+                {/* Bloc Email arrondi */}
+                <View
+                  className="bg-muted/50 p-4 rounded-[24px]"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: isDark ? "#334155" : "#E2E8F0",
+                  }}
+                >
+                  <Text className="text-xs text-muted-foreground uppercase font-bold mb-1">
+                    Email de connexion
+                  </Text>
+                  <Text className="text-base font-medium text-foreground dark:text-white">
+                    {profile?.email}
+                  </Text>
+                </View>
+              </CardContent>
+            </Card>
+
+            {/* === SECTION ADMIN (Visible seulement si Admin) === */}
+            {isAdmin && (
+              <View className="mb-8">
+                <Text className="text-xs font-bold uppercase text-muted-foreground mb-3 px-4">
+                  Administration
+                </Text>
+
+                {/* Ajouter Employé */}
+                <Pressable
+                  onPress={() =>
+                    router.push("/(app)/parametres/create-employee" as any)
+                  }
+                  className="mb-3"
+                >
+                  {/* ✅ Card arrondie */}
+                  <Card
+                    className="rounded-[32px] bg-blue-500/5 border-blue-200 dark:border-blue-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(59,130,246,0.05)" }}
+                  >
+                    <CardContent className="p-4 flex-row items-center justify-between">
+                      <View className="flex-row items-center gap-4 flex-1">
+                        {/* Icône Ronde */}
+                        <View className="bg-blue-500 rounded-full w-12 h-12 items-center justify-center">
+                          <UserPlus
+                            size={24}
+                            color="white"
+                            style={{ marginLeft: 4 }}
+                          />
+                        </View>
+                        {/* Textes Centrés */}
+                        <View className="flex-1 justify-center">
+                          <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                            Ajouter un employé
+                          </Text>
+                          <Text className="text-sm text-muted-foreground leading-tight">
+                            Créer un nouveau compte
+                          </Text>
+                        </View>
+                      </View>
+                      <ChevronRight
+                        size={20}
+                        color={isDark ? "white" : "black"}
+                      />
+                    </CardContent>
+                  </Card>
+                </Pressable>
+
+                {/* Gérer Équipe */}
+                <Pressable
+                  onPress={() => router.push("/(app)/parametres/team" as any)}
+                  className="mb-3"
+                >
+                  {/* ✅ Card arrondie */}
+                  <Card
+                    className="rounded-[32px] bg-purple-500/5 border-purple-200 dark:border-purple-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(168,85,247,0.05)" }}
+                  >
+                    <CardContent className="p-4 flex-row items-center justify-between">
+                      <View className="flex-row items-center gap-4 flex-1">
+                        <View className="bg-purple-500 rounded-full w-12 h-12 items-center justify-center">
+                          <Users size={24} color="white" />
+                        </View>
+                        <View className="flex-1 justify-center">
+                          <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                            Gérer l'équipe
+                          </Text>
+                          <Text className="text-sm text-muted-foreground leading-tight">
+                            Horaires, Reset MDP...
+                          </Text>
+                        </View>
+                      </View>
+                      <ChevronRight
+                        size={20}
+                        color={isDark ? "white" : "black"}
+                      />
+                    </CardContent>
+                  </Card>
+                </Pressable>
+                {/* Zones géographiques */}
+                <Pressable
+                  onPress={() => router.push("/(app)/parametres/zones" as any)}
+                  className="mb-3"
+                >
+                  <Card
+                    className="rounded-[32px] bg-emerald-500/5 border-emerald-200 dark:border-emerald-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(16,185,129,0.05)" }}
+                  >
+                    <CardContent className="p-4 flex-row items-center justify-between">
+                      <View className="flex-row items-center gap-4 flex-1">
+                        <View className="bg-emerald-500 rounded-full w-12 h-12 items-center justify-center">
+                          <MapPin size={24} color="white" />
+                        </View>
+                        <View className="flex-1 justify-center">
+                          <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                            Zones géographiques
+                          </Text>
+                          <Text className="text-sm text-muted-foreground leading-tight">
+                            Gérer les sous-zones et villes
+                          </Text>
+                        </View>
+                      </View>
+                      <ChevronRight
+                        size={20}
+                        color={isDark ? "white" : "black"}
+                      />
+                    </CardContent>
+                  </Card>
+                </Pressable>
+                {/* Taux horaires */}
+                <Pressable
+                  onPress={() => router.push("/(app)/parametres/tarifs" as any)}
+                  className="mb-3"
+                >
+                  <Card
+                    className="rounded-[32px] bg-orange-500/5 border-orange-200 dark:border-orange-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(249,115,22,0.05)" }}
+                  >
+                    <CardContent className="p-4 flex-row items-center justify-between">
+                      <View className="flex-row items-center gap-4 flex-1">
+                        <View className="bg-orange-500 rounded-full w-12 h-12 items-center justify-center">
+                          <Clock size={24} color="white" />
+                        </View>
+                        <View className="flex-1 justify-center">
+                          <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                            Taux horaires
+                          </Text>
+                          <Text className="text-sm text-muted-foreground leading-tight">
+                            Gérer les tarifs €/h
+                          </Text>
+                        </View>
+                      </View>
+                      <ChevronRight
+                        size={20}
+                        color={isDark ? "white" : "black"}
+                      />
+                    </CardContent>
+                  </Card>
+                </Pressable>
+                {/* Historique des actions */}
+                <Pressable
+                  onPress={() => router.push("/(app)/parametres/logs" as any)}
+                >
+                  <Card
+                    className="rounded-[32px] bg-amber-500/5 border-amber-200 dark:border-amber-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(245,158,11,0.05)" }}
+                  >
+                    <CardContent className="p-4 flex-row items-center justify-between">
+                      <View className="flex-row items-center gap-4 flex-1">
+                        <View className="bg-amber-500 rounded-full w-12 h-12 items-center justify-center">
+                          <History size={24} color="white" />
+                        </View>
+                        <View className="flex-1 justify-center">
+                          <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                            Historique
+                          </Text>
+                          <Text className="text-sm text-muted-foreground leading-tight">
+                            Actions, modifications, statuts
+                          </Text>
+                        </View>
+                      </View>
+                      <ChevronRight
+                        size={20}
+                        color={isDark ? "white" : "black"}
+                      />
+                    </CardContent>
+                  </Card>
+                </Pressable>
+              </View>
+            )}
+
+            {/* 3. SECURITÉ */}
+            <Card className="mb-8 rounded-[32px] overflow-hidden">
+              <CardHeader className="p-6 pb-4">
+                <SectionTitle icon={Lock} title="Sécurité" />
+              </CardHeader>
+              <CardContent className="p-6 pt-0">
+                <Text className="text-sm text-muted-foreground mb-6 leading-relaxed">
+                  Pour changer votre mot de passe, entrez le nouveau ci-dessous.
+                </Text>
+
+                <View className="gap-2 w-full">
+                  {/* Champ Nouveau MDP */}
+                  <View className="w-full">
+                    <Input
+                      placeholder="Nouveau mot de passe"
+                      secureTextEntry
+                      value={newPassword}
+                      onChangeText={setNewPassword}
+                      className="w-full"
+                    />
+                    {newPassword.length > 0 && newPassword.length < 8 && (
                       <View className="flex-row items-center mt-2 ml-1">
                         <Info size={14} color="#EF4444" />
                         <Text className="text-xs text-destructive ml-1.5 font-medium">
-                          Les mots de passe ne correspondent pas
+                          8 caractères minimum requis
                         </Text>
                       </View>
                     )}
-                </View>
+                  </View>
 
-                <View className="h-4 w-full" />
+                  {/* Champ Confirmation */}
+                  <View className="w-full">
+                    <Input
+                      placeholder="Confirmer le nouveau mot de passe"
+                      secureTextEntry
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      className="w-full"
+                    />
+                    {confirmPassword.length > 0 &&
+                      newPassword !== confirmPassword && (
+                        <View className="flex-row items-center mt-2 ml-1">
+                          <Info size={14} color="#EF4444" />
+                          <Text className="text-xs text-destructive ml-1.5 font-medium">
+                            Les mots de passe ne correspondent pas
+                          </Text>
+                        </View>
+                      )}
+                  </View>
 
-                {/* Bouton Mettre à jour (Arrondi) */}
-                <Button
-                  onPress={handleChangePassword}
-                  loading={loadingPass}
-                  disabled={
-                    !newPassword ||
-                    newPassword.length < 8 ||
-                    newPassword !== confirmPassword
-                  }
-                  className="w-full rounded-[28px] h-14"
-                >
-                  <Save
-                    size={18}
-                    color={
+                  <View className="h-4 w-full" />
+
+                  {/* Bouton Mettre à jour (Arrondi) */}
+                  <Button
+                    onPress={handleChangePassword}
+                    loading={loadingPass}
+                    disabled={
                       !newPassword ||
                       newPassword.length < 8 ||
                       newPassword !== confirmPassword
-                        ? "#9CA3AF"
-                        : "white"
                     }
-                  />
-                  <Text
-                    className={`ml-2 font-bold ${!newPassword || newPassword.length < 8 || newPassword !== confirmPassword ? "text-gray-400" : "text-white"}`}
+                    className="w-full rounded-[28px] h-14"
                   >
-                    Mettre à jour le mot de passe
-                  </Text>
-                </Button>
-              </View>
-            </CardContent>
-          </Card>
+                    <Save
+                      size={18}
+                      color={
+                        !newPassword ||
+                        newPassword.length < 8 ||
+                        newPassword !== confirmPassword
+                          ? "#9CA3AF"
+                          : "white"
+                      }
+                    />
+                    <Text
+                      className={`ml-2 font-bold ${!newPassword || newPassword.length < 8 || newPassword !== confirmPassword ? "text-gray-400" : "text-white"}`}
+                    >
+                      Mettre à jour le mot de passe
+                    </Text>
+                  </Button>
+                </View>
+              </CardContent>
+            </Card>
 
-          {/* 4. DÉCONNEXION (Arrondi) */}
-          <Pressable
-            onPress={() => setLogoutDialog(true)}
-            className="flex-row items-center justify-center p-4 rounded-[28px] border border-destructive/30 bg-destructive/5 active:bg-destructive/10 h-14"
-          >
-            <LogOut size={18} color="#EF4444" />
-            <Text className="ml-2 text-destructive font-bold">
-              Se déconnecter
-            </Text>
-          </Pressable>
-        </ScrollView>
+            {/* 4. DÉCONNEXION (Arrondi) */}
+            <Pressable
+              onPress={() => setLogoutDialog(true)}
+              className="flex-row items-center justify-center p-4 rounded-[28px] border border-destructive/30 bg-destructive/5 active:bg-destructive/10 h-14"
+            >
+              <LogOut size={18} color="#EF4444" />
+              <Text className="ml-2 text-destructive font-bold">
+                Se déconnecter
+              </Text>
+            </Pressable>
+          </ScrollView>
         </KeyboardAvoidingView>
       )}
 
@@ -459,7 +505,9 @@ export default function ParametresScreen() {
                   style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
                   className="h-12 rounded-[24px] border border-border dark:border-slate-700 items-center justify-center"
                 >
-                  <Text className="font-bold text-foreground dark:text-white">Annuler</Text>
+                  <Text className="font-bold text-foreground dark:text-white">
+                    Annuler
+                  </Text>
                 </Pressable>
               </View>
               <View style={{ flex: 1 }}>

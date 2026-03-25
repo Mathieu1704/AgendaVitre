@@ -6,10 +6,12 @@ export function Avatar({
   name,
   size = "md",
   className,
+  color,
 }: {
   name: string | null | undefined;
   size?: "sm" | "md" | "lg";
   className?: string;
+  color?: string;
 }) {
   const initials = (name || "?")
     .split(" ")
@@ -33,10 +35,12 @@ export function Avatar({
   return (
     <View
       className={cn(
-        "rounded-full bg-primary items-center justify-center",
+        "rounded-full items-center justify-center",
+        !color && "bg-primary",
         sizeClasses[size],
         className
       )}
+      style={color ? { backgroundColor: color } : undefined}
     >
       <Text className={cn("font-bold text-white", textSizes[size])}>
         {initials}

@@ -1,73 +1,78 @@
-import React, { useEffect, useState } from "react";
-import { Pressable, Platform } from "react-native";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { Pressable, Platform, useColorScheme } from "react-native";
 import { Moon, Sun } from "lucide-react-native";
 import Animated, {
   useAnimatedStyle,
   withSpring,
   useSharedValue,
 } from "react-native-reanimated";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const THEME_KEY = "@lvmagenda_theme";
 
-// Lecture synchrone depuis localStorage sur web (évite le flash clair→sombre au reload)
-function getInitialTheme(): "light" | "dark" {
-  if (Platform.OS === "web" && typeof localStorage !== "undefined") {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === "dark" || saved === "light") return saved;
-  }
-  return "light";
-}
+type ThemeContextType = {
+  colorScheme: "light" | "dark";
+  isDark: boolean;
+  toggleTheme: () => void;
+};
 
-// ✅ Hook personnalisé qui fonctionne partout
-export function useTheme() {
-  const [colorScheme, setColorScheme] = useState<"light" | "dark">(getInitialTheme);
+const ThemeContext = createContext<ThemeContextType>({
+  colorScheme: "light",
+  isDark: false,
+  toggleTheme: () => {},
+});
 
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // Native: follows iOS/Android system dark mode automatically
+  const systemScheme = useColorScheme() ?? "light";
+
+  // Web: manually controlled via the toggle button
+  const [webScheme, setWebScheme] = useState<"light" | "dark">("light");
+
+  // Native: dark mode disabled (NativeWind v2 + New Architecture incompatible)
+  // Re-enable by replacing "light" with systemScheme once NativeWind v4 is adopted
+  const colorScheme: "light" | "dark" =
+    Platform.OS === "web" ? webScheme : "light";
+  const isDark = colorScheme === "dark";
+
+  // Web: load saved preference from localStorage on mount
   useEffect(() => {
-    // Sur web le thème est déjà appliqué via getInitialTheme, on ne recharge que sur natif
-    if (Platform.OS !== "web") loadTheme();
-    else applyTheme(colorScheme);
+    if (Platform.OS !== "web" || typeof localStorage === "undefined") return;
+    const saved = localStorage.getItem(THEME_KEY) as "light" | "dark" | null;
+    if (saved === "dark" || saved === "light") {
+      setWebScheme(saved);
+    }
   }, []);
 
-  const loadTheme = async () => {
-    try {
-      const saved = await AsyncStorage.getItem(THEME_KEY);
-      if (saved === "dark" || saved === "light") {
-        setColorScheme(saved);
-        applyTheme(saved);
-      }
-    } catch (error) {
-      console.error("Erreur chargement thème:", error);
+  // Web: apply/remove "dark" class on <html>
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [isDark]);
+
+  const toggleTheme = () => {
+    if (Platform.OS !== "web") return; // native follows system — no manual toggle
+    const next: "light" | "dark" = webScheme === "dark" ? "light" : "dark";
+    setWebScheme(next);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(THEME_KEY, next);
     }
   };
 
-  const applyTheme = (theme: "light" | "dark") => {
-    // ✅ Pour le WEB uniquement
-    if (Platform.OS === "web" && typeof document !== "undefined") {
-      if (theme === "dark") {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
-    }
-  };
-
-  const toggleTheme = async () => {
-    const newTheme = colorScheme === "dark" ? "light" : "dark";
-    setColorScheme(newTheme);
-    applyTheme(newTheme);
-
-    try {
-      await AsyncStorage.setItem(THEME_KEY, newTheme);
-    } catch (error) {
-      console.error("Erreur sauvegarde thème:", error);
-    }
-  };
-
-  return { colorScheme, toggleTheme, isDark: colorScheme === "dark" };
+  return (
+    <ThemeContext.Provider value={{ colorScheme, isDark, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
 }
 
-// ✅ Composant ThemeToggle
+export function useTheme() {
+  return useContext(ThemeContext);
+}
+
 export function ThemeToggle() {
   const { isDark, toggleTheme } = useTheme();
   const rotation = useSharedValue(isDark ? 180 : 0);
@@ -79,6 +84,9 @@ export function ThemeToggle() {
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],
   }));
+
+  // Only meaningful on web — hide on native
+  if (Platform.OS !== "web") return null;
 
   return (
     <Pressable

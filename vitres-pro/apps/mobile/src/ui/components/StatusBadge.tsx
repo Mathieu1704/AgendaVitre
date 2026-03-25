@@ -1,7 +1,7 @@
 import React from "react";
 import { Text, View } from "react-native";
 import { cn } from "../../lib/utils";
-// On type pour matcher ton backend
+
 type Status = "planned" | "in_progress" | "done" | string;
 
 interface StatusBadgeProps {
@@ -16,18 +16,18 @@ export const StatusBadge = ({ status, className }: StatusBadgeProps) => {
   > = {
     planned: {
       label: "Planifiée",
-      style: "bg-blue-50 border-blue-200",
-      textStyle: "text-blue-700",
+      style: "bg-blue-50 border-blue-200 dark:bg-blue-900/40 dark:border-blue-700",
+      textStyle: "text-blue-700 dark:text-blue-300",
     },
     in_progress: {
       label: "En cours",
-      style: "bg-orange-50 border-orange-200",
-      textStyle: "text-orange-700",
+      style: "bg-orange-50 border-orange-200 dark:bg-orange-900/40 dark:border-orange-700",
+      textStyle: "text-orange-700 dark:text-orange-300",
     },
     done: {
       label: "Terminée",
-      style: "bg-green-50 border-green-200",
-      textStyle: "text-green-700",
+      style: "bg-green-50 border-green-200 dark:bg-green-900/40 dark:border-green-700",
+      textStyle: "text-green-700 dark:text-green-300",
     },
   };
 
@@ -36,16 +36,14 @@ export const StatusBadge = ({ status, className }: StatusBadgeProps) => {
   return (
     <View
       className={cn(
-        "border px-2.5 py-1 rounded-full",
+        "border px-2 py-0.5 rounded-full",
         config.style,
         className
       )}
     >
       <Text
-        className={cn(
-          "text-[10px] font-bold uppercase tracking-wide",
-          config.textStyle
-        )}
+        className={cn("font-bold uppercase tracking-wide", config.textStyle)}
+        style={{ fontSize: 10 }}
       >
         {config.label}
       </Text>

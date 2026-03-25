@@ -654,7 +654,7 @@ export default function CalendarScreen() {
           <ScrollView
             className="flex-1"
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 100 }}
+            contentContainerStyle={{ paddingBottom: 80 }}
             refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
           >
             {viewMode === "month" && (

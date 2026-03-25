@@ -138,6 +138,25 @@ def update_employee(
     db.refresh(db_obj)
     return db_obj
 
+@router.post("/{employee_id}/reset-password")
+def reset_employee_password(
+    employee_id: UUID,
+    body: PasswordResetRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    try:
+        supabase_admin.auth.admin.update_user_by_id(str(employee_id), {"password": body.password})
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur Supabase: {str(e)}")
+    return {"status": "ok"}
+
+
 @router.delete("/{employee_id}")
 def delete_employee(
     employee_id: UUID,

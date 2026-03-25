@@ -165,7 +165,7 @@ export default function FacturationScreen() {
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
-      style={{ paddingTop: isWeb ? 0 : insets.top }}
+      style={{ paddingTop: isWeb ? 0 : insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
     >
       {/* Header — même style que Planning */}
       <View

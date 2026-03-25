@@ -45,6 +45,15 @@ export const useCreateZone = () => {
   });
 };
 
+export const useUnassignedCities = () => {
+  const { data, isLoading } = useQuery({
+    queryKey: ["unassigned-cities"],
+    queryFn: async () => (await api.get("/api/settings/zones/unassigned-cities")).data as string[],
+    staleTime: 2 * 60 * 1000,
+  });
+  return { unassignedCities: data ?? [], isLoading };
+};
+
 export const useReassignCity = () => {
   const qc = useQueryClient();
   return useMutation({
@@ -52,6 +61,7 @@ export const useReassignCity = () => {
       api.patch(`/api/settings/zones/cities/${encodeURIComponent(city)}`, { sub_zone_id }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sub-zones"] });
+      qc.invalidateQueries({ queryKey: ["unassigned-cities"] });
       qc.invalidateQueries({ queryKey: ["interventions"] });
     },
   });

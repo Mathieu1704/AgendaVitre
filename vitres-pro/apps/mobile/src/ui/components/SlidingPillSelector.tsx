@@ -117,7 +117,7 @@ export function SlidingPillSelector({
             }}
           >
             {opt.icon?.(textColor)}
-            <Animated.Text style={{ fontSize, fontWeight: "600", color: textColor }}>
+            <Animated.Text numberOfLines={1} style={{ fontSize, fontWeight: "600", color: textColor }}>
               {opt.label}
             </Animated.Text>
           </Pressable>

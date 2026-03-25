@@ -1,8 +1,10 @@
 import React from "react";
-import { View, Text, ViewProps, TextProps } from "react-native";
+import { View, Text, ViewProps, TextProps, Platform } from "react-native";
 import { cn } from "../cn";
+import { useTheme } from "./ThemeToggle";
 
 export function Card({ className, style, ...props }: ViewProps) {
+  const { isDark } = useTheme();
   return (
     <View
       className={cn(
@@ -10,13 +12,20 @@ export function Card({ className, style, ...props }: ViewProps) {
         "dark:bg-slate-900 dark:border-slate-800",
         className,
       )}
-      style={style} // ✅ Ajout ici pour accepter borderRadius: 32
+      style={[
+        Platform.OS !== "web"
+          ? {
+              backgroundColor: isDark ? "#0F172A" : "#FFFFFF",
+              borderColor: isDark ? "#1E293B" : "#E4E4E7",
+            }
+          : {},
+        style,
+      ]}
       {...props}
     />
   );
 }
 
-// Le reste (Header, Title, Content) ne change pas
 export function CardHeader({ className, ...props }: ViewProps) {
   return (
     <View className={cn("flex flex-col space-y-1.5", className)} {...props} />

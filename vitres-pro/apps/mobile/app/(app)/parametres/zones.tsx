@@ -10,13 +10,16 @@ import {
   Animated,
   Platform,
   PanResponder,
+  Alert,
+  KeyboardAvoidingView,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronDown, ChevronUp, ChevronLeft, Pencil, Check, X, MapPin, Plus, Trash2 } from "lucide-react-native";
 import { Button } from "../../../src/ui/components/Button";
+import { Dialog } from "../../../src/ui/components/Dialog";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
-import { useSubZones, useRenameZone, useReassignCity, useCreateZone, useDeleteZone, SubZoneOut } from "../../../src/hooks/useZones";
+import { useSubZones, useUnassignedCities, useRenameZone, useReassignCity, useCreateZone, useDeleteZone, SubZoneOut } from "../../../src/hooks/useZones";
 import { toast } from "../../../src/ui/toast";
 
 const PARENT_LABELS: Record<string, string> = {
@@ -48,6 +51,7 @@ function ZoneCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [editLabel, setEditLabel] = useState(zone.label);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-8)).current;
@@ -91,14 +95,29 @@ function ZoneCard({
     justSwiped.current = false;
   };
 
-  const handleDelete = async () => {
+  const doDelete = async () => {
     try {
       await deleteZone.mutateAsync(zone.id);
       toast.success("Sous-zone supprimée");
     } catch (e: any) {
       closeSwipe();
       const msg = e?.response?.data?.detail ?? "Erreur lors de la suppression";
-      toast.error(msg);
+      toast.error("Suppression impossible", msg);
+    }
+  };
+
+  const handleDelete = () => {
+    if (Platform.OS === "web") {
+      setConfirmDelete(true);
+    } else {
+      Alert.alert(
+        "Supprimer la sous-zone",
+        `Voulez-vous vraiment supprimer "${zone.label}" ?`,
+        [
+          { text: "Annuler", style: "cancel", onPress: closeSwipe },
+          { text: "Supprimer", style: "destructive", onPress: doDelete },
+        ]
+      );
     }
   };
 
@@ -169,6 +188,7 @@ function ZoneCard({
                 flex: 1, fontSize: 15, fontWeight: "600",
                 color: isDark ? "#fff" : "#0f172a",
                 borderBottomWidth: 1, borderBottomColor: colors.pill, paddingVertical: 2,
+                ...(Platform.OS === "web" ? { outlineStyle: "none" } as any : {}),
               }}
               onSubmitEditing={handleRename}
             />
@@ -179,7 +199,7 @@ function ZoneCard({
           )}
           <Text className="text-xs text-muted-foreground ml-1">{zone.cities.length} villes</Text>
         </View>
-        <View className="flex-row items-center gap-2">
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {editing ? (
             <>
               <Pressable onPress={handleRename} className="p-1" hitSlop={8}>
@@ -192,6 +212,7 @@ function ZoneCard({
           ) : (
             <Pressable
               onPress={(e) => { e.stopPropagation(); setEditing(true); if (!expanded) toggle(); }}
+              style={{ marginLeft: 10 }}
               className="p-1 mr-1" hitSlop={8}
             >
               <Pencil size={15} color={isDark ? "#94A3B8" : "#64748B"} />
@@ -223,7 +244,8 @@ function ZoneCard({
                   <Pressable
                     onPress={() => onReassign(city, zone.id)}
                     hitSlop={8}
-                    className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800"
+                    style={{ borderRadius: 10 }}
+                    className="px-2 py-1 bg-slate-100 dark:bg-slate-800"
                   >
                     <Text className="text-xs text-muted-foreground">Déplacer</Text>
                   </Pressable>
@@ -233,6 +255,32 @@ function ZoneCard({
         </Animated.View>
       )}
       </Animated.View>
+    <Dialog open={confirmDelete} onClose={() => { setConfirmDelete(false); closeSwipe(); }}>
+      <View style={{ padding: 24, gap: 16 }}>
+        <Text style={{ fontSize: 17, fontWeight: "800" }} className="text-foreground dark:text-white">
+          Supprimer la sous-zone ?
+        </Text>
+        <Text className="text-muted-foreground">
+          Voulez-vous vraiment supprimer «{zone.label}» ?
+        </Text>
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <Button
+            variant="outline"
+            style={{ flex: 1, borderRadius: 24 }}
+            onPress={() => { setConfirmDelete(false); closeSwipe(); }}
+          >
+            Annuler
+          </Button>
+          <Button
+            variant="destructive"
+            style={{ flex: 1, borderRadius: 24 }}
+            onPress={() => { setConfirmDelete(false); doDelete(); }}
+          >
+            Supprimer
+          </Button>
+        </View>
+      </View>
+    </Dialog>
     </View>
   );
 }
@@ -242,6 +290,7 @@ export default function ZonesScreen() {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
   const { subZones, isLoading } = useSubZones();
+  const { unassignedCities } = useUnassignedCities();
   const reassignCity = useReassignCity();
 
   const [reassignModal, setReassignModal] = useState<{ city: string; currentZoneId: string } | null>(null);
@@ -286,7 +335,7 @@ export default function ZonesScreen() {
     return (
       <View className="mb-6">
         <View className="flex-row items-center justify-between mb-3">
-          <View style={{ backgroundColor: colors.pill }} className="px-4 py-2 rounded-2xl">
+          <View style={{ backgroundColor: colors.pill, borderRadius: 99 }} className="px-4 py-2">
             <Text className="text-white font-bold text-sm">{PARENT_LABELS[parentZone]}</Text>
           </View>
           <Pressable
@@ -320,7 +369,7 @@ export default function ZonesScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View
         className="flex-1 bg-background dark:bg-slate-950"
-        style={{ paddingTop: Platform.OS === "web" ? 0 : insets.top }}
+        style={{ paddingTop: Platform.OS === "web" ? 0 : insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
       >
         {/* Header */}
         <View className="px-4 pt-4 pb-2 flex-row items-center border-b border-border dark:border-slate-800">
@@ -346,7 +395,39 @@ export default function ZonesScreen() {
               <>
                 <Text className="text-xs text-muted-foreground mb-4">
                   {subZones.length} sous-zones · {subZones.reduce((s, z) => s + z.cities.length, 0)} villes
+                  {unassignedCities.length > 0 ? ` · ${unassignedCities.length} non assignée(s)` : ""}
                 </Text>
+
+                {unassignedCities.length > 0 && (
+                  <View className="mb-6">
+                    <View style={{ backgroundColor: "#F59E0B", borderRadius: 99 }} className="px-4 py-2 self-start mb-3">
+                      <Text className="text-white font-bold text-sm">Non assignées ({unassignedCities.length})</Text>
+                    </View>
+                    <View style={{ borderRadius: 16, borderWidth: 1, borderColor: isDark ? "#334155" : "#FDE68A", backgroundColor: isDark ? "#1C1408" : "#FFFBEB", overflow: "hidden" }}>
+                      {unassignedCities.map((city, i) => (
+                        <View
+                          key={city}
+                          style={{
+                            flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+                            paddingHorizontal: 16, paddingVertical: 12,
+                            borderBottomWidth: i < unassignedCities.length - 1 ? 1 : 0,
+                            borderBottomColor: isDark ? "#334155" : "#FDE68A",
+                          }}
+                        >
+                          <Text style={{ fontSize: 14, color: isDark ? "#FDE68A" : "#92400E", flex: 1 }}>{city}</Text>
+                          <Pressable
+                            onPress={() => setReassignModal({ city, currentZoneId: "" })}
+                            hitSlop={8}
+                            style={{ borderRadius: 10, backgroundColor: "#F59E0B22", paddingHorizontal: 10, paddingVertical: 5 }}
+                          >
+                            <Text style={{ fontSize: 12, color: "#F59E0B", fontWeight: "600" }}>Assigner</Text>
+                          </Pressable>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
                 {renderSection(hainauts, "hainaut")}
                 {renderSection(ardennes, "ardennes")}
               </>
@@ -362,62 +443,75 @@ export default function ZonesScreen() {
         animationType="slide"
         onRequestClose={() => setCreateModal(null)}
       >
-        <Pressable className="flex-1 bg-black/40" onPress={() => setCreateModal(null)} />
-        <View
-          className="bg-white dark:bg-slate-900 rounded-t-3xl"
-          style={{ paddingBottom: insets.bottom + 16 }}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1, justifyContent: "flex-end" }}
         >
-          <View className="px-5 pt-5 pb-3 border-b border-border dark:border-slate-700 flex-row items-start justify-between">
-            <View className="flex-1 mr-3">
-              <Text className="text-base font-bold text-foreground dark:text-white">
-                Nouvelle sous-zone
-              </Text>
-              <Text className="text-xs text-muted-foreground mt-0.5">
-                {createModal ? PARENT_LABELS[createModal] : ""}
-              </Text>
+          <Pressable
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)" }}
+            onPress={() => setCreateModal(null)}
+          />
+          <View
+            className="bg-white dark:bg-slate-900 rounded-t-3xl"
+            style={{ width: "100%", paddingBottom: 8 }}
+          >
+            <View className="px-5 pt-5 pb-3 border-b border-border dark:border-slate-700 flex-row items-start justify-between">
+              <View className="flex-1 mr-3">
+                <Text className="text-base font-bold text-foreground dark:text-white">
+                  Nouvelle sous-zone
+                </Text>
+                <Text className="text-xs text-muted-foreground mt-0.5">
+                  {createModal ? PARENT_LABELS[createModal] : ""}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setCreateModal(null)}
+                hitSlop={12}
+                style={{
+                  width: 28, height: 28, borderRadius: 14,
+                  backgroundColor: isDark ? "#334155" : "#F1F5F9",
+                  alignItems: "center", justifyContent: "center", marginTop: 2,
+                }}
+              >
+                <X size={14} color={isDark ? "#94A3B8" : "#64748B"} />
+              </Pressable>
             </View>
-            <Pressable
-              onPress={() => setCreateModal(null)}
-              hitSlop={12}
-              style={{
-                width: 28, height: 28, borderRadius: 14,
-                backgroundColor: isDark ? "#334155" : "#F1F5F9",
-                alignItems: "center", justifyContent: "center", marginTop: 2,
-              }}
-            >
-              <X size={14} color={isDark ? "#94A3B8" : "#64748B"} />
-            </Pressable>
+            <View className="px-5 pt-4 pb-2 gap-3">
+              <TextInput
+                value={newZoneLabel}
+                onChangeText={setNewZoneLabel}
+                placeholder="Nom de la sous-zone"
+                autoFocus
+                placeholderTextColor={isDark ? "#475569" : "#94A3B8"}
+                style={{
+                  fontSize: 15, color: isDark ? "#fff" : "#0f172a",
+                  borderWidth: 1, borderColor: createModal ? PARENT_COLORS[createModal]?.pill : "#CBD5E1",
+                  borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+                }}
+                onSubmitEditing={handleCreateZone}
+                returnKeyType="done"
+              />
+              <Pressable
+                onPress={handleCreateZone}
+                disabled={!newZoneLabel.trim() || createZone.isPending}
+                style={{
+                  backgroundColor: !newZoneLabel.trim() ? "#CBD5E1" : (createModal ? PARENT_COLORS[createModal]?.pill : "#3B82F6"),
+                  borderRadius: 14, paddingVertical: 13, alignItems: "center",
+                }}
+              >
+                {createZone.isPending
+                  ? <ActivityIndicator color="white" size="small" />
+                  : <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Créer</Text>
+                }
+              </Pressable>
+            </View>
           </View>
-          <View className="px-5 pt-4 pb-2 gap-3">
-            <TextInput
-              value={newZoneLabel}
-              onChangeText={setNewZoneLabel}
-              placeholder="Nom de la sous-zone"
-              autoFocus
-              placeholderTextColor={isDark ? "#475569" : "#94A3B8"}
-              style={{
-                fontSize: 15, color: isDark ? "#fff" : "#0f172a",
-                borderWidth: 1, borderColor: createModal ? PARENT_COLORS[createModal]?.pill : "#CBD5E1",
-                borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
-              }}
-              onSubmitEditing={handleCreateZone}
-              returnKeyType="done"
-            />
-            <Pressable
-              onPress={handleCreateZone}
-              disabled={!newZoneLabel.trim() || createZone.isPending}
-              style={{
-                backgroundColor: !newZoneLabel.trim() ? "#CBD5E1" : (createModal ? PARENT_COLORS[createModal]?.pill : "#3B82F6"),
-                borderRadius: 14, paddingVertical: 13, alignItems: "center",
-              }}
-            >
-              {createZone.isPending
-                ? <ActivityIndicator color="white" size="small" />
-                : <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Créer</Text>
-              }
-            </Pressable>
-          </View>
-        </View>
+        </KeyboardAvoidingView>
+        {/* Comble la zone derrière le clavier pour couvrir ses coins arrondis */}
+        <View
+          style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 350, backgroundColor: isDark ? "#0F172A" : "#FFFFFF" }}
+          pointerEvents="none"
+        />
       </Modal>
 
       {/* Modal réassignation */}
@@ -430,7 +524,7 @@ export default function ZonesScreen() {
         <Pressable className="flex-1 bg-black/40" onPress={() => setReassignModal(null)} />
         <View
           className="bg-white dark:bg-slate-900 rounded-t-3xl"
-          style={{ paddingBottom: insets.bottom + 16 }}
+          style={{ width: "100%", paddingBottom: insets.bottom + 80 }}
         >
           <View className="px-5 pt-5 pb-3 border-b border-border dark:border-slate-700 flex-row items-start justify-between">
             <View className="flex-1 mr-3">

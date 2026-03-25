@@ -166,7 +166,8 @@ export default function ClientsListScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: 100 }}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={Platform.OS !== "web"}
+          indicatorStyle="black"
           initialNumToRender={15}
           maxToRenderPerBatch={10}
           windowSize={5}

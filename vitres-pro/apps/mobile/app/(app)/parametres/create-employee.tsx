@@ -62,7 +62,10 @@ export default function CreateEmployeeScreen() {
     <View
       className="flex-1 bg-background dark:bg-slate-950"
       // ✅ Padding Top dynamique (Gestion Notch)
-      style={{ paddingTop: isWeb ? 0 : insets.top }}
+      style={{
+        paddingTop: isWeb ? 0 : insets.top,
+        backgroundColor: isDark ? "#020817" : "#FFFFFF",
+      }}
     >
       {/* Header Simple (Aligné sur Add Client) */}
       <View className="px-4 pt-4 pb-2 flex-row items-center">
@@ -82,7 +85,7 @@ export default function CreateEmployeeScreen() {
         {/* Hero Section (Identique Add Client) */}
         <View className="items-center mb-8">
           <View className="bg-primary/10 w-20 h-20 rounded-full items-center justify-center mb-4">
-            <UserPlus size={32} color="#3B82F6" />
+            <UserPlus size={32} color="#3B82F6" style={{ marginLeft: 6 }} />
           </View>
           <Text className="text-center text-muted-foreground dark:text-slate-400 max-w-xs">
             Créez un accès pour un membre de l'équipe et définissez ses droits.
@@ -96,13 +99,12 @@ export default function CreateEmployeeScreen() {
               Identifiants
             </Text>
           </CardHeader>
-          <CardContent className="px-6 pb-6 pt-4 gap-4">
+          <CardContent className="px-6 pb-6 pt-4" style={{ gap: 16 }}>
             <Input
               label="Nom Complet"
               placeholder="Ex: Thomas Dubuisson"
               value={fullName}
               onChangeText={setFullName}
-              containerStyle={{ marginBottom: 8 }} // Espace aéré
             />
             <Input
               label="Email (Login)"
@@ -111,7 +113,6 @@ export default function CreateEmployeeScreen() {
               keyboardType="email-address"
               value={email}
               onChangeText={setEmail}
-              containerStyle={{ marginBottom: 8 }} // Espace aéré
             />
             <Input
               label="Mot de passe provisoire"
@@ -128,12 +129,11 @@ export default function CreateEmployeeScreen() {
               Configuration
             </Text>
           </CardHeader>
-          <CardContent className="px-6 pb-6 pt-4 gap-4">
+          <CardContent className="px-6 pb-6 pt-4" style={{ gap: 16 }}>
             <ColorPicker
               selectedColor={selectedColor}
               onColorChange={setSelectedColor}
               label="Couleur Planning"
-              containerStyle={{ marginBottom: 8 }}
             />
 
             <Input
@@ -141,7 +141,6 @@ export default function CreateEmployeeScreen() {
               value={weeklyHours}
               onChangeText={setWeeklyHours}
               keyboardType="numeric"
-              containerStyle={{ marginBottom: 8 }}
               placeholder="Ex: 38"
             />
 

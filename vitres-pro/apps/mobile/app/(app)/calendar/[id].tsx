@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
   Platform,
   Linking,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -89,7 +90,9 @@ export default function InterventionDetailScreen() {
       });
       // Mise à jour optimiste dans la liste aussi
       queryClient.setQueryData<any[]>(["interventions"], (old) =>
-        old ? old.map((i) => i.id === id ? { ...i, status: newStatus } : i) : old
+        old
+          ? old.map((i) => (i.id === id ? { ...i, status: newStatus } : i))
+          : old,
       );
       return { prev };
     },
@@ -150,15 +153,28 @@ export default function InterventionDetailScreen() {
 
   const handleDeleteRequest = () => {
     setMenuVisible(false);
-    // Petit délai pour l'UX
-    setTimeout(() => setShowDeleteConfirm(true), 200);
+    if (Platform.OS !== "web") {
+      Alert.alert(
+        "Supprimer l'intervention ?",
+        "Cette action est irréversible. L'intervention sera définitivement effacée du planning.",
+        [
+          { text: "Annuler", style: "cancel" },
+          { text: "Supprimer", style: "destructive", onPress: () => deleteMutation.mutate() },
+        ]
+      );
+    } else {
+      setTimeout(() => setShowDeleteConfirm(true), 200);
+    }
   };
 
   // 5. RENDU CONDITIONNEL (Loading / Error)
   // C'est SEULEMENT ICI qu'on a le droit de faire des returns anticipés
   if (isLoading) {
     return (
-      <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950">
+      <View
+        className="flex-1 justify-center items-center bg-background dark:bg-slate-950"
+        style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
+      >
         <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
@@ -166,7 +182,10 @@ export default function InterventionDetailScreen() {
 
   if (!intervention) {
     return (
-      <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950 px-6">
+      <View
+        className="flex-1 justify-center items-center bg-background dark:bg-slate-950 px-6"
+        style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
+      >
         <View className="bg-destructive/10 p-4 rounded-full mb-4">
           <AlertCircle size={48} color="#EF4444" />
         </View>
@@ -193,22 +212,40 @@ export default function InterventionDetailScreen() {
   const hasClient = ["intervention", "devis"].includes(intervType);
   const TYPE_BADGE: Record<
     string,
-    { label: string; color: string; bg: string }
+    { label: string; color: string; bg: string; bgDark: string }
   > = {
-    intervention: { label: "Intervention", color: "#3B82F6", bg: "#EFF6FF" },
-    devis: { label: "Devis", color: "#8B5CF6", bg: "#F5F3FF" },
-    tournee: { label: "Tournée", color: "#F97316", bg: "#FFF7ED" },
-    note: { label: "Note", color: "#64748B", bg: "#F8FAFC" },
+    intervention: {
+      label: "Intervention",
+      color: "#3B82F6",
+      bg: "#EFF6FF",
+      bgDark: "#1E3A5F",
+    },
+    devis: {
+      label: "Devis",
+      color: "#8B5CF6",
+      bg: "#F5F3FF",
+      bgDark: "#2E1B5E",
+    },
+    tournee: {
+      label: "Tournée",
+      color: "#F97316",
+      bg: "#FFF7ED",
+      bgDark: "#431407",
+    },
+    note: { label: "Note", color: "#64748B", bg: "#F8FAFC", bgDark: "#1E293B" },
   };
   const typeBadge = TYPE_BADGE[intervType] ?? TYPE_BADGE["intervention"];
 
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
-      style={{ paddingTop: isDesktop ? 0 : insets.top }}
+      style={{
+        paddingTop: isDesktop ? 0 : insets.top,
+        backgroundColor: isDark ? "#020817" : "#FFFFFF",
+      }}
     >
       {/* --- HEADER --- */}
-      <View className="flex-row items-center p-4 pt-12 pb-4 border-b border-border dark:border-slate-800 bg-background dark:bg-slate-950 z-10">
+      <View className="flex-row items-center p-4 pt-4 pb-4 border-b border-border dark:border-slate-800 bg-background dark:bg-slate-950 z-10">
         <Pressable
           onPress={handleBack}
           className="p-2 rounded-full hover:bg-muted dark:hover:bg-slate-800 active:bg-muted"
@@ -223,31 +260,19 @@ export default function InterventionDetailScreen() {
           Détails
         </Text>
         <View className="flex-1" />
-        {/* BOUTON MENU ADMIN */}
-        {isAdmin && (
-          <Pressable
-            onPress={() => setMenuVisible(true)}
-            className="p-2 rounded-full hover:bg-muted mr-2"
-          >
-            <MoreVertical
-              size={24}
-              className="text-foreground dark:text-white"
-            />
-          </Pressable>
-        )}
-        {/* Badges type + statut alignés */}
+        {/* Badges type + statut + bouton 3 points alignés à droite */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <View
             style={{
               paddingHorizontal: 10,
               paddingVertical: 4,
               borderRadius: 20,
-              backgroundColor: typeBadge.bg,
+              backgroundColor: isDark ? typeBadge.bgDark : typeBadge.bg,
             }}
           >
             <Text
               style={{
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: "700",
                 color: typeBadge.color,
               }}
@@ -256,30 +281,74 @@ export default function InterventionDetailScreen() {
             </Text>
           </View>
           <StatusBadge status={intervention.status} />
+          {isAdmin && (
+            <Pressable
+              onPress={() => setMenuVisible(true)}
+              className="p-1.5 rounded-full hover:bg-muted"
+            >
+              <MoreVertical size={20} color={isDark ? "#94A3B8" : "#64748B"} />
+            </Pressable>
+          )}
         </View>
       </View>
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* --- TITRE --- */}
-        <View className="px-6 pt-6 pb-2">
+        <View className="px-6 pt-4 pb-2">
           <Animated.View entering={FadeInDown.delay(100).springify()}>
-            <Text className="text-3xl font-extrabold text-foreground dark:text-white mb-4 leading-tight">
-              {intervention.title}
+            <Text className="text-2xl font-extrabold text-foreground dark:text-white mb-3 leading-tight">
+              {intervention.title.replace(/[\r\n\u2028\u2029]+/g, " ").trim()}
             </Text>
 
             {/* Alerte paiement — uniquement pour les interventions */}
             {intervType === "intervention" &&
               (intervention.payment_mode === "cash" ||
                 (!intervention.payment_mode && !intervention.is_invoice)) && (
-                <View className="bg-red-100 dark:bg-red-900/20 p-4 rounded-2xl mb-6 border border-red-200 dark:border-red-900/50 flex-row gap-4 items-center">
-                  <View className="bg-red-500 h-10 w-10 rounded-full items-center justify-center">
+                <View
+                  style={{
+                    backgroundColor: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2",
+                    borderWidth: 1,
+                    borderColor: isDark ? "rgba(153,27,27,0.5)" : "#FECACA",
+                    borderRadius: 16,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    marginBottom: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      backgroundColor: "#EF4444",
+                      height: 40,
+                      width: 40,
+                      borderRadius: 20,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
                     <Wallet size={20} color="white" />
                   </View>
-                  <View className="flex-1">
-                    <Text className="text-red-700 dark:text-red-400 font-extrabold text-sm uppercase mb-0.5">
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: isDark ? "#F87171" : "#B91C1C",
+                        fontWeight: "800",
+                        fontSize: 15,
+                        textTransform: "uppercase",
+                        marginBottom: 2,
+                      }}
+                    >
                       À ENCAISSER SUR PLACE
                     </Text>
-                    <Text className="text-red-600/80 dark:text-red-300 text-xs font-medium leading-tight">
+                    <Text
+                      style={{
+                        color: isDark ? "#FCA5A5" : "#DC2626",
+                        fontSize: 14,
+                        fontWeight: "500",
+                      }}
+                    >
                       Le client doit payer {intervention.price_estimated} €
                       maintenant.
                     </Text>
@@ -288,15 +357,51 @@ export default function InterventionDetailScreen() {
               )}
             {intervType === "intervention" &&
               intervention.payment_mode === "invoice_cash" && (
-                <View className="bg-orange-100 dark:bg-orange-900/20 p-4 rounded-2xl mb-6 border border-orange-200 dark:border-orange-900/50 flex-row gap-4 items-center">
-                  <View className="bg-orange-500 h-10 w-10 rounded-full items-center justify-center">
+                <View
+                  style={{
+                    backgroundColor: isDark ? "rgba(154,52,18,0.2)" : "#FFEDD5",
+                    borderWidth: 1,
+                    borderColor: isDark ? "rgba(154,52,18,0.5)" : "#FED7AA",
+                    borderRadius: 16,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    marginBottom: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      backgroundColor: "#F97316",
+                      height: 40,
+                      width: 40,
+                      borderRadius: 20,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
                     <Wallet size={20} color="white" />
                   </View>
-                  <View className="flex-1">
-                    <Text className="text-orange-700 dark:text-orange-400 font-extrabold text-sm uppercase mb-0.5">
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: isDark ? "#FB923C" : "#C2410C",
+                        fontWeight: "800",
+                        fontSize: 13,
+                        textTransform: "uppercase",
+                        marginBottom: 2,
+                      }}
+                    >
                       À ENCAISSER SUR PLACE
                     </Text>
-                    <Text className="text-orange-600/80 dark:text-orange-300 text-xs font-medium leading-tight">
+                    <Text
+                      style={{
+                        color: isDark ? "#FDBA74" : "#EA580C",
+                        fontSize: 12,
+                        fontWeight: "500",
+                      }}
+                    >
                       Le client doit payer {intervention.price_estimated} €
                       maintenant.
                     </Text>
@@ -304,57 +409,76 @@ export default function InterventionDetailScreen() {
                 </View>
               )}
 
-            <View className="flex-row items-center gap-2 mb-6">
-              <Calendar size={16} color={isDark ? "#94A3B8" : "#64748B"} />
-              <Text className="text-base font-medium text-muted-foreground">
-                {startTime.toLocaleDateString("fr-FR", {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                  timeZone: "Europe/Brussels",
-                })}
-              </Text>
+            {/* Date + heure sur une seule ligne compacte */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 16,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingLeft: 4,
+                }}
+              >
+                <Calendar size={16} color={isDark ? "#94A3B8" : "#64748B"} />
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "500",
+                    color: isDark ? "#94A3B8" : "#64748B",
+                    textTransform: "capitalize",
+                  }}
+                >
+                  {startTime.toLocaleDateString("fr-FR", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                    timeZone: "Europe/Brussels",
+                  })}
+                </Text>
+              </View>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  backgroundColor: isDark ? "#1E3A5F" : "#EFF6FF",
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                }}
+              >
+                <Clock size={16} color="#3B82F6" />
+                <Text
+                  style={{ fontSize: 17, fontWeight: "700", color: "#3B82F6" }}
+                >
+                  {startTime.toLocaleTimeString("fr-FR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone: "Europe/Brussels",
+                  })}
+                </Text>
+              </View>
             </View>
           </Animated.View>
         </View>
 
         {/* --- BLOCS D'INFORMATIONS --- */}
-        <View className="px-6 pb-20">
-          {/* LIGNE 1 : HORAIRE + CLIENT */}
+        <View className="px-6 pb-32" style={{ marginTop: -10 }}>
+          {/* LIGNE 1 : CLIENT */}
           <View
             className={isDesktop ? "flex-row w-full gap-4" : "gap-4"}
             style={{
               marginRight: isDesktop ? 0 : 20,
-              marginBottom: 20,
+              marginBottom: 12,
             }}
           >
-            {/* 1. HORAIRE */}
-            <Animated.View
-              entering={FadeInDown.delay(200)}
-              className={isDesktop ? "flex-1" : "w-full"}
-            >
-              <Card className="min-h-[110px] justify-center rounded-3xl">
-                <CardContent className="p-5 flex-row items-center justify-between">
-                  <View>
-                    <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                      Horaire prévu
-                    </Text>
-                    <Text className="text-3xl font-bold text-foreground dark:text-white">
-                      {startTime.toLocaleTimeString("fr-FR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        timeZone: "Europe/Brussels",
-                      })}
-                    </Text>
-                  </View>
-                  <View className="bg-blue-500/10 p-3 rounded-full">
-                    <Clock size={28} color="#3B82F6" />
-                  </View>
-                </CardContent>
-              </Card>
-            </Animated.View>
-
             {/* 2. CLIENT (seulement pour intervention/devis avec un client lié) */}
             {hasClient && intervention.client && (
               <Animated.View
@@ -402,7 +526,7 @@ export default function InterventionDetailScreen() {
               entering={FadeInDown.delay(350)}
               className={`flex-row w-full ${isDesktop ? "gap-4" : "gap-2"}`}
               style={{
-                marginBottom: isDesktop ? 0 : 20,
+                marginBottom: isDesktop ? 0 : 0,
               }}
             >
               {/* BOUTON GPS */}
@@ -615,7 +739,7 @@ export default function InterventionDetailScreen() {
 
                   {/* Notes — toujours affichées */}
                   {intervention.description && (
-                    <View className="bg-muted/50 dark:bg-slate-900/50 p-4 rounded-xl mt-2">
+                    <View style={{ backgroundColor: isDark ? "rgba(15,23,42,0.5)" : "rgba(0,0,0,0.04)", padding: 16, borderRadius: 16, marginTop: 8 }}>
                       <Text className="text-xs font-bold text-muted-foreground mb-1">
                         NOTES
                       </Text>
@@ -631,13 +755,16 @@ export default function InterventionDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* --- FOOTER ACTIONS (Fixe en bas) --- */}
-      <View className="absolute bottom-0 left-0 right-0 p-4 bg-background dark:bg-slate-950 border-t border-border dark:border-slate-800">
+      {/* --- FOOTER ACTIONS (Fixe en bas, flottant) --- */}
+      <View
+        className="absolute bottom-0 left-0 right-0 px-4 pt-4"
+        style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+      >
         {intervention.status === "planned" && (
           <Button
             onPress={() => statusMutation.mutate("in_progress")}
             disabled={statusMutation.isPending}
-            className="w-full h-14 bg-orange-500 hover:bg-orange-600 rounded-full"
+            className="w-full h-14 bg-blue-500 hover:bg-blue-600 rounded-full"
           >
             {statusMutation.isPending ? (
               <ActivityIndicator color="white" />

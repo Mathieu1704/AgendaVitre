@@ -1,6 +1,7 @@
 import React from "react";
 import { View, ScrollView, Text, Pressable, ActivityIndicator, Platform } from "react-native";
 import { useRouter } from "expo-router";
+import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BellOff, CheckCheck, AlertTriangle, Info } from "lucide-react-native";
 import {
@@ -79,6 +80,7 @@ function NotifItem({
 }
 
 export default function NotificationsScreen() {
+  const { isDark } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { notifications, isLoading, unreadCount } = useNotifications();
@@ -95,7 +97,7 @@ export default function NotificationsScreen() {
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
-      style={{ paddingTop: insets.top }}
+      style={{ paddingTop: insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
     >
       {/* Header — même style que Planning */}
       <View
@@ -140,7 +142,7 @@ export default function NotificationsScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={Platform.OS !== "web"} indicatorStyle="black">
           {notifications.map((notif) => (
             <NotifItem key={notif.id} notif={notif} onPress={() => handlePress(notif)} />
           ))}

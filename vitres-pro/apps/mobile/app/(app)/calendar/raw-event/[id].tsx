@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "../../../../src/ui/components/ThemeToggle";
 import {
   ChevronLeft,
   MapPin,
@@ -35,6 +36,7 @@ import {
 import { useEmployees } from "../../../../src/hooks/useEmployees";
 
 export default function RawEventDetailScreen() {
+  const { isDark } = useTheme();
   const { id, date } = useLocalSearchParams<{ id: string; date?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -146,7 +148,7 @@ export default function RawEventDetailScreen() {
 
   if (isLoading || !rawEvent) {
     return (
-      <View className="flex-1 bg-background dark:bg-slate-950 items-center justify-center">
+      <View className="flex-1 bg-background dark:bg-slate-950 items-center justify-center" style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
         <ActivityIndicator size="large" />
       </View>
     );
@@ -168,13 +170,13 @@ export default function RawEventDetailScreen() {
     convertMutation.isPending;
 
   return (
-    <View className="flex-1 bg-background dark:bg-slate-950">
+    <View className="flex-1 bg-background dark:bg-slate-950" style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
       {/* Header */}
       <View
         className="px-4 pb-3 bg-background dark:bg-slate-950 border-b border-border dark:border-slate-800"
         style={{ paddingTop: insets.top + 10 }}
       >
-        <View className="flex-row items-center gap-3">
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <Pressable
             onPress={goBack}
             className="p-2 rounded-full active:opacity-50"
@@ -182,9 +184,9 @@ export default function RawEventDetailScreen() {
             <ChevronLeft size={24} color="#64748B" />
           </Pressable>
           <View className="flex-1">
-            <View className="flex-row items-center gap-2">
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Text
-                className="text-base font-bold text-foreground dark:text-white flex-1"
+                className="text-lg font-bold text-foreground dark:text-white flex-1"
               >
                 {rawEvent.summary}
               </Text>
@@ -247,9 +249,9 @@ export default function RawEventDetailScreen() {
           </Text>
           {rawEvent.assigned_employees &&
           rawEvent.assigned_employees.length > 0 ? (
-            <View className="gap-2">
+            <View style={{ gap: 8 }}>
               {rawEvent.assigned_employees.map((emp) => (
-                <View key={emp.id} className="flex-row items-center gap-3">
+                <View key={emp.id} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                   <View
                     className="w-8 h-8 rounded-full items-center justify-center"
                     style={{ backgroundColor: emp.color + "33" }}
@@ -305,7 +307,7 @@ export default function RawEventDetailScreen() {
         {isBusy ? (
           <ActivityIndicator size="large" />
         ) : (
-          <View className="gap-3">
+          <View style={{ gap: 12 }}>
             <Pressable
               onPress={openPicker}
               className="flex-row items-center justify-center gap-3 bg-primary p-4 rounded-2xl active:opacity-80"
@@ -464,7 +466,7 @@ export default function RawEventDetailScreen() {
               contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: insets.bottom + 24 }}
             >
               {/* Header */}
-              <View className="flex-row items-center gap-2 mb-1">
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
                 <Sparkles size={18} color="#4F46E5" />
                 <Text className="text-lg font-bold text-foreground dark:text-white">
                   Suggestion IA

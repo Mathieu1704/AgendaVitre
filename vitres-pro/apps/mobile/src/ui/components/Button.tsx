@@ -30,6 +30,7 @@ export function Button({
   onPress,
   children,
   variant = "default",
+  size = "default",
   loading,
   disabled,
   className,
@@ -70,7 +71,8 @@ export function Button({
       // ✅ Style avec borderRadius par défaut de 16, overflow hidden pour forcer l'arrondi
       style={[animatedStyle, { borderRadius: 16, overflow: "hidden" }, style]}
       className={cn(
-        "h-12 flex-row items-center justify-center border px-4",
+        "flex-row items-center justify-center border",
+        size === "icon" ? "h-10 w-10 p-0" : size === "sm" ? "h-8 px-3" : "h-12 px-4",
         variantStyles[variant],
         (loading || disabled) && "opacity-50",
         className,

@@ -59,8 +59,8 @@ export default function TarifsScreen() {
 
   return (
     <View
-      className="flex-1 bg-background"
-      style={{ paddingTop: insets.top }}
+      className="flex-1 bg-white dark:bg-slate-950"
+      style={{ paddingTop: insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
     >
       <Stack.Screen options={{ headerShown: false }} />
 

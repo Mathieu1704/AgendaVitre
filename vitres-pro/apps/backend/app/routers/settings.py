@@ -106,6 +106,18 @@ def rename_zone(zone_id: UUID, body: LabelUpdate, db: Session = Depends(get_db),
     )
 
 
+@router.get("/zones/unassigned-cities")
+def list_unassigned_cities(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Villes présentes sur des clients mais sans mapping dans city_sub_zones."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    from sqlalchemy import select
+    assigned = {row.city for row in db.query(CitySubZone.city).all()}
+    cities = db.query(Client.city).filter(Client.city != None, Client.city != "").distinct().all()
+    unassigned = sorted({c.city for c in cities if c.city not in assigned})
+    return unassigned
+
+
 @router.patch("/zones/cities/{city}")
 def reassign_city(city: str, body: CityReassign, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Réassigne une ville à une nouvelle sous-zone et met à jour clients + interventions."""

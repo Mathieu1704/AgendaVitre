@@ -2,21 +2,20 @@ import { Stack } from "expo-router";
 import { PaperProvider, MD3LightTheme, MD3DarkTheme } from "react-native-paper";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useColorScheme } from "react-native";
 import { ToastHost } from "../src/ui/toast";
+import { ThemeProvider, useTheme } from "../src/ui/components/ThemeToggle";
 import "../app.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30 * 1000,        // 30s : évite les refetch inutiles à chaque navigation
-      refetchOnWindowFocus: false,  // évite le reload au clic dans la fenêtre (surtout agaçant en dev)
-      retry: 1,                     // 1 seule tentative en cas d'erreur réseau
+      staleTime: 30 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
     },
   },
 });
 
-// 🎨 Thème Paper Moderne (Surchargé)
 const lightTheme = {
   ...MD3LightTheme,
   colors: {
@@ -31,7 +30,7 @@ const lightTheme = {
     onPrimary: "#FFFFFF",
     onSecondary: "#FFFFFF",
   },
-  roundness: 16, // Coins arrondis
+  roundness: 16,
 };
 
 const darkTheme = {
@@ -51,22 +50,31 @@ const darkTheme = {
   roundness: 16,
 };
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? darkTheme : lightTheme;
+// Séparé pour pouvoir lire useTheme() après ThemeProvider
+function ThemedApp() {
+  const { isDark } = useTheme();
+  const theme = isDark ? darkTheme : lightTheme;
 
   return (
+    <QueryClientProvider client={queryClient}>
+      <PaperProvider theme={theme}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(app)" />
+        </Stack>
+        <ToastHost />
+      </PaperProvider>
+    </QueryClientProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
     <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <PaperProvider theme={theme}>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(app)" />
-          </Stack>
-          <ToastHost />
-        </PaperProvider>
-      </QueryClientProvider>
+      <ThemeProvider>
+        <ThemedApp />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

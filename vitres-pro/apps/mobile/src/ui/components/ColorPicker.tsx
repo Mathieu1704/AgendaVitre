@@ -80,16 +80,15 @@ export function ColorPicker({
 
   return (
     <>
-      <View style={containerStyle}>
-        {/* ✅ LABEL ALIGNÉ : font-semibold et mb-1.5 pour matcher le gap-1.5 de l'Input */}
-        <Text className="text-sm font-semibold text-foreground dark:text-white mb-1.5">
+      <View style={[{ gap: 6, width: "100%" }, containerStyle]}>
+        <Text className="text-sm font-semibold text-foreground dark:text-white">
           {label}
         </Text>
 
         {/* ✅ INPUT STYLE : h-12 (48px) et rounded-[16px] pour matcher l'Input */}
         <Pressable
           onPress={() => setOpen(true)}
-          className="h-12 flex-row items-center justify-between px-4 mr-2 rounded-[16px] border border-border dark:border-slate-700 bg-background dark:bg-slate-900"
+          className="h-12 flex-row items-center justify-between px-4 rounded-[16px] border border-border dark:border-slate-700 bg-background dark:bg-slate-900"
         >
           <View className="flex-row items-center gap-3">
             <View

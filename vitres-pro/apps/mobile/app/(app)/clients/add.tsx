@@ -134,9 +134,9 @@ export default function AddClientScreen() {
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         {/* Hero */}
-        <View className="items-center mb-8">
+        <View style={{ alignItems: "center", marginBottom: 32 }}>
           <View className="bg-primary/10 w-20 h-20 rounded-full items-center justify-center mb-4">
-            <UserPlus size={32} color="#3B82F6" />
+            <UserPlus size={32} color="#3B82F6" style={{ marginLeft: 6 }} />
           </View>
           <Text className="text-center text-muted-foreground dark:text-slate-400 max-w-xs">
             Remplissez les informations ci-dessous pour créer une fiche client.
@@ -150,7 +150,10 @@ export default function AddClientScreen() {
             </Text>
           </CardHeader>
 
-          <CardContent className="px-6 pb-6 pt-4 gap-4">
+          <CardContent
+            className="px-6 pb-6 pt-4 gap-4"
+            style={{ paddingLeft: 32 }}
+          >
             <Input
               label="Nom / Entreprise *"
               placeholder="Ex: Jean Dupont"
@@ -214,7 +217,10 @@ export default function AddClientScreen() {
           </CardHeader>
 
           {/* Content ajusté : pt-4 */}
-          <CardContent className="px-6 pb-6 pt-4 gap-4">
+          <CardContent
+            className="px-6 pb-6 pt-4 gap-4"
+            style={{ paddingLeft: 32 }}
+          >
             <Input
               label="Téléphone *"
               placeholder="0487 12 34 56"

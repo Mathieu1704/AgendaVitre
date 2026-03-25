@@ -1,13 +1,12 @@
 import React, { useMemo } from "react";
 import { View, Text, Pressable } from "react-native";
 import { Calendar as RNCalendar, DateData } from "react-native-calendars";
-import { Zap } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { toISODate, startOfMonth, endOfMonth } from "../../../lib/date";
 import { useRawEventsByRange } from "../../../hooks/useRawEvents";
-import { DailyStatsBadge } from "../DailyStatsBadge";
 import { RawEventCard } from "./RawEventCard";
 import { FilterChipsBar, renderInterventionGroups, AssignModalState, InterventionGroupsCtx } from "./InterventionGroups";
+import { PlanningHeader } from "../PlanningHeader";
 
 interface MonthViewProps {
   cursorDate: Date;
@@ -131,21 +130,16 @@ export const MonthView = React.memo(function MonthView({
         />
       </View>
 
-      <View className="pt-6 pb-24">
-        <View className="flex-row items-center px-6 mb-4 gap-3">
-          {isAdmin && (
-            <Pressable
-              onPress={() => router.push(`/(app)/calendar/rate-session?date=${selectedDate}&zone=${effectiveZone}` as any)}
-              className="w-11 h-11 rounded-full items-center justify-center active:opacity-60"
-              style={{ backgroundColor: "#3B82F6" + "18" }}
-            >
-              <Zap size={20} color="#3B82F6" />
-            </Pressable>
-          )}
-          <Text className="text-xl font-bold text-foreground dark:text-white capitalize mr-2">
+      <View className="pt-6 pb-6">
+        <View className="px-6 mb-2">
+          <Text className="text-xl font-bold text-foreground dark:text-white capitalize mb-3">
             {new Date(selectedDate).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
           </Text>
-          <DailyStatsBadge dateStr={selectedDate} zone={effectiveZone} />
+          <PlanningHeader
+            dateStr={selectedDate}
+            zone={effectiveZone}
+            onRateSession={isAdmin ? () => router.push(`/(app)/calendar/rate-session?date=${selectedDate}&zone=${effectiveZone}` as any) : undefined}
+          />
         </View>
 
         <View className="px-4">

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback } from "react";
+import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -69,8 +69,8 @@ const TYPE_CONFIG: Record<
   note: { label: "Note", color: "#64748B", bg: "#F8FAFC" },
 };
 
-const NEEDS_CLIENT: IntervType[] = ["intervention", "devis"];
-const NEEDS_ITEMS: IntervType[] = ["intervention", "devis"];
+const NEEDS_CLIENT: IntervType[] = ["intervention"];
+const NEEDS_ITEMS: IntervType[] = ["intervention"];
 
 type RecurrenceFreq =
   | "none"
@@ -331,6 +331,13 @@ export default function AddInterventionScreen() {
   const [newClientEmail, setNewClientEmail] = useState("");
   const [newClientNotes, setNewClientNotes] = useState("");
   const [ncFocused, setNcFocused] = useState<string | null>(null);
+  const ncNameRef = useRef<TextInput>(null);
+  const ncStreetRef = useRef<TextInput>(null);
+  const ncZipRef = useRef<TextInput>(null);
+  const ncCityRef = useRef<TextInput>(null);
+  const ncPhoneRef = useRef<TextInput>(null);
+  const ncEmailRef = useRef<TextInput>(null);
+  const ncNotesRef = useRef<TextInput>(null);
 
   // Catalogue de services du client sélectionné
   const { data: clientServices = [], refetch: refetchClientServices } =
@@ -548,17 +555,20 @@ export default function AddInterventionScreen() {
     [allItems],
   );
 
-  const selectedRate = (hourlyRates as any[])?.find((r: any) => r.id === selectedRateId) ?? null;
-  const computedHoursRaw = selectedRate && totalPrice > 0
-    ? Math.round((totalPrice / selectedRate.rate) * 2) / 2
-    : null;
-  const computedHours = computedHoursRaw != null
-    ? (() => {
-        const h = Math.floor(computedHoursRaw);
-        const m = Math.round((computedHoursRaw % 1) * 60);
-        return m === 0 ? `${h}h` : `${h}h${m.toString().padStart(2, "0")}`;
-      })()
-    : null;
+  const selectedRate =
+    (hourlyRates as any[])?.find((r: any) => r.id === selectedRateId) ?? null;
+  const computedHoursRaw =
+    selectedRate && totalPrice > 0
+      ? Math.round((totalPrice / selectedRate.rate) * 2) / 2
+      : null;
+  const computedHours =
+    computedHoursRaw != null
+      ? (() => {
+          const h = Math.floor(computedHoursRaw);
+          const m = Math.round((computedHoursRaw % 1) * 60);
+          return m === 0 ? `${h}h` : `${h}h${m.toString().padStart(2, "0")}`;
+        })()
+      : null;
 
   const toggleService = (id: string) => {
     setCheckedServiceIds((prev) => {
@@ -728,7 +738,10 @@ export default function AddInterventionScreen() {
       } else {
         router.push({
           pathname: "/(app)/calendar",
-          params: { date: startDateStr, ...(from_view ? { view: from_view } : {}) },
+          params: {
+            date: startDateStr,
+            ...(from_view ? { view: from_view } : {}),
+          },
         });
       }
     } catch (err: any) {
@@ -770,7 +783,10 @@ export default function AddInterventionScreen() {
     (isRepriseMode && isLoadingReprise)
   ) {
     return (
-      <View className="flex-1 justify-center items-center bg-background dark:bg-slate-950" style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
+      <View
+        className="flex-1 justify-center items-center bg-background dark:bg-slate-950"
+        style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
+      >
         <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
@@ -784,7 +800,10 @@ export default function AddInterventionScreen() {
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
-      style={{ paddingTop: isWeb ? 0 : insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
+      style={{
+        paddingTop: isWeb ? 0 : insets.top,
+        backgroundColor: isDark ? "#020817" : "#FFFFFF",
+      }}
     >
       <View className="px-4 py-2 flex-row items-center">
         <Pressable
@@ -792,10 +811,11 @@ export default function AddInterventionScreen() {
             if (isEditMode) router.push(`/(app)/calendar/${id}`);
             else if (isRepriseMode)
               router.push(`/(app)/calendar/${reprise_of}` as any);
-            else router.push({
-              pathname: "/(app)/calendar",
-              params: from_view ? { view: from_view, date: from_date } : {},
-            });
+            else
+              router.push({
+                pathname: "/(app)/calendar",
+                params: from_view ? { view: from_view, date: from_date } : {},
+              });
           }}
           className="p-2 rounded-full hover:bg-muted active:bg-muted"
         >
@@ -814,53 +834,27 @@ export default function AddInterventionScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-      <ScrollView keyboardDismissMode="on-drag" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        <Card className="max-w-2xl w-full self-center rounded-[40px] overflow-hidden">
-          {/* BANNIÈRE "RDV NON REPRIS" (mode reprise uniquement) */}
-          {isRepriseMode && (
-            <View style={{ padding: 16, paddingBottom: 0 }}>
-              {!noRepriseMode ? (
-                <Pressable
-                  onPress={() => setNoRepriseMode(true)}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#FEF2F2",
-                    borderWidth: 1.5,
-                    borderColor: "#FECACA",
-                    borderRadius: 16,
-                    padding: 14,
-                    gap: 10,
-                  }}
-                >
-                  <AlertTriangle size={18} color="#EF4444" />
-                  <Text
-                    style={{
-                      color: "#EF4444",
-                      fontWeight: "700",
-                      fontSize: 15,
-                    }}
-                  >
-                    RDV non repris
-                  </Text>
-                </Pressable>
-              ) : (
-                <View
-                  style={{
-                    backgroundColor: "#FEF2F2",
-                    borderWidth: 1.5,
-                    borderColor: "#FECACA",
-                    borderRadius: 20,
-                    padding: 16,
-                    gap: 12,
-                  }}
-                >
-                  <View
+        <ScrollView
+          keyboardDismissMode="on-drag"
+          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        >
+          <Card className="max-w-2xl w-full self-center rounded-[40px] overflow-hidden">
+            {/* BANNIÈRE "RDV NON REPRIS" (mode reprise uniquement) */}
+            {isRepriseMode && (
+              <View style={{ padding: 16, paddingBottom: 0 }}>
+                {!noRepriseMode ? (
+                  <Pressable
+                    onPress={() => setNoRepriseMode(true)}
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: 8,
+                      justifyContent: "center",
+                      backgroundColor: "#FEF2F2",
+                      borderWidth: 1.5,
+                      borderColor: "#FECACA",
+                      borderRadius: 16,
+                      padding: 14,
+                      gap: 10,
                     }}
                   >
                     <AlertTriangle size={18} color="#EF4444" />
@@ -869,879 +863,990 @@ export default function AddInterventionScreen() {
                         color: "#EF4444",
                         fontWeight: "700",
                         fontSize: 15,
-                        flex: 1,
                       }}
                     >
                       RDV non repris
                     </Text>
-                    <Pressable
-                      onPress={() => setNoRepriseMode(false)}
-                      style={{ padding: 4 }}
-                    >
-                      <X size={18} color="#94A3B8" />
-                    </Pressable>
-                  </View>
-                  <TextInput
-                    value={noRepriseNote}
-                    onChangeText={setNoRepriseNote}
-                    placeholder="Note optionnelle (raison, contexte...)"
-                    placeholderTextColor="#CBD5E1"
-                    multiline
-                    numberOfLines={3}
-                    style={[
-                      {
-                        fontSize: 14,
-                        color: isDark ? "#F1F5F9" : "#0f172a",
-                        backgroundColor: isDark ? "#1E293B" : "white",
-                        borderRadius: 12,
-                        padding: 12,
-                        minHeight: 70,
-                        borderWidth: 1,
-                        borderColor: "#FECACA",
-                      },
-                      Platform.OS === "web"
-                        ? ({ outlineStyle: "none" } as any)
-                        : {},
-                    ]}
-                  />
-                  <Pressable
-                    onPress={handleNoReprise}
-                    disabled={isSubmittingNoReprise}
-                    style={{
-                      backgroundColor: "#EF4444",
-                      borderRadius: 12,
-                      padding: 14,
-                      alignItems: "center",
-                      opacity: isSubmittingNoReprise ? 0.6 : 1,
-                    }}
-                  >
-                    {isSubmittingNoReprise ? (
-                      <ActivityIndicator color="white" />
-                    ) : (
-                      <Text
-                        style={{
-                          color: "white",
-                          fontWeight: "700",
-                          fontSize: 15,
-                        }}
-                      >
-                        Confirmer sans reprise
-                      </Text>
-                    )}
                   </Pressable>
-                </View>
-              )}
-            </View>
-          )}
-
-          <CardHeader className="p-6 pb-2">
-            <Text className="text-2xl font-extrabold text-foreground dark:text-white text-center">
-              {isRepriseMode
-                ? "Reprise RDV"
-                : isEditMode
-                  ? "Modifier"
-                  : "Planifier"}
-            </Text>
-            <Text className="mt-1 text-muted-foreground text-center font-medium">
-              {isRepriseMode
-                ? "Planifie le prochain RDV pour ce client"
-                : isEditMode
-                  ? "Mise à jour intervention"
-                  : "Nouvelle intervention"}
-            </Text>
-          </CardHeader>
-
-          <CardContent className="p-6 pt-4 gap-5">
-            {/* TYPE (admin only) */}
-            {isAdmin && (
-              <View className="gap-1">
-                <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">
-                  Type
-                </Text>
-                <View className="flex-row gap-2 flex-wrap">
-                  {(Object.keys(TYPE_CONFIG) as IntervType[]).map((t) => {
-                    const cfg = TYPE_CONFIG[t];
-                    const active = intervType === t;
-                    return (
-                      <Pressable
-                        key={t}
-                        onPress={() => setIntervType(t)}
-                        style={{
-                          paddingHorizontal: 14,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                          borderWidth: 1.5,
-                          borderColor: active ? cfg.color : "#E2E8F0",
-                          backgroundColor: active ? cfg.bg : "transparent",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontWeight: "600",
-                            fontSize: 13,
-                            color: active ? cfg.color : "#94A3B8",
-                          }}
-                        >
-                          {cfg.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-
-            {/* ZONE (admin seulement) */}
-            {isAdmin && (
-              <View className="gap-1">
-                <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">
-                  Zone
-                </Text>
-                <View className="flex-row gap-2">
-                  {(["hainaut", "ardennes"] as const).map((z) => {
-                    const active = zone === z;
-                    const color = z === "ardennes" ? "#10B981" : "#3B82F6";
-                    const bg = z === "ardennes" ? "#D1FAE5" : "#DBEAFE";
-                    return (
-                      <Pressable
-                        key={z}
-                        onPress={() => setZone(z)}
-                        style={{
-                          flex: 1,
-                          paddingVertical: 10,
-                          borderRadius: 16,
-                          borderWidth: 1.5,
-                          borderColor: active ? color : "#E2E8F0",
-                          backgroundColor: active ? bg : "transparent",
-                          alignItems: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontWeight: "600",
-                            fontSize: 14,
-                            color: active ? color : "#94A3B8",
-                          }}
-                        >
-                          {z === "ardennes" ? "Ardennes" : "Hainaut"}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-
-            {/* CLIENT */}
-            {typeNeedsClient && (
-              <View className="gap-1">
-                <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">
-                  Pour qui ?
-                </Text>
-                <View className="flex-row items-center gap-2">
-                  <View className="flex-1">
-                    <Select
-                      title="Choisir un client"
-                      value={
-                        selectedClient
-                          ? {
-                              id: selectedClient.id,
-                              label:
-                                selectedClient.name ||
-                                selectedClient.address ||
-                                "Client anonyme",
-                            }
-                          : null
-                      }
-                      items={clientItems}
-                      onChange={(v) => {
-                        const c = clients?.find((x) => x.id === v.id);
-                        if (c) setSelectedClient(c);
-                      }}
-                    />
-                  </View>
-                  <Pressable
-                    onPress={() => setShowNewClient(true)}
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 14,
-                      backgroundColor: "#EFF6FF",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: 1,
-                      borderColor: "#BFDBFE",
-                    }}
-                  >
-                    <UserPlus size={20} color="#3B82F6" />
-                  </Pressable>
-                </View>
-              </View>
-            )}
-
-            {/* EMPLOYES */}
-            <View className="gap-1">
-              <Text className="text-sm font-semibold text-foreground dark:text-white">
-                Qui intervient ?
-              </Text>
-              <MultiSelect
-                items={employeeItems}
-                selectedIds={selectedEmployeeIds}
-                onChange={setSelectedEmployeeIds}
-              />
-            </View>
-
-            {/* TITRE + DATE + DURÉE */}
-            <View className="gap-4 mt-2">
-              <Input
-                label="Titre"
-                value={title}
-                onChangeText={setTitle}
-                containerStyle={{ marginBottom: isWeb ? 0 : 10 }}
-              />
-              <DateTimePicker
-                value={startDateStr}
-                onChange={setStartDateStr}
-                label="Début de l'intervention"
-                dateOnly={!isAdmin}
-              />
-              <Input
-                label="Durée (heures)"
-                value={durationHours}
-                onChangeText={setDurationHours}
-                keyboardType="numeric"
-              />
-            </View>
-
-            {/* RÉCURRENCE (pas en mode édition) */}
-            {!isEditMode && (
-              <View className="gap-1">
-                <Text className="text-sm font-semibold text-foreground dark:text-white ml-1">
-                  Récurrence
-                </Text>
-
-                {/* Dropdown trigger */}
-                <Pressable
-                  onPress={() => setShowRecurrenceDropdown((v) => !v)}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    borderWidth: 1.5,
-                    borderRadius: 14,
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
-                    borderColor:
-                      recurrence.freq !== "none" ? "#3B82F6" : (isDark ? "#334155" : "#E2E8F0"),
-                    backgroundColor:
-                      recurrence.freq !== "none" ? (isDark ? "#1E3A5F" : "#EFF6FF") : "transparent",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "600",
-                      color: recurrence.freq !== "none" ? "#3B82F6" : "#64748B",
-                    }}
-                  >
-                    {recurrenceLabel}
-                  </Text>
-                  <ChevronDown
-                    size={18}
-                    color={recurrence.freq !== "none" ? "#3B82F6" : "#94A3B8"}
-                  />
-                </Pressable>
-
-                {/* Dropdown options */}
-                {showRecurrenceDropdown && (
+                ) : (
                   <View
                     style={{
+                      backgroundColor: "#FEF2F2",
                       borderWidth: 1.5,
-                      borderColor: isDark ? "#334155" : "#E2E8F0",
-                      borderRadius: 14,
-                      backgroundColor: isDark ? "#1E293B" : "white",
-                      overflow: "hidden",
-                      marginTop: 4,
-                      shadowColor: "#000",
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.08,
-                      shadowRadius: 8,
-                      elevation: 4,
+                      borderColor: "#FECACA",
+                      borderRadius: 20,
+                      padding: 16,
+                      gap: 12,
                     }}
                   >
-                    {contextualOptions.map((opt, idx) => {
-                      const isActive =
-                        recurrence.freq === opt.freq && opt.freq !== "custom";
-                      const isLast = idx === contextualOptions.length - 1;
-                      return (
-                        <Pressable
-                          key={opt.freq}
-                          onPress={() => {
-                            if (opt.freq === "custom") {
-                              setCustomIntervalStr(String(recurrence.interval));
-                              setCustomUnit(recurrence.unit);
-                              setCustomDaysOfWeek(recurrence.daysOfWeek);
-                              setCustomEndType(recurrence.endType);
-                              setCustomCountStr(String(recurrence.count));
-                              setCustomEndDate(recurrence.endDate);
-                              setShowCustomModal(true);
-                            } else {
-                              setRecurrence({
-                                ...DEFAULT_RECURRENCE,
-                                freq: opt.freq,
-                                endType: recurrence.endType,
-                                count: recurrence.count,
-                                endDate: recurrence.endDate,
-                              });
-                            }
-                            setShowRecurrenceDropdown(false);
-                          }}
-                          style={[
-                            {
-                              flexDirection: "row",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              paddingHorizontal: 16,
-                              paddingVertical: 13,
-                            },
-                            !isLast
-                              ? {
-                                  borderBottomWidth: 1,
-                                  borderBottomColor: isDark ? "#334155" : "#F1F5F9",
-                                }
-                              : {},
-                          ]}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 14,
-                              fontWeight: isActive ? "700" : "500",
-                              color: isActive
-                                ? "#3B82F6"
-                                : opt.freq === "custom"
-                                  ? "#8B5CF6"
-                                  : isDark ? "#F1F5F9" : "#0f172a",
-                            }}
-                          >
-                            {opt.label}
-                          </Text>
-                          {isActive && <Check size={16} color="#3B82F6" />}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                )}
-
-                {/* Nombre d'occurrences si récurrence active */}
-                {recurrence.freq !== "none" && (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginTop: 8,
-                      gap: 10,
-                      paddingHorizontal: 4,
-                    }}
-                  >
-                    <Text style={{ fontSize: 13, color: "#64748B", flex: 1 }}>
-                      Nombre d'occurrences :
-                    </Text>
-                    <TextInput
-                      value={String(recurrence.count)}
-                      onChangeText={(v) => {
-                        const n = parseInt(v);
-                        if (!isNaN(n) && n > 0)
-                          setRecurrence((r) => ({
-                            ...r,
-                            count: n,
-                            endType: "count",
-                          }));
-                      }}
-                      keyboardType="numeric"
-                      style={[
-                        {
-                          width: 60,
-                          borderWidth: 1.5,
-                          borderColor: "#DBEAFE",
-                          borderRadius: 10,
-                          padding: 8,
-                          textAlign: "center",
-                          fontSize: 15,
-                          fontWeight: "700",
-                          color: "#3B82F6",
-                          backgroundColor: "#F0F9FF",
-                        },
-                        Platform.OS === "web"
-                          ? ({ outlineStyle: "none" } as any)
-                          : {},
-                      ]}
-                    />
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* PRESTATIONS */}
-            {typeNeedsItems && (
-              <View className="mt-2 pt-4 border-t border-border dark:border-slate-800">
-                <View className="flex-row justify-between items-center mb-3">
-                  <Text className="text-sm font-semibold text-foreground dark:text-white">
-                    Prestations
-                  </Text>
-                  {!isAddingService && (
-                    <Pressable
-                      onPress={() => {
-                        setIsAddingService(true);
-                        setNewServiceLabel("");
-                        setNewServicePrice("");
-                      }}
-                      className="flex-row items-center bg-primary/10 px-3 py-1.5 rounded-full"
-                    >
-                      <PlusCircle size={16} color="#3B82F6" />
-                      <Text className="text-primary font-bold ml-1.5 text-xs">
-                        Ajouter
-                      </Text>
-                    </Pressable>
-                  )}
-                </View>
-
-                {/* Formulaire inline d'ajout */}
-                {isAddingService && (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: 8,
-                      alignItems: "center",
-                      marginBottom: 10,
-                      backgroundColor: "#F0F9FF",
-                      borderRadius: 10,
-                      padding: 8,
-                    }}
-                  >
-                    <TextInput
-                      autoFocus
-                      placeholder="Nom (ex: RDC, Velux…)"
-                      value={newServiceLabel}
-                      onChangeText={setNewServiceLabel}
-                      style={[
-                        {
-                          flex: 2,
-                          borderWidth: 1,
-                          borderColor: isDark ? "#1E40AF" : "#BAE6FD",
-                          borderRadius: 8,
-                          paddingHorizontal: 10,
-                          paddingVertical: 7,
-                          fontSize: 14,
-                          backgroundColor: isDark ? "#1E293B" : "#fff",
-                          color: isDark ? "#F1F5F9" : "#1E293B",
-                        },
-                        Platform.OS === "web"
-                          ? ({ outlineStyle: "none" } as any)
-                          : {},
-                      ]}
-                    />
-                    <TextInput
-                      placeholder="Prix"
-                      keyboardType="numeric"
-                      value={newServicePrice}
-                      onChangeText={setNewServicePrice}
-                      style={[
-                        {
-                          flex: 1,
-                          borderWidth: 1,
-                          borderColor: isDark ? "#1E40AF" : "#BAE6FD",
-                          borderRadius: 8,
-                          paddingHorizontal: 10,
-                          paddingVertical: 7,
-                          fontSize: 14,
-                          backgroundColor: isDark ? "#1E293B" : "#fff",
-                          color: isDark ? "#F1F5F9" : "#1E293B",
-                        },
-                        Platform.OS === "web"
-                          ? ({ outlineStyle: "none" } as any)
-                          : {},
-                      ]}
-                    />
-                    <Pressable
-                      onPress={async () => {
-                        if (!newServiceLabel.trim()) {
-                          toast.error("Nom requis", "");
-                          return;
-                        }
-                        if (selectedClient?.id) {
-                          try {
-                            const newSvc: ClientService = (
-                              await api.post(
-                                `/api/clients/${selectedClient.id}/services`,
-                                {
-                                  label: newServiceLabel.trim(),
-                                  price: Number(newServicePrice) || 0,
-                                  position: clientServices.length,
-                                },
-                              )
-                            ).data;
-                            await refetchClientServices();
-                            setCheckedServiceIds(
-                              (prev) => new Set([...prev, newSvc.id]),
-                            );
-                          } catch {
-                            toast.error("Erreur", "Impossible d'ajouter");
-                          }
-                        } else {
-                          addAdHocItem();
-                          updateAdHocItem(
-                            adHocItems.length,
-                            "label",
-                            newServiceLabel.trim(),
-                          );
-                          updateAdHocItem(
-                            adHocItems.length,
-                            "price",
-                            newServicePrice,
-                          );
-                        }
-                        setIsAddingService(false);
-                      }}
-                      style={{
-                        backgroundColor: "#3B82F6",
-                        borderRadius: 8,
-                        padding: 8,
-                      }}
-                    >
-                      <Check size={18} color="#fff" />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => setIsAddingService(false)}
-                      style={{ padding: 6 }}
-                    >
-                      <X size={18} color="#94A3B8" />
-                    </Pressable>
-                  </View>
-                )}
-
-                {/* Services du client = cases à cocher */}
-                {clientServices.map((svc) => {
-                  const checked = checkedServiceIds.has(svc.id);
-                  const priceVal =
-                    servicePriceOverrides[svc.id] ?? svc.price.toString();
-                  return (
                     <View
-                      key={svc.id}
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
                         gap: 8,
-                        marginBottom: 8,
                       }}
                     >
-                      <Pressable
-                        onPress={() => toggleService(svc.id)}
+                      <AlertTriangle size={18} color="#EF4444" />
+                      <Text
                         style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: 6,
-                          borderWidth: 2,
-                          borderColor: checked ? "#3B82F6" : "#CBD5E1",
-                          backgroundColor: checked ? "#3B82F6" : "transparent",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
+                          color: "#EF4444",
+                          fontWeight: "700",
+                          fontSize: 15,
+                          flex: 1,
                         }}
                       >
-                        {checked && <Check size={13} color="#fff" />}
-                      </Pressable>
-                      <View style={{ flex: 2 }}>
-                        <TextInput
-                          value={svc.label}
-                          placeholder="Nom du service"
-                          onChangeText={async (t) => {
-                            try {
-                              await api.patch(
-                                `/api/clients/${selectedClient!.id}/services/${svc.id}`,
-                                { label: t },
-                              );
-                              await refetchClientServices();
-                            } catch {
-                              /* silently ignore */
-                            }
-                          }}
-                          style={[
-                            {
-                              borderWidth: 1,
-                              borderColor: "#E2E8F0",
-                              borderRadius: 8,
-                              paddingHorizontal: 10,
-                              paddingVertical: 7,
-                              fontSize: 14,
-                              color: checked ? "#1E293B" : "#94A3B8",
-                            },
-                            Platform.OS === "web"
-                              ? ({ outlineStyle: "none" } as any)
-                              : {},
-                          ]}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <TextInput
-                          value={checked ? priceVal : svc.price.toString()}
-                          placeholder="Prix"
-                          keyboardType="numeric"
-                          editable={checked}
-                          onChangeText={(t) =>
-                            setServicePriceOverrides((prev) => ({
-                              ...prev,
-                              [svc.id]: t,
-                            }))
-                          }
-                          style={[
-                            {
-                              borderWidth: 1,
-                              borderColor: checked ? "#E2E8F0" : "#F1F5F9",
-                              borderRadius: 8,
-                              paddingHorizontal: 10,
-                              paddingVertical: 7,
-                              fontSize: 14,
-                              color: checked ? "#1E293B" : "#94A3B8",
-                              backgroundColor: checked ? undefined : "#F8FAFC",
-                            },
-                            Platform.OS === "web"
-                              ? ({ outlineStyle: "none" } as any)
-                              : {},
-                          ]}
-                        />
-                      </View>
+                        RDV non repris
+                      </Text>
                       <Pressable
-                        onPress={async () => {
-                          try {
-                            await api.delete(
-                              `/api/clients/${selectedClient!.id}/services/${svc.id}`,
-                            );
-                            setCheckedServiceIds((prev) => {
-                              const n = new Set(prev);
-                              n.delete(svc.id);
-                              return n;
-                            });
-                            setServicePriceOverrides((prev) => {
-                              const n = { ...prev };
-                              delete n[svc.id];
-                              return n;
-                            });
-                            await refetchClientServices();
-                          } catch {
-                            toast.error("Erreur", "Impossible de supprimer");
-                          }
-                        }}
-                        style={{ padding: 6 }}
+                        onPress={() => setNoRepriseMode(false)}
+                        style={{ padding: 4 }}
                       >
-                        <Trash2 size={18} color="#EF4444" />
+                        <X size={18} color="#94A3B8" />
                       </Pressable>
                     </View>
-                  );
-                })}
-
-                {/* Items ad-hoc (sans client ou ajout ponctuel) */}
-                {adHocItems.map((item, index) => (
-                  <View
-                    key={`adhoc-${index}`}
-                    className="flex-row gap-2 items-center mb-2"
-                  >
-                    <View className="flex-[2]">
-                      <Input
-                        placeholder="Ex: RDC, Velux..."
-                        value={item.label}
-                        onChangeText={(t) => updateAdHocItem(index, "label", t)}
-                      />
-                    </View>
-                    <View className="flex-1">
-                      <Input
-                        placeholder="Prix"
-                        keyboardType="numeric"
-                        value={item.price}
-                        onChangeText={(t) => updateAdHocItem(index, "price", t)}
-                      />
-                    </View>
+                    <TextInput
+                      value={noRepriseNote}
+                      onChangeText={setNoRepriseNote}
+                      placeholder="Note optionnelle (raison, contexte...)"
+                      placeholderTextColor="#CBD5E1"
+                      multiline
+                      numberOfLines={3}
+                      style={[
+                        {
+                          fontSize: 14,
+                          color: isDark ? "#F1F5F9" : "#0f172a",
+                          backgroundColor: isDark ? "#1E293B" : "white",
+                          borderRadius: 12,
+                          padding: 12,
+                          minHeight: 70,
+                          borderWidth: 1,
+                          borderColor: "#FECACA",
+                        },
+                        Platform.OS === "web"
+                          ? ({ outlineStyle: "none" } as any)
+                          : {},
+                      ]}
+                    />
                     <Pressable
-                      onPress={() => removeAdHocItem(index)}
-                      className="p-2"
+                      onPress={handleNoReprise}
+                      disabled={isSubmittingNoReprise}
+                      style={{
+                        backgroundColor: "#EF4444",
+                        borderRadius: 12,
+                        padding: 14,
+                        alignItems: "center",
+                        opacity: isSubmittingNoReprise ? 0.6 : 1,
+                      }}
                     >
-                      <Trash2 size={20} color="#EF4444" />
+                      {isSubmittingNoReprise ? (
+                        <ActivityIndicator color="white" />
+                      ) : (
+                        <Text
+                          style={{
+                            color: "white",
+                            fontWeight: "700",
+                            fontSize: 15,
+                          }}
+                        >
+                          Confirmer sans reprise
+                        </Text>
+                      )}
                     </Pressable>
                   </View>
-                ))}
-
-                <View className="flex-row justify-between items-center mt-2">
-                  <Text className="font-bold text-lg text-foreground dark:text-white">
-                    Total Estimé
-                  </Text>
-                  <Text className="font-extrabold text-2xl text-primary">
-                    {totalPrice.toFixed(2)} €
-                  </Text>
-                </View>
+                )}
               </View>
             )}
 
-            {/* TAUX HORAIRE (admin uniquement) */}
-            {isAdmin && Array.isArray(hourlyRates) && hourlyRates.length > 0 && (
-              <View className="pt-4 mt-4 border-t border-border dark:border-slate-800">
-                <Text className="text-sm font-semibold text-foreground dark:text-white mb-2">
-                  Taux horaire
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2">
-                  <View className="flex-row gap-2">
-                    {[null, ...hourlyRates].map((r: any) => {
-                      const isSelected = selectedRateId === (r?.id ?? null);
+            <CardHeader className="p-6 pb-2">
+              <Text className="text-2xl font-extrabold text-foreground dark:text-white text-center">
+                {isRepriseMode
+                  ? "Reprise RDV"
+                  : isEditMode
+                    ? "Modifier"
+                    : "Planifier"}
+              </Text>
+              <Text className="mt-1 text-muted-foreground text-center font-medium">
+                {isRepriseMode
+                  ? "Planifie le prochain RDV pour ce client"
+                  : isEditMode
+                    ? "Mise à jour intervention"
+                    : "Nouvelle intervention"}
+              </Text>
+            </CardHeader>
+
+            <CardContent style={{ padding: 24, paddingTop: 16, gap: 20 }}>
+              {/* TYPE (admin only) */}
+              {isAdmin && (
+                <View style={{ gap: 4 }}>
+                  <Text className="text-sm font-semibold text-foreground dark:text-white">
+                    Type
+                  </Text>
+                  <View
+                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+                  >
+                    {(Object.keys(TYPE_CONFIG) as IntervType[]).map((t) => {
+                      const cfg = TYPE_CONFIG[t];
+                      const active = intervType === t;
                       return (
                         <Pressable
-                          key={r?.id ?? "none"}
-                          onPress={() => setSelectedRateId(r?.id ?? null)}
+                          key={t}
+                          onPress={() => setIntervType(t)}
                           style={{
+                            flex: 1,
+                            minWidth: "45%",
                             paddingHorizontal: 14,
-                            paddingVertical: 8,
+                            paddingVertical: 10,
                             borderRadius: 20,
-                            backgroundColor: isSelected ? "#3B82F6" : (isDark ? "#1E293B" : "#F1F5F9"),
-                            borderWidth: 1,
-                            borderColor: isSelected ? "#3B82F6" : (isDark ? "#334155" : "#E2E8F0"),
+                            borderWidth: 1.5,
+                            borderColor: active ? cfg.color : "#E2E8F0",
+                            backgroundColor: active ? cfg.bg : "transparent",
+                            alignItems: "center",
                           }}
                         >
-                          <Text style={{ color: isSelected ? "#fff" : (isDark ? "#94A3B8" : "#64748B"), fontWeight: "600", fontSize: 13 }}>
-                            {r ? `${r.label ? r.label + " — " : ""}${r.rate} €/h` : "Aucun"}
+                          <Text
+                            style={{
+                              fontWeight: "600",
+                              fontSize: 13,
+                              color: active ? cfg.color : "#94A3B8",
+                            }}
+                          >
+                            {cfg.label}
                           </Text>
                         </Pressable>
                       );
                     })}
                   </View>
-                </ScrollView>
-                {computedHours && (
-                  <Text className="text-sm text-muted-foreground">
-                    → {computedHours} calculées ({totalPrice.toFixed(2)} € ÷ {selectedRate?.rate} €/h)
+                </View>
+              )}
+
+              {/* ZONE (admin seulement) */}
+              {isAdmin && (
+                <View style={{ gap: 4, marginTop: -4 }}>
+                  <Text className="text-sm font-semibold text-foreground dark:text-white">
+                    Zone
                   </Text>
-                )}
-              </View>
-            )}
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {(["hainaut", "ardennes"] as const).map((z) => {
+                      const active = zone === z;
+                      const color = z === "ardennes" ? "#10B981" : "#3B82F6";
+                      const bg = z === "ardennes" ? "#D1FAE5" : "#DBEAFE";
+                      return (
+                        <Pressable
+                          key={z}
+                          onPress={() => setZone(z)}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 10,
+                            borderRadius: 16,
+                            borderWidth: 1.5,
+                            borderColor: active ? color : "#E2E8F0",
+                            backgroundColor: active ? bg : "transparent",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontWeight: "600",
+                              fontSize: 14,
+                              color: active ? color : "#94A3B8",
+                            }}
+                          >
+                            {z === "ardennes" ? "Ardennes" : "Hainaut"}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
 
-            {/* NOTES */}
-            <View>
-              <Input
-                label="Notes"
-                placeholder="Infos supplémentaires..."
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                numberOfLines={3}
-                className="h-20 py-2"
-              />
-            </View>
+              {/* CLIENT */}
+              {typeNeedsClient && (
+                <View style={{ gap: 4 }}>
+                  <Text className="text-sm font-semibold text-foreground dark:text-white">
+                    Pour qui ?
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Select
+                        title="Choisir un client"
+                        value={
+                          selectedClient
+                            ? {
+                                id: selectedClient.id,
+                                label:
+                                  selectedClient.name ||
+                                  selectedClient.address ||
+                                  "Client anonyme",
+                              }
+                            : null
+                        }
+                        items={clientItems}
+                        onChange={(v) => {
+                          const c = clients?.find((x) => x.id === v.id);
+                          if (c) setSelectedClient(c);
+                        }}
+                      />
+                    </View>
+                    <Pressable
+                      onPress={() => setShowNewClient(true)}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 14,
+                        backgroundColor: "#EFF6FF",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderWidth: 1,
+                        borderColor: "#BFDBFE",
+                      }}
+                    >
+                      <UserPlus size={20} color="#3B82F6" />
+                    </Pressable>
+                  </View>
+                </View>
+              )}
 
-            {/* PAIEMENT */}
-            {isAdmin && typeNeedsClient && (
-              <View className="pt-4 mt-4 border-t border-border dark:border-slate-800">
-                <Text className="text-sm font-semibold text-foreground dark:text-white mb-2">
-                  Paiement
+              {/* EMPLOYES */}
+              <View style={{ gap: 4 }}>
+                <Text className="text-sm font-semibold text-foreground dark:text-white">
+                  Qui intervient ?
                 </Text>
-                <SlidingPillSelector
-                  options={[
-                    {
-                      id: "cash",
-                      label: "Espèces",
-                      pillColor: "#EF4444",
-                      activeTextColor: "#fff",
-                      icon: (c) => <Banknote size={14} color={c} />,
-                    },
-                    {
-                      id: "invoice",
-                      label: "FAC",
-                      pillColor: "#22C55E",
-                      activeTextColor: "#fff",
-                      icon: (c) => <FileText size={14} color={c} />,
-                    },
-                    {
-                      id: "invoice_cash",
-                      label: "FAC+Esp.",
-                      pillColor: "#F97316",
-                      activeTextColor: "#fff",
-                      icon: (c) => <Wallet size={14} color={c} />,
-                    },
-                  ]}
-                  selected={paymentMode}
-                  onSelect={(id) =>
-                    setPaymentMode(id as "cash" | "invoice" | "invoice_cash")
-                  }
-                  pillColor="#3B82F6"
-                  bgColor="#F1F5F9"
-                  activeTextColor="#fff"
-                  inactiveTextColor="#64748B"
-                  fontSize={12}
-                  itemPy={9}
+                <MultiSelect
+                  items={employeeItems}
+                  selectedIds={selectedEmployeeIds}
+                  onChange={setSelectedEmployeeIds}
                 />
-                {paymentMode === "cash" && (
-                  <Text
-                    style={{ fontSize: 11, color: "#EF4444", marginTop: 5 }}
-                  >
-                    L'employé encaisse sur place
-                  </Text>
-                )}
-                {paymentMode === "invoice" && (
-                  <Text
-                    style={{ fontSize: 11, color: "#22C55E", marginTop: 5 }}
-                  >
-                    Une facture sera émise au client
-                  </Text>
-                )}
-                {paymentMode === "invoice_cash" && (
-                  <Text
-                    style={{ fontSize: 11, color: "#F97316", marginTop: 5 }}
-                  >
-                    L'employé encaisse sur place et une facture sera émise
-                  </Text>
-                )}
               </View>
-            )}
 
-            {/* ACTIONS */}
-            <View className="mt-6 flex-row gap-3">
-              <View
-                style={{
-                  flex: 1,
-                  marginLeft: isWeb ? 0 : -22,
-                  marginRight: isWeb ? 0 : 15,
-                }}
-              >
-                <Button
-                  variant="outline"
-                  onPress={() => {
-                    if (isRepriseMode)
-                      router.push(`/(app)/calendar/${reprise_of}` as any);
-                    else router.push({
-                      pathname: "/(app)/calendar",
-                      params: from_view ? { view: from_view, date: from_date } : {},
-                    });
+              {/* TITRE + DATE + DURÉE */}
+              <View style={{ gap: 16 }}>
+                <Input
+                  label="Titre"
+                  value={title}
+                  onChangeText={setTitle}
+                />
+                <DateTimePicker
+                  value={startDateStr}
+                  onChange={setStartDateStr}
+                  label="Début de l'intervention"
+                  dateOnly={!isAdmin}
+                />
+                <Input
+                  label="Durée (heures)"
+                  value={durationHours}
+                  onChangeText={setDurationHours}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              {/* RÉCURRENCE (pas en mode édition) */}
+              {!isEditMode && (
+                <View style={{ gap: 4 }}>
+                  <Text className="text-sm font-semibold text-foreground dark:text-white">
+                    Récurrence
+                  </Text>
+
+                  {/* Dropdown trigger */}
+                  <Pressable
+                    onPress={() => setShowRecurrenceDropdown((v) => !v)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      borderWidth: 1.5,
+                      borderRadius: 14,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      borderColor:
+                        recurrence.freq !== "none"
+                          ? "#3B82F6"
+                          : isDark
+                            ? "#334155"
+                            : "#E2E8F0",
+                      backgroundColor:
+                        recurrence.freq !== "none"
+                          ? isDark
+                            ? "#1E3A5F"
+                            : "#EFF6FF"
+                          : "transparent",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: "600",
+                        color:
+                          recurrence.freq !== "none" ? "#3B82F6" : "#64748B",
+                      }}
+                    >
+                      {recurrenceLabel}
+                    </Text>
+                    <ChevronDown
+                      size={18}
+                      color={recurrence.freq !== "none" ? "#3B82F6" : "#94A3B8"}
+                    />
+                  </Pressable>
+
+                  {/* Dropdown options */}
+                  {showRecurrenceDropdown && (
+                    <View
+                      style={{
+                        borderWidth: 1.5,
+                        borderColor: isDark ? "#334155" : "#E2E8F0",
+                        borderRadius: 14,
+                        backgroundColor: isDark ? "#1E293B" : "white",
+                        overflow: "hidden",
+                        marginTop: 4,
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.08,
+                        shadowRadius: 8,
+                        elevation: 4,
+                      }}
+                    >
+                      {contextualOptions.map((opt, idx) => {
+                        const isActive =
+                          recurrence.freq === opt.freq && opt.freq !== "custom";
+                        const isLast = idx === contextualOptions.length - 1;
+                        return (
+                          <Pressable
+                            key={opt.freq}
+                            onPress={() => {
+                              if (opt.freq === "custom") {
+                                setCustomIntervalStr(
+                                  String(recurrence.interval),
+                                );
+                                setCustomUnit(recurrence.unit);
+                                setCustomDaysOfWeek(recurrence.daysOfWeek);
+                                setCustomEndType(recurrence.endType);
+                                setCustomCountStr(String(recurrence.count));
+                                setCustomEndDate(recurrence.endDate);
+                                setShowCustomModal(true);
+                              } else {
+                                setRecurrence({
+                                  ...DEFAULT_RECURRENCE,
+                                  freq: opt.freq,
+                                  endType: recurrence.endType,
+                                  count: recurrence.count,
+                                  endDate: recurrence.endDate,
+                                });
+                              }
+                              setShowRecurrenceDropdown(false);
+                            }}
+                            style={[
+                              {
+                                flexDirection: "row",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                paddingHorizontal: 16,
+                                paddingVertical: 13,
+                              },
+                              !isLast
+                                ? {
+                                    borderBottomWidth: 1,
+                                    borderBottomColor: isDark
+                                      ? "#334155"
+                                      : "#F1F5F9",
+                                  }
+                                : {},
+                            ]}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 14,
+                                fontWeight: isActive ? "700" : "500",
+                                color: isActive
+                                  ? "#3B82F6"
+                                  : opt.freq === "custom"
+                                    ? "#8B5CF6"
+                                    : isDark
+                                      ? "#F1F5F9"
+                                      : "#0f172a",
+                              }}
+                            >
+                              {opt.label}
+                            </Text>
+                            {isActive && <Check size={16} color="#3B82F6" />}
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
+
+                  {/* Nombre d'occurrences si récurrence active */}
+                  {recurrence.freq !== "none" && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginTop: 8,
+                        gap: 10,
+                        paddingHorizontal: 4,
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, color: "#64748B", flex: 1 }}>
+                        Nombre d'occurrences :
+                      </Text>
+                      <TextInput
+                        value={String(recurrence.count)}
+                        onChangeText={(v) => {
+                          const n = parseInt(v);
+                          if (!isNaN(n) && n > 0)
+                            setRecurrence((r) => ({
+                              ...r,
+                              count: n,
+                              endType: "count",
+                            }));
+                        }}
+                        keyboardType="numeric"
+                        style={[
+                          {
+                            width: 60,
+                            borderWidth: 1.5,
+                            borderColor: "#DBEAFE",
+                            borderRadius: 10,
+                            padding: 8,
+                            textAlign: "center",
+                            fontSize: 15,
+                            fontWeight: "700",
+                            color: "#3B82F6",
+                            backgroundColor: "#F0F9FF",
+                          },
+                          Platform.OS === "web"
+                            ? ({ outlineStyle: "none" } as any)
+                            : {},
+                        ]}
+                      />
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* PRESTATIONS */}
+              {typeNeedsItems && (
+                <View className="mt-2 pt-4 border-t border-border dark:border-slate-800">
+                  <View className="flex-row justify-between items-center mb-3">
+                    <Text className="text-sm font-semibold text-foreground dark:text-white">
+                      Prestations
+                    </Text>
+                    {!isAddingService && (
+                      <Pressable
+                        onPress={() => {
+                          setIsAddingService(true);
+                          setNewServiceLabel("");
+                          setNewServicePrice("");
+                        }}
+                        className="flex-row items-center bg-primary/10 px-3 py-1.5 rounded-full"
+                      >
+                        <PlusCircle size={16} color="#3B82F6" />
+                        <Text className="text-primary font-bold ml-1.5 text-xs">
+                          Ajouter
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+
+                  {/* Formulaire inline d'ajout */}
+                  {isAddingService && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        gap: 8,
+                        alignItems: "center",
+                        marginBottom: 10,
+                        backgroundColor: "#F0F9FF",
+                        borderRadius: 10,
+                        padding: 8,
+                      }}
+                    >
+                      <TextInput
+                        autoFocus
+                        placeholder="Nom (ex: RDC, Velux…)"
+                        placeholderTextColor="#94A3B8"
+                        value={newServiceLabel}
+                        onChangeText={setNewServiceLabel}
+                        style={[
+                          {
+                            flex: 2,
+                            borderWidth: 1,
+                            borderColor: "#3B82F6",
+                            borderRadius: 8,
+                            paddingHorizontal: 10,
+                            paddingVertical: 7,
+                            fontSize: 14,
+                            backgroundColor: isDark ? "#1E293B" : "#fff",
+                            color: isDark ? "#F1F5F9" : "#1E293B",
+                          },
+                          Platform.OS === "web"
+                            ? ({ outlineStyle: "none" } as any)
+                            : {},
+                        ]}
+                      />
+                      <TextInput
+                        placeholder="Prix"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="numeric"
+                        value={newServicePrice}
+                        onChangeText={setNewServicePrice}
+                        style={[
+                          {
+                            flex: 1,
+                            borderWidth: 1,
+                            borderColor: isDark ? "#1E40AF" : "#3B82F6",
+                            borderRadius: 8,
+                            paddingHorizontal: 10,
+                            paddingVertical: 7,
+                            fontSize: 14,
+                            backgroundColor: isDark ? "#1E293B" : "#fff",
+                            color: isDark ? "#F1F5F9" : "#1E293B",
+                          },
+                          Platform.OS === "web"
+                            ? ({ outlineStyle: "none" } as any)
+                            : {},
+                        ]}
+                      />
+                      <Pressable
+                        onPress={async () => {
+                          if (!newServiceLabel.trim()) {
+                            toast.error("Nom requis", "");
+                            return;
+                          }
+                          if (selectedClient?.id) {
+                            try {
+                              const newSvc: ClientService = (
+                                await api.post(
+                                  `/api/clients/${selectedClient.id}/services`,
+                                  {
+                                    label: newServiceLabel.trim(),
+                                    price: Number(newServicePrice) || 0,
+                                    position: clientServices.length,
+                                  },
+                                )
+                              ).data;
+                              await refetchClientServices();
+                              setCheckedServiceIds(
+                                (prev) => new Set([...prev, newSvc.id]),
+                              );
+                            } catch {
+                              toast.error("Erreur", "Impossible d'ajouter");
+                            }
+                          } else {
+                            addAdHocItem();
+                            updateAdHocItem(
+                              adHocItems.length,
+                              "label",
+                              newServiceLabel.trim(),
+                            );
+                            updateAdHocItem(
+                              adHocItems.length,
+                              "price",
+                              newServicePrice,
+                            );
+                          }
+                          setIsAddingService(false);
+                        }}
+                        style={{
+                          backgroundColor: "#3B82F6",
+                          borderRadius: 20,
+                          width: 34,
+                          height: 34,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Check size={16} color="#fff" strokeWidth={2.5} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setIsAddingService(false)}
+                        style={{
+                          backgroundColor: isDark ? "#1E293B" : "#F1F5F9",
+                          borderRadius: 20,
+                          borderWidth: 1.5,
+                          borderColor: isDark ? "#475569" : "#CBD5E1",
+                          width: 34,
+                          height: 34,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <X
+                          size={16}
+                          color={isDark ? "#94A3B8" : "#64748B"}
+                          strokeWidth={2.5}
+                        />
+                      </Pressable>
+                    </View>
+                  )}
+
+                  {/* Services du client = cases à cocher */}
+                  {clientServices.map((svc) => {
+                    const checked = checkedServiceIds.has(svc.id);
+                    const priceVal =
+                      servicePriceOverrides[svc.id] ?? svc.price.toString();
+                    return (
+                      <View
+                        key={svc.id}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 8,
+                          marginBottom: 8,
+                        }}
+                      >
+                        <Pressable
+                          onPress={() => toggleService(svc.id)}
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 6,
+                            borderWidth: 2,
+                            borderColor: checked ? "#3B82F6" : "#CBD5E1",
+                            backgroundColor: checked
+                              ? "#3B82F6"
+                              : "transparent",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {checked && <Check size={13} color="#fff" />}
+                        </Pressable>
+                        <View style={{ flex: 2 }}>
+                          <TextInput
+                            value={svc.label}
+                            placeholder="Nom du service"
+                            onChangeText={async (t) => {
+                              try {
+                                await api.patch(
+                                  `/api/clients/${selectedClient!.id}/services/${svc.id}`,
+                                  { label: t },
+                                );
+                                await refetchClientServices();
+                              } catch {
+                                /* silently ignore */
+                              }
+                            }}
+                            style={[
+                              {
+                                borderWidth: 1,
+                                borderColor: "#E2E8F0",
+                                borderRadius: 8,
+                                paddingHorizontal: 10,
+                                paddingVertical: 7,
+                                fontSize: 14,
+                                color: checked ? "#1E293B" : "#94A3B8",
+                              },
+                              Platform.OS === "web"
+                                ? ({ outlineStyle: "none" } as any)
+                                : {},
+                            ]}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <TextInput
+                            value={checked ? priceVal : svc.price.toString()}
+                            placeholder="Prix"
+                            keyboardType="numeric"
+                            editable={checked}
+                            onChangeText={(t) =>
+                              setServicePriceOverrides((prev) => ({
+                                ...prev,
+                                [svc.id]: t,
+                              }))
+                            }
+                            style={[
+                              {
+                                borderWidth: 1,
+                                borderColor: checked ? "#E2E8F0" : "#F1F5F9",
+                                borderRadius: 8,
+                                paddingHorizontal: 10,
+                                paddingVertical: 7,
+                                fontSize: 14,
+                                color: checked ? "#1E293B" : "#94A3B8",
+                                backgroundColor: checked
+                                  ? undefined
+                                  : "#F8FAFC",
+                              },
+                              Platform.OS === "web"
+                                ? ({ outlineStyle: "none" } as any)
+                                : {},
+                            ]}
+                          />
+                        </View>
+                        <Pressable
+                          onPress={async () => {
+                            try {
+                              await api.delete(
+                                `/api/clients/${selectedClient!.id}/services/${svc.id}`,
+                              );
+                              setCheckedServiceIds((prev) => {
+                                const n = new Set(prev);
+                                n.delete(svc.id);
+                                return n;
+                              });
+                              setServicePriceOverrides((prev) => {
+                                const n = { ...prev };
+                                delete n[svc.id];
+                                return n;
+                              });
+                              await refetchClientServices();
+                            } catch {
+                              toast.error("Erreur", "Impossible de supprimer");
+                            }
+                          }}
+                          style={{ padding: 6 }}
+                        >
+                          <Trash2 size={18} color="#EF4444" />
+                        </Pressable>
+                      </View>
+                    );
+                  })}
+
+                  {/* Items ad-hoc (sans client ou ajout ponctuel) */}
+                  {adHocItems.map((item, index) => (
+                    <View
+                      key={`adhoc-${index}`}
+                      className="flex-row gap-2 items-center mb-2"
+                    >
+                      <View className="flex-[2]">
+                        <Input
+                          placeholder="Ex: RDC, Velux..."
+                          value={item.label}
+                          onChangeText={(t) =>
+                            updateAdHocItem(index, "label", t)
+                          }
+                        />
+                      </View>
+                      <View className="flex-1">
+                        <Input
+                          placeholder="Prix"
+                          keyboardType="numeric"
+                          value={item.price}
+                          onChangeText={(t) =>
+                            updateAdHocItem(index, "price", t)
+                          }
+                        />
+                      </View>
+                      <Pressable
+                        onPress={() => removeAdHocItem(index)}
+                        className="p-2"
+                      >
+                        <Trash2 size={20} color="#EF4444" />
+                      </Pressable>
+                    </View>
+                  ))}
+
+                  <View className="flex-row justify-between items-center mt-2">
+                    <Text className="font-bold text-lg text-foreground dark:text-white">
+                      Total Estimé
+                    </Text>
+                    <Text className="font-extrabold text-2xl text-primary">
+                      {totalPrice.toFixed(2)} €
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* TAUX HORAIRE (admin uniquement) */}
+              {isAdmin &&
+                Array.isArray(hourlyRates) &&
+                hourlyRates.length > 0 &&
+                totalPrice > 0 && (
+                  <View className="pt-4 mt-4 border-t border-border dark:border-slate-800">
+                    <Text className="text-sm font-semibold text-foreground dark:text-white mb-2">
+                      Taux horaire
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      className="mb-2"
+                    >
+                      <View className="flex-row gap-2">
+                        {[null, ...hourlyRates].map((r: any) => {
+                          const isSelected = selectedRateId === (r?.id ?? null);
+                          return (
+                            <Pressable
+                              key={r?.id ?? "none"}
+                              onPress={() => setSelectedRateId(r?.id ?? null)}
+                              style={{
+                                paddingHorizontal: 14,
+                                paddingVertical: 8,
+                                borderRadius: 20,
+                                backgroundColor: isSelected
+                                  ? "#3B82F6"
+                                  : isDark
+                                    ? "#1E293B"
+                                    : "#F1F5F9",
+                                borderWidth: 1,
+                                borderColor: isSelected
+                                  ? "#3B82F6"
+                                  : isDark
+                                    ? "#334155"
+                                    : "#E2E8F0",
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: isSelected
+                                    ? "#fff"
+                                    : isDark
+                                      ? "#94A3B8"
+                                      : "#64748B",
+                                  fontWeight: "600",
+                                  fontSize: 13,
+                                }}
+                              >
+                                {r
+                                  ? `${r.label ? r.label + " — " : ""}${r.rate} €/h`
+                                  : "Aucun"}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </ScrollView>
+                    {computedHours && (
+                      <Text className="text-sm text-muted-foreground">
+                        → {computedHours} calculées ({totalPrice.toFixed(2)} € ÷{" "}
+                        {selectedRate?.rate} €/h)
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+              {/* NOTES */}
+              <View>
+                <Input
+                  label="Notes"
+                  placeholder="Infos supplémentaires..."
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
+                  numberOfLines={3}
+                  className="h-20 py-2"
+                />
+              </View>
+
+              {/* PAIEMENT */}
+              {isAdmin && typeNeedsClient && (
+                <View className="pt-4 mt-4 border-t border-border dark:border-slate-800">
+                  <Text className="text-sm font-semibold text-foreground dark:text-white mb-2">
+                    Paiement
+                  </Text>
+                  <SlidingPillSelector
+                    options={[
+                      {
+                        id: "cash",
+                        label: "Espèces",
+                        pillColor: "#EF4444",
+                        activeTextColor: "#fff",
+                        icon: (c) => <Banknote size={14} color={c} />,
+                      },
+                      {
+                        id: "invoice",
+                        label: "FAC",
+                        pillColor: "#22C55E",
+                        activeTextColor: "#fff",
+                        icon: (c) => <FileText size={14} color={c} />,
+                      },
+                      {
+                        id: "invoice_cash",
+                        label: "FAC+Esp.",
+                        pillColor: "#F97316",
+                        activeTextColor: "#fff",
+                        icon: (c) => <Wallet size={14} color={c} />,
+                      },
+                    ]}
+                    selected={paymentMode}
+                    onSelect={(id) =>
+                      setPaymentMode(id as "cash" | "invoice" | "invoice_cash")
+                    }
+                    pillColor="#3B82F6"
+                    bgColor="#F1F5F9"
+                    activeTextColor="#fff"
+                    inactiveTextColor="#64748B"
+                    fontSize={12}
+                    itemPy={9}
+                  />
+                  {paymentMode === "cash" && (
+                    <Text
+                      style={{ fontSize: 11, color: "#EF4444", marginTop: 5 }}
+                    >
+                      L'employé encaisse sur place
+                    </Text>
+                  )}
+                  {paymentMode === "invoice" && (
+                    <Text
+                      style={{ fontSize: 11, color: "#22C55E", marginTop: 5 }}
+                    >
+                      Une facture sera émise au client
+                    </Text>
+                  )}
+                  {paymentMode === "invoice_cash" && (
+                    <Text
+                      style={{ fontSize: 11, color: "#F97316", marginTop: 5 }}
+                    >
+                      L'employé encaisse sur place et une facture sera émise
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              {/* ACTIONS */}
+              <View className="mt-6 flex-row gap-3">
+                <View
+                  style={{
+                    flex: 1,
+                    marginLeft: isWeb ? 0 : -22,
+                    marginRight: isWeb ? 0 : 15,
                   }}
-                  className="w-full"
-                  style={{ borderRadius: 20 }}
                 >
-                  Annuler
-                </Button>
+                  <Button
+                    variant="outline"
+                    onPress={() => {
+                      if (isRepriseMode)
+                        router.push(`/(app)/calendar/${reprise_of}` as any);
+                      else
+                        router.push({
+                          pathname: "/(app)/calendar",
+                          params: from_view
+                            ? { view: from_view, date: from_date }
+                            : {},
+                        });
+                    }}
+                    className="w-full"
+                    style={{ borderRadius: 20 }}
+                  >
+                    Annuler
+                  </Button>
+                </View>
+                <View style={{ flex: 1, marginRight: isWeb ? 0 : 16 }}>
+                  <Button
+                    onPress={handleSubmit}
+                    disabled={isSubmitting}
+                    className="w-full"
+                    style={{ borderRadius: 20 }}
+                  >
+                    {isSubmitting
+                      ? "Envoi..."
+                      : isRepriseMode
+                        ? "Planifier le RDV"
+                        : isEditMode
+                          ? "Mettre à jour"
+                          : "Valider"}
+                  </Button>
+                </View>
               </View>
-              <View style={{ flex: 1, marginRight: isWeb ? 0 : 16 }}>
-                <Button
-                  onPress={handleSubmit}
-                  disabled={isSubmitting}
-                  className="w-full"
-                  style={{ borderRadius: 20 }}
-                >
-                  {isSubmitting
-                    ? "Envoi..."
-                    : isRepriseMode
-                      ? "Planifier le RDV"
-                      : isEditMode
-                        ? "Mettre à jour"
-                        : "Valider"}
-                </Button>
-              </View>
-            </View>
-          </CardContent>
-        </Card>
-      </ScrollView>
+            </CardContent>
+          </Card>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       {/* MODAL RÉCURRENCE PERSONNALISÉE */}
@@ -2010,8 +2115,9 @@ export default function AddInterventionScreen() {
             </Pressable>
           </View>
 
-          <View className="gap-3">
-            <View
+          <View style={{ gap: 12 }}>
+            <Pressable
+              onPress={() => { setNcFocused("name"); ncNameRef.current?.focus(); }}
               style={{
                 borderWidth: 1.5,
                 borderColor: ncFocused === "name" ? "#3B82F6" : "#E2E8F0",
@@ -2032,6 +2138,7 @@ export default function AddInterventionScreen() {
                 NOM / ENTREPRISE
               </Text>
               <TextInput
+                ref={ncNameRef}
                 value={newClientName}
                 onChangeText={setNewClientName}
                 placeholder="Ex: Jean Dupont"
@@ -2045,8 +2152,9 @@ export default function AddInterventionScreen() {
                     : {},
                 ]}
               />
-            </View>
-            <View
+            </Pressable>
+            <Pressable
+              onPress={() => { setNcFocused("street"); ncStreetRef.current?.focus(); }}
               style={{
                 borderWidth: 1.5,
                 borderColor: ncFocused === "street" ? "#3B82F6" : "#E2E8F0",
@@ -2067,6 +2175,7 @@ export default function AddInterventionScreen() {
                 RUE ET NUMÉRO *
               </Text>
               <TextInput
+                ref={ncStreetRef}
                 value={newClientStreet}
                 onChangeText={setNewClientStreet}
                 placeholder="10 Rue de la Paix"
@@ -2080,9 +2189,10 @@ export default function AddInterventionScreen() {
                     : {},
                 ]}
               />
-            </View>
-            <View className="flex-row gap-3">
-              <View
+            </Pressable>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <Pressable
+                onPress={() => { setNcFocused("zip"); ncZipRef.current?.focus(); }}
                 style={{
                   flex: 1,
                   borderWidth: 1.5,
@@ -2104,6 +2214,7 @@ export default function AddInterventionScreen() {
                   CP
                 </Text>
                 <TextInput
+                  ref={ncZipRef}
                   value={newClientZip}
                   onChangeText={setNewClientZip}
                   placeholder="7000"
@@ -2118,8 +2229,9 @@ export default function AddInterventionScreen() {
                       : {},
                   ]}
                 />
-              </View>
-              <View
+              </Pressable>
+              <Pressable
+                onPress={() => { setNcFocused("city"); ncCityRef.current?.focus(); }}
                 style={{
                   flex: 2,
                   borderWidth: 1.5,
@@ -2141,6 +2253,7 @@ export default function AddInterventionScreen() {
                   VILLE *
                 </Text>
                 <TextInput
+                  ref={ncCityRef}
                   value={newClientCity}
                   onChangeText={setNewClientCity}
                   placeholder="Mons"
@@ -2154,9 +2267,10 @@ export default function AddInterventionScreen() {
                       : {},
                   ]}
                 />
-              </View>
+              </Pressable>
             </View>
-            <View
+            <Pressable
+              onPress={() => { setNcFocused("phone"); ncPhoneRef.current?.focus(); }}
               style={{
                 borderWidth: 1.5,
                 borderColor: ncFocused === "phone" ? "#3B82F6" : "#E2E8F0",
@@ -2177,6 +2291,7 @@ export default function AddInterventionScreen() {
                 TÉLÉPHONE *
               </Text>
               <TextInput
+                ref={ncPhoneRef}
                 value={newClientPhone}
                 onChangeText={setNewClientPhone}
                 placeholder="0487 12 34 56"
@@ -2191,8 +2306,9 @@ export default function AddInterventionScreen() {
                     : {},
                 ]}
               />
-            </View>
-            <View
+            </Pressable>
+            <Pressable
+              onPress={() => { setNcFocused("email"); ncEmailRef.current?.focus(); }}
               style={{
                 borderWidth: 1.5,
                 borderColor: ncFocused === "email" ? "#3B82F6" : "#E2E8F0",
@@ -2213,6 +2329,7 @@ export default function AddInterventionScreen() {
                 EMAIL
               </Text>
               <TextInput
+                ref={ncEmailRef}
                 value={newClientEmail}
                 onChangeText={setNewClientEmail}
                 placeholder="client@email.com"
@@ -2228,8 +2345,9 @@ export default function AddInterventionScreen() {
                     : {},
                 ]}
               />
-            </View>
-            <View
+            </Pressable>
+            <Pressable
+              onPress={() => { setNcFocused("notes"); ncNotesRef.current?.focus(); }}
               style={{
                 borderWidth: 1.5,
                 borderColor: ncFocused === "notes" ? "#3B82F6" : "#E2E8F0",
@@ -2250,6 +2368,7 @@ export default function AddInterventionScreen() {
                 NOTES INTERNES
               </Text>
               <TextInput
+                ref={ncNotesRef}
                 value={newClientNotes}
                 onChangeText={setNewClientNotes}
                 placeholder="Code porte, préférences..."
@@ -2265,7 +2384,7 @@ export default function AddInterventionScreen() {
                     : {},
                 ]}
               />
-            </View>
+            </Pressable>
           </View>
 
           <Button

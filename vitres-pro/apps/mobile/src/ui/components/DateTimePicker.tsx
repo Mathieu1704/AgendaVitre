@@ -119,7 +119,7 @@ export function DateTimePicker({
 
   return (
     <>
-      <View className="gap-1.5 w-full">
+      <View style={{ gap: 6, width: "100%" }}>
         {label && (
           <Text className="text-sm font-semibold text-foreground dark:text-white">
             {label}
@@ -140,7 +140,7 @@ export function DateTimePicker({
         >
           <View className="flex-row items-center gap-3">
             <CalendarIcon size={18} color="#3B82F6" />
-            <Text className="text-foreground dark:text-white font-medium capitalize">
+            <Text className="text-foreground dark:text-white font-medium capitalize" style={{ fontSize: 16 }}>
               {displayDate}
             </Text>
           </View>
@@ -161,7 +161,7 @@ export function DateTimePicker({
           >
             <View className="flex-row items-center gap-3">
               <Clock size={18} color="#3B82F6" />
-              <Text className="text-foreground dark:text-white font-medium">
+              <Text className="text-foreground dark:text-white font-medium" style={{ fontSize: 16 }}>
                 {timePart}
               </Text>
             </View>

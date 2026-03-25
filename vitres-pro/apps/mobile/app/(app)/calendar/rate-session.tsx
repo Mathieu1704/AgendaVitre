@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -6,10 +12,24 @@ import {
   Pressable,
   ActivityIndicator,
   TextInput,
+  InputAccessoryView,
+  Keyboard,
+  Platform,
 } from "react-native";
-import { Stack, useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
+import {
+  Stack,
+  useRouter,
+  useLocalSearchParams,
+  useFocusEffect,
+} from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronLeft, Zap, Check, Plus, Trash2 } from "lucide-react-native";
+import {
+  ChevronLeft,
+  Zap,
+  Check,
+  PlusCircle,
+  Trash2,
+} from "lucide-react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import Animated, {
   useSharedValue,
@@ -52,16 +72,20 @@ function RatePill({
       <Pressable
         onPress={onPress}
         onLongPress={onLongPress}
-        onPressIn={() => { scale.value = withTiming(0.88, { duration: 80 }); }}
-        onPressOut={() => { scale.value = withTiming(1, { duration: 80 }); }}
+        onPressIn={() => {
+          scale.value = withTiming(0.88, { duration: 80 });
+        }}
+        onPressOut={() => {
+          scale.value = withTiming(1, { duration: 80 });
+        }}
         delayLongPress={500}
         className="px-4 py-2.5 rounded-full"
         style={{
           backgroundColor: isSelected
             ? "#3B82F6"
             : isDark
-            ? "#1E293B"
-            : "#F1F5F9",
+              ? "#1E293B"
+              : "#F1F5F9",
         }}
       >
         <Text
@@ -98,7 +122,10 @@ export default function RateSessionScreen() {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
   const qc = useQueryClient();
-  const { date, zone } = useLocalSearchParams<{ date: string; zone?: string }>();
+  const { date, zone } = useLocalSearchParams<{
+    date: string;
+    zone?: string;
+  }>();
 
   const { interventions, isLoading } = useInterventions();
   const { data: hourlyRates } = useHourlyRates();
@@ -119,7 +146,9 @@ export default function RateSessionScreen() {
       .filter((i: any) => {
         if (i.type !== "intervention") return false;
         if (i.time_tbd) return false;
-        const iDate = toBrusselsDateTimeString(new Date(i.start_time)).split("T")[0];
+        const iDate = toBrusselsDateTimeString(new Date(i.start_time)).split(
+          "T",
+        )[0];
         if (iDate !== date) return false;
         if (zone && zone !== "all" && i.zone !== zone) return false;
         return true;
@@ -128,17 +157,21 @@ export default function RateSessionScreen() {
         const za = a.sub_zone ?? "";
         const zb = b.sub_zone ?? "";
         if (za !== zb) return za.localeCompare(zb);
-        return new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
+        return (
+          new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+        );
       });
   }, [interventions, date, zone]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [assignments, setAssignments] = useState<Record<string, string | null>>({});
+  const [assignments, setAssignments] = useState<Record<string, string | null>>(
+    {},
+  );
 
   useFocusEffect(
     useCallback(() => {
       setCurrentIndex(0);
-    }, [])
+    }, []),
   );
 
   useEffect(() => {
@@ -155,12 +188,20 @@ export default function RateSessionScreen() {
   const selectedRateId = current ? (assignments[current.id] ?? null) : null;
   const selectedRate = rates.find((r: any) => r.id === selectedRateId) ?? null;
 
-  const price = current ? (parseFloat(current.price_estimated) || 0) : 0;
+  const price = current ? parseFloat(current.price_estimated) || 0 : 0;
   const computedHoursRaw =
     selectedRate && price > 0
       ? Math.round((price / selectedRate.rate) * 2) / 2
       : null;
-  const computedHoursStr = computedHoursRaw != null ? fmtH(computedHoursRaw) : null;
+  const computedHoursStr =
+    computedHoursRaw != null ? fmtH(computedHoursRaw) : null;
+
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (computedHoursStr) {
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  }, [computedHoursStr]);
 
   const totalHours = useMemo(() => {
     return filteredList.reduce((sum: number, i: any) => {
@@ -228,10 +269,12 @@ export default function RateSessionScreen() {
   const inputStyle = {
     height: 44,
     paddingHorizontal: 14,
+    paddingVertical: 0,
     borderRadius: 12,
     borderWidth: 1,
     fontSize: 14,
     fontWeight: "500" as const,
+    textAlignVertical: "center" as const,
     backgroundColor: isDark ? "#0F172A" : "#FFFFFF",
     borderColor: isDark ? "#334155" : "#E2E8F0",
     color: isDark ? "#F1F5F9" : "#09090B",
@@ -251,7 +294,13 @@ export default function RateSessionScreen() {
 
   if (filteredList.length === 0) {
     return (
-      <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
+      <View
+        className="flex-1 bg-white dark:bg-slate-950"
+        style={{
+          paddingTop: insets.top,
+          backgroundColor: isDark ? "#020817" : "#FFFFFF",
+        }}
+      >
         <Stack.Screen options={{ headerShown: false }} />
         <View className="flex-row items-center px-4 py-3 gap-3">
           <Pressable
@@ -281,10 +330,16 @@ export default function RateSessionScreen() {
   // === ÉCRAN DE FIN ===
   if (isDone) {
     const treated = filteredList.filter(
-      (i: any) => assignments[i.id] != null
+      (i: any) => assignments[i.id] != null,
     ).length;
     return (
-      <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
+      <View
+        className="flex-1 bg-white dark:bg-slate-950"
+        style={{
+          paddingTop: insets.top,
+          backgroundColor: isDark ? "#020817" : "#FFFFFF",
+        }}
+      >
         <Stack.Screen options={{ headerShown: false }} />
         <View className="flex-1 items-center justify-center px-6">
           <View className="w-20 h-20 rounded-full bg-green-500/10 items-center justify-center mb-6">
@@ -329,7 +384,13 @@ export default function RateSessionScreen() {
   const items = current.items || [];
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
+    <View
+      className="flex-1 bg-white dark:bg-slate-950"
+      style={{
+        paddingTop: insets.top,
+        backgroundColor: isDark ? "#020817" : "#FFFFFF",
+      }}
+    >
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Header */}
@@ -358,6 +419,7 @@ export default function RateSessionScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 140 }}
         keyboardShouldPersistTaps="handled"
@@ -368,13 +430,17 @@ export default function RateSessionScreen() {
             <View className="flex-row items-center gap-1.5 mb-3">
               <View
                 className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: current.sub_zone ? "#3B82F6" : "#94A3B8" }}
+                style={{
+                  backgroundColor: current.sub_zone ? "#3B82F6" : "#94A3B8",
+                }}
               />
               <Text
                 className="text-xs font-bold uppercase tracking-wider"
                 style={{ color: current.sub_zone ? "#3B82F6" : "#94A3B8" }}
               >
-                {current.sub_zone ? fmtZone(current.sub_zone) : "Sans sous-zone"}
+                {current.sub_zone
+                  ? fmtZone(current.sub_zone)
+                  : "Sans sous-zone"}
               </Text>
             </View>
             <Text className="text-xl font-bold text-foreground dark:text-white leading-snug">
@@ -397,9 +463,24 @@ export default function RateSessionScreen() {
             ) : null}
 
             {items.length > 0 ? (
-              <View className="border-t border-border dark:border-slate-700 pt-3 mt-4 gap-1.5">
+              <View
+                style={{
+                  borderTopWidth: 1,
+                  borderTopColor: isDark ? "#334155" : "#E4E4E7",
+                  paddingTop: 12,
+                  marginTop: 16,
+                  gap: 6,
+                }}
+              >
                 {items.map((item: any, idx: number) => (
-                  <View key={item.id ?? idx} className="flex-row justify-between items-center">
+                  <View
+                    key={item.id ?? idx}
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
                     <Text className="text-sm text-muted-foreground flex-1 mr-2">
                       {item.label}
                     </Text>
@@ -408,7 +489,16 @@ export default function RateSessionScreen() {
                     </Text>
                   </View>
                 ))}
-                <View className="border-t border-border dark:border-slate-700 mt-2 pt-2 flex-row justify-between">
+                <View
+                  style={{
+                    borderTopWidth: 1,
+                    borderTopColor: isDark ? "#334155" : "#E4E4E7",
+                    marginTop: 8,
+                    paddingTop: 8,
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                  }}
+                >
                   <Text className="text-sm font-bold text-foreground dark:text-white">
                     Total estimé
                   </Text>
@@ -418,7 +508,16 @@ export default function RateSessionScreen() {
                 </View>
               </View>
             ) : price > 0 ? (
-              <View className="border-t border-border dark:border-slate-700 pt-3 mt-4 flex-row justify-between">
+              <View
+                style={{
+                  borderTopWidth: 1,
+                  borderTopColor: isDark ? "#334155" : "#E4E4E7",
+                  paddingTop: 12,
+                  marginTop: 16,
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                }}
+              >
                 <Text className="text-sm font-bold text-foreground dark:text-white">
                   Prix estimé
                 </Text>
@@ -443,11 +542,22 @@ export default function RateSessionScreen() {
               </Text>
               <Pressable
                 onPress={() => setShowAddRate(true)}
-                className="flex-row items-center gap-1 px-3 py-1.5 rounded-full"
-                style={{ backgroundColor: isDark ? "#1E293B" : "#F1F5F9" }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: isDark
+                    ? "rgba(59,130,246,0.15)"
+                    : "rgba(59,130,246,0.1)",
+                }}
               >
-                <Plus size={14} color="#3B82F6" />
-                <Text className="text-xs font-semibold text-blue-500">
+                <PlusCircle size={16} color="#3B82F6" />
+                <Text
+                  style={{ fontSize: 12, fontWeight: "700", color: "#3B82F6" }}
+                >
                   Nouveau taux
                 </Text>
               </Pressable>
@@ -471,7 +581,18 @@ export default function RateSessionScreen() {
             </ScrollView>
 
             {computedHoursStr && (
-              <View className="flex-row items-center justify-between mt-4 px-4 py-3 rounded-2xl" style={{ backgroundColor: "#3B82F6" + "14" }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginTop: 16,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderRadius: 16,
+                  backgroundColor: "#3B82F614",
+                }}
+              >
                 <View>
                   <Text className="text-xs text-blue-500 font-semibold uppercase tracking-wider mb-0.5">
                     Heures calculées
@@ -491,21 +612,36 @@ export default function RateSessionScreen() {
 
       {/* Footer fixe */}
       <View
-        className="absolute bottom-0 left-0 right-0 bg-background border-t border-border dark:border-slate-800 px-4 pt-3"
-        style={{ paddingBottom: insets.bottom + 12 }}
+        className="absolute bottom-0 left-0 right-0 bg-background px-4 pt-2"
+        style={{ paddingBottom: 6 }}
       >
-        <View className="flex-row gap-2 mb-2">
+        <View style={{ flexDirection: "row", gap: 8, marginBottom: 2 }}>
           <Pressable
             onPress={handlePrev}
             disabled={currentIndex === 0}
-            className="w-12 py-3 rounded-2xl border border-border dark:border-slate-700 items-center justify-center"
-            style={{ opacity: currentIndex === 0 ? 0.3 : 1 }}
+            style={{
+              width: 48,
+              paddingVertical: 14,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: isDark ? "#334155" : "#E4E4E7",
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: currentIndex === 0 ? 0.3 : 1,
+            }}
           >
             <ChevronLeft size={18} color={isDark ? "white" : "#09090B"} />
           </Pressable>
           <Pressable
             onPress={handleSkip}
-            className="flex-1 py-3 rounded-2xl border border-border dark:border-slate-700 items-center"
+            style={{
+              flex: 1,
+              paddingVertical: 14,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: isDark ? "#334155" : "#E4E4E7",
+              alignItems: "center",
+            }}
           >
             <Text className="text-sm font-semibold text-muted-foreground">
               Passer →
@@ -513,14 +649,24 @@ export default function RateSessionScreen() {
           </Pressable>
           <Pressable
             onPress={handleValidate}
-            className="flex-[2] py-3 rounded-2xl bg-blue-500 items-center"
+            style={{
+              flex: 2,
+              paddingVertical: 14,
+              borderRadius: 16,
+              backgroundColor: "#3B82F6",
+              alignItems: "center",
+            }}
           >
-            <Text className="text-sm font-bold text-white">✓ Valider</Text>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: "white" }}>
+              ✓ Valider
+            </Text>
           </Pressable>
         </View>
         {totalHours > 0 && (
           <View className="flex-row items-center justify-center gap-2 mt-1">
-            <Text className="text-sm text-muted-foreground">Total journée :</Text>
+            <Text className="text-sm text-muted-foreground">
+              Total journée :
+            </Text>
             <Text className="text-base font-bold text-foreground dark:text-white">
               {fmtH(totalHours)}
             </Text>
@@ -554,8 +700,9 @@ export default function RateSessionScreen() {
             placeholder="Taux €/h (ex: 50)"
             placeholderTextColor={isDark ? "#64748B" : "#94A3B8"}
             value={newRateValue}
-            onChangeText={setNewRateValue}
+            onChangeText={(v) => setNewRateValue(v.replace(/[^0-9.,]/g, ""))}
             keyboardType="decimal-pad"
+            inputAccessoryViewID="rate-input-accessory"
             style={[inputStyle, { marginBottom: 16 }]}
           />
           <View className="flex-row gap-3">

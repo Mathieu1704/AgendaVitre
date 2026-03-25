@@ -7,6 +7,7 @@ import {
   Linking,
   ActivityIndicator,
   Platform,
+  Alert,
   TextInput,
   useWindowDimensions,
   KeyboardAvoidingView,
@@ -20,6 +21,7 @@ import {
   Phone,
   Mail,
   MapPin,
+  Navigation,
   FileText,
   ExternalLink,
   MoreVertical,
@@ -231,29 +233,38 @@ export default function ClientDetailScreen() {
             </View>
 
             {/* Actions rapides */}
-            <View className="flex-row justify-center gap-4 mb-8">
+            <View className="flex-row justify-center gap-3 mb-8">
+              {/* Y aller */}
               <Pressable
-                onPress={handleCall}
-                disabled={!client.phone}
-                className={`items-center gap-1 px-4 py-3 rounded-2xl ${client.phone ? "bg-green-500/10" : "bg-muted opacity-50"}`}
-              >
-                <Phone size={22} color={client.phone ? "#22C55E" : "#94A3B8"} />
-                <Text className="text-xs font-semibold" style={{ color: client.phone ? "#22C55E" : "#94A3B8" }}>Appeler</Text>
-              </Pressable>
-              <Pressable
-                onPress={handleEmail}
-                disabled={!client.email}
-                className={`items-center gap-1 px-4 py-3 rounded-2xl ${client.email ? "bg-blue-500/10" : "bg-muted opacity-50"}`}
-              >
-                <Mail size={22} color={client.email ? "#3B82F6" : "#94A3B8"} />
-                <Text className="text-xs font-semibold" style={{ color: client.email ? "#3B82F6" : "#94A3B8" }}>Email</Text>
-              </Pressable>
-              <Pressable
+                className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
                 onPress={handleMaps}
-                className="items-center gap-1 px-4 py-3 rounded-2xl bg-orange-500/10"
               >
-                <MapPin size={22} color="#F97316" />
-                <Text className="text-xs font-semibold" style={{ color: "#F97316" }}>Maps</Text>
+                <View className="bg-emerald-500/10 p-3 rounded-full mb-2">
+                  <Navigation size={24} color="#10B981" fill="#10B981" fillOpacity={0.2} />
+                </View>
+                <Text className="text-xs font-bold text-foreground dark:text-white">Y aller</Text>
+              </Pressable>
+
+              {/* Appeler */}
+              <Pressable
+                className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
+                onPress={handleCall}
+              >
+                <View className="bg-blue-500/10 p-3 rounded-full mb-2">
+                  <Phone size={24} color="#3B82F6" fill="#3B82F6" fillOpacity={0.2} />
+                </View>
+                <Text className="text-xs font-bold text-foreground dark:text-white">Appeler</Text>
+              </Pressable>
+
+              {/* Email */}
+              <Pressable
+                className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
+                onPress={handleEmail}
+              >
+                <View className="bg-orange-500/10 p-3 rounded-full mb-2">
+                  <Mail size={24} color="#F97316" fill="#F97316" fillOpacity={0.2} />
+                </View>
+                <Text className="text-xs font-bold text-foreground dark:text-white">Email</Text>
               </Pressable>
             </View>
 
@@ -313,7 +324,21 @@ export default function ClientDetailScreen() {
               <Text className="text-base text-foreground dark:text-white font-medium">Modifier les informations</Text>
             </Pressable>
             <Pressable
-              onPress={() => { setMenuOpen(false); setDeleteDialog(true); }}
+              onPress={() => {
+                setMenuOpen(false);
+                if (Platform.OS !== "web") {
+                  Alert.alert(
+                    "Supprimer ce client ?",
+                    "Le client sera supprimé, mais ses interventions resteront dans l'agenda.",
+                    [
+                      { text: "Annuler", style: "cancel" },
+                      { text: "Supprimer", style: "destructive", onPress: () => deleteMutation.mutate() },
+                    ]
+                  );
+                } else {
+                  setDeleteDialog(true);
+                }
+              }}
               style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
               className="flex-row items-center gap-3 px-4 py-3 rounded-xl"
             >

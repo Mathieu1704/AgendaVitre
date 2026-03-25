@@ -4,6 +4,7 @@ import { Dialog } from "./Dialog";
 import { Button } from "./Button";
 import { cn } from "../cn";
 import { ChevronDown, Search } from "lucide-react-native";
+import { useTheme } from "./ThemeToggle";
 
 export function Select<T extends { id: string; label: string }>({
   value,
@@ -13,8 +14,9 @@ export function Select<T extends { id: string; label: string }>({
   title = "Choisir",
   className,
   style,
-  containerStyle, // ✅ 1. On récupère la prop
+  containerStyle,
   label,
+  searchable = true,
 }: {
   value: T | null;
   onChange: (v: T) => void;
@@ -23,10 +25,12 @@ export function Select<T extends { id: string; label: string }>({
   title?: string;
   className?: string;
   style?: StyleProp<ViewStyle>;
-  containerStyle?: StyleProp<ViewStyle>; // ✅ 2. On la type
+  containerStyle?: StyleProp<ViewStyle>;
   label?: string;
+  searchable?: boolean;
 }) {
   const { height: screenHeight } = useWindowDimensions();
+  const { isDark } = useTheme();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -44,7 +48,7 @@ export function Select<T extends { id: string; label: string }>({
 
   return (
     // ✅ 3. On l'applique sur la View parente
-    <View className="gap-1.5 w-full" style={containerStyle}>
+    <View style={[{ gap: 6, width: "100%" }, containerStyle]}>
       {label && (
         <Text className="text-sm font-semibold text-foreground dark:text-white">
           {label}
@@ -83,16 +87,16 @@ export function Select<T extends { id: string; label: string }>({
           </Text>
 
           {/* Champ de recherche */}
-          <View
+          {searchable && <View
             style={{
               flexDirection: "row",
               alignItems: "center",
               borderWidth: 1.5,
-              borderColor: searchFocused ? "#3B82F6" : "#E2E8F0",
+              borderColor: searchFocused ? "#3B82F6" : isDark ? "#334155" : "#E2E8F0",
               borderRadius: 12,
               paddingHorizontal: 12,
               marginBottom: 12,
-              backgroundColor: "#F8FAFC",
+              backgroundColor: isDark ? "#1E293B" : "#F8FAFC",
             }}
           >
             <Search size={16} color={searchFocused ? "#3B82F6" : "#94A3B8"} />
@@ -104,11 +108,11 @@ export function Select<T extends { id: string; label: string }>({
               placeholder="Rechercher..."
               placeholderTextColor="#94A3B8"
               style={[
-                { flex: 1, height: 40, paddingHorizontal: 8, color: "#0f172a", fontSize: 15 },
+                { flex: 1, height: 40, paddingHorizontal: 8, color: isDark ? "#F1F5F9" : "#0f172a", fontSize: 15 },
                 Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {},
               ]}
             />
-          </View>
+          </View>}
 
           <ScrollView
             style={{ maxHeight: Math.min(320, screenHeight * 0.4) }}

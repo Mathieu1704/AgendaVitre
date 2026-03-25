@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "../../src/ui/components/ThemeToggle";
 import {
   View,
   Text,
@@ -50,6 +51,7 @@ interface StatItem {
 }
 
 export default function Dashboard() {
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { interventions, isLoading: interventionsLoading } = useInterventions();
   const { clients } = useClients();
@@ -102,25 +104,23 @@ export default function Dashboard() {
       return startDate >= new Date() && !isToday(startDate);
     }) || [];
 
-  const totalRevenue =
-    interventions
-      ?.filter((i: any) => i.status === "done")
-      .reduce(
-        (acc: number, i: any) => acc + (Number(i.price_estimated) || 0),
-        0,
-      ) || 0;
-
-  const chartData: ChartItem[] = [
-    { value: 1200, label: "Jan" },
-    { value: 2100, label: "Fév" },
-    { value: 1800, label: "Mar" },
-    { value: 2400, label: "Avr" },
-    { value: 3200, label: "Mai" },
-    { value: 2800, label: "Juin" },
-  ];
-
   // Tendances mois-sur-mois
   const now = new Date();
+  // Graphique : 6 derniers mois de revenus réels
+  const chartData: ChartItem[] = Array.from({ length: 6 }, (_, i) => {
+    const monthStart = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() - 4 + i, 0, 23, 59, 59);
+    const revenue = interventions
+      ?.filter((int: any) => {
+        if (int.status !== "done" || !int.start_time) return false;
+        const d = new Date(int.start_time);
+        return d >= monthStart && d <= monthEnd;
+      })
+      .reduce((acc: number, int: any) => acc + (Number(int.price_estimated) || 0), 0) || 0;
+    const label = monthStart.toLocaleDateString("fr-FR", { month: "short" });
+    return { value: revenue, label: label.charAt(0).toUpperCase() + label.slice(1, 4) };
+  });
+  const chartMax = Math.max(...chartData.map(d => d.value), 500);
   const startThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
@@ -142,6 +142,14 @@ export default function Dashboard() {
     : intThisMonth > 0 ? 100 : 0;
 
   const fmtPct = (n: number) => `${n > 0 ? "+" : ""}${n}%`;
+
+  const totalRevenue =
+    interventions
+      ?.filter((i: any) => i.status === "done")
+      .reduce(
+        (acc: number, i: any) => acc + (Number(i.price_estimated) || 0),
+        0,
+      ) || 0;
 
   const stats: StatItem[] = [
     {
@@ -189,7 +197,7 @@ export default function Dashboard() {
   // Loading state
   if (loadingRole) {
     return (
-      <View className="flex-1 items-center justify-center bg-background dark:bg-slate-950">
+      <View className="flex-1 items-center justify-center bg-background dark:bg-slate-950" style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
         <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
@@ -203,9 +211,10 @@ export default function Dashboard() {
       <ScrollView
         className="flex-1 bg-background dark:bg-slate-950"
         showsVerticalScrollIndicator={false}
+        style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
         contentContainerStyle={{
           paddingTop: insets.top + 16,
-          paddingBottom: 120,
+          paddingBottom: 24,
           paddingHorizontal: 16,
         }}
       >
@@ -337,7 +346,7 @@ export default function Dashboard() {
                     yAxisThickness={0}
                     xAxisThickness={0}
                     noOfSections={4}
-                    maxValue={4000}
+                    maxValue={Math.ceil(chartMax / 500) * 500}
                   />
                 </View>
               </CardContent>
@@ -380,16 +389,16 @@ export default function Dashboard() {
                 </View>
               ) : (
                 <ScrollView
-                  style={{ maxHeight: 320 }}
+                  style={{ maxHeight: 480 }}
                   contentContainerStyle={{ paddingRight: 8 }}
                   showsVerticalScrollIndicator={true}
                   nestedScrollEnabled={true}
                 >
-                  <View className="gap-3">
+                  <View className="gap-2">
                   {todayInterventions.map((item: any, i: number) => (
                     <View
                       key={i}
-                      className="flex-row items-center gap-3 p-3 rounded-2xl bg-muted/40 dark:bg-slate-800/50"
+                      className="flex-row items-center gap-3 p-3 rounded-3xl bg-muted/40 dark:bg-slate-800/50 border border-border dark:border-slate-700"
                     >
                       <Avatar
                         name={item.client?.name || item.title}
@@ -409,7 +418,7 @@ export default function Dashboard() {
                           • {item.client?.name || "Client"}
                         </Text>
                       </View>
-                      <StatusBadge status={item.status} />
+                      <StatusBadge status={item.status} className="py-0.5 px-1.5" />
                     </View>
                   ))}
                   </View>
@@ -505,6 +514,7 @@ export default function Dashboard() {
     <ScrollView
       className="flex-1 bg-background dark:bg-slate-950 p-4 lg:p-8"
       showsVerticalScrollIndicator={false}
+      style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
       contentContainerStyle={{ paddingTop: insets.top + 16 }}
     >
       <View className="mb-8">
@@ -627,7 +637,7 @@ export default function Dashboard() {
                     xAxisThickness={1}
                     xAxisColor="#E4E4E7"
                     noOfSections={5}
-                    maxValue={3500}
+                    maxValue={Math.ceil(chartMax / 500) * 500}
                     pointerConfig={{
                       pointerStripHeight: 200,
                       pointerStripColor: "#CBD5E1",

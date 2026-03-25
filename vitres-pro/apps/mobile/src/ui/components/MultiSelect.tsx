@@ -51,7 +51,7 @@ export function MultiSelect({
     .join(", ");
 
   return (
-    <View className="gap-1.5 w-full">
+    <View style={{ gap: 6, width: "100%" }}>
       {label && (
         // ✅ SUPPRESSION de ml-1
         <Text className="text-sm font-semibold text-foreground dark:text-white">
@@ -105,7 +105,8 @@ export function MultiSelect({
             onChangeText={setSearch}
             placeholder="Rechercher..."
             placeholderTextColor="#94A3B8"
-            className="h-11 px-4 mb-4 rounded-2xl border border-border bg-muted dark:bg-slate-800 dark:border-slate-700 text-foreground dark:text-white text-base"
+            className="h-11 px-4 mb-4 border border-border bg-muted dark:bg-slate-800 dark:border-slate-700 text-foreground dark:text-white text-base"
+            style={{ borderRadius: 12 }}
           />
           <ScrollView style={{ maxHeight: 360 }}>
             {filteredItems.map((item) => {
