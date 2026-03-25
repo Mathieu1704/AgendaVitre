@@ -443,6 +443,11 @@ export default function ZonesScreen() {
         animationType="slide"
         onRequestClose={() => setCreateModal(null)}
       >
+        {/* Comble la zone derrière le clavier pour couvrir ses coins arrondis — rendu AVANT le KAV pour rester derrière */}
+        <View
+          style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 350, backgroundColor: isDark ? "#0F172A" : "#FFFFFF" }}
+          pointerEvents="none"
+        />
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ flex: 1, justifyContent: "flex-end" }}
@@ -507,11 +512,6 @@ export default function ZonesScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
-        {/* Comble la zone derrière le clavier pour couvrir ses coins arrondis */}
-        <View
-          style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 350, backgroundColor: isDark ? "#0F172A" : "#FFFFFF" }}
-          pointerEvents="none"
-        />
       </Modal>
 
       {/* Modal réassignation */}
