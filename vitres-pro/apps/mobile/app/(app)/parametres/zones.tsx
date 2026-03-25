@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   PanResponder,
   Alert,
   KeyboardAvoidingView,
+  Keyboard,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -293,6 +294,13 @@ export default function ZonesScreen() {
   const { unassignedCities } = useUnassignedCities();
   const reassignCity = useReassignCity();
 
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardWillShow", () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener("keyboardWillHide", () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
   const [reassignModal, setReassignModal] = useState<{ city: string; currentZoneId: string } | null>(null);
   const [createModal, setCreateModal] = useState<"hainaut" | "ardennes" | null>(null);
   const activeSwipeClose = useRef<(() => void) | null>(null);
@@ -443,11 +451,6 @@ export default function ZonesScreen() {
         animationType="slide"
         onRequestClose={() => setCreateModal(null)}
       >
-        {/* Comble la zone derrière le clavier pour couvrir ses coins arrondis — rendu AVANT le KAV pour rester derrière */}
-        <View
-          style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 350, backgroundColor: isDark ? "#0F172A" : "#FFFFFF" }}
-          pointerEvents="none"
-        />
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ flex: 1, justifyContent: "flex-end" }}
@@ -512,6 +515,13 @@ export default function ZonesScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
+        {/* Visible uniquement quand le clavier est ouvert : comble ses coins arrondis */}
+        {keyboardVisible && (
+          <View
+            style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 350, backgroundColor: isDark ? "#0F172A" : "#FFFFFF" }}
+            pointerEvents="none"
+          />
+        )}
       </Modal>
 
       {/* Modal réassignation */}
