@@ -68,6 +68,7 @@ interface ColorPickerProps {
   onColorChange: (color: string) => void;
   label?: string;
   containerStyle?: StyleProp<ViewStyle>;
+  usedColors?: string[];
 }
 
 export function ColorPicker({
@@ -75,6 +76,7 @@ export function ColorPicker({
   onColorChange,
   label = "Couleur",
   containerStyle,
+  usedColors = [],
 }: ColorPickerProps) {
   const [open, setOpen] = useState(false);
 
@@ -112,25 +114,28 @@ export function ColorPicker({
 
           <ScrollView style={{ maxHeight: 400 }}>
             <View className="flex-row flex-wrap gap-2 justify-center">
-              {COLOR_PALETTE.map((color, index) => (
-                <Pressable
-                  key={`${color}-${index}`}
-                  onPress={() => {
-                    onColorChange(color);
-                    setOpen(false);
-                  }}
-                  style={{ backgroundColor: color }}
-                  className={`w-12 h-12 rounded-full items-center justify-center ${
-                    selectedColor === color
-                      ? "ring-2 ring-primary ring-offset-2"
-                      : ""
-                  }`}
-                >
-                  {selectedColor === color && (
-                    <Check size={20} color="white" strokeWidth={3} />
-                  )}
-                </Pressable>
-              ))}
+              {COLOR_PALETTE.map((color, index) => {
+                const isSelected = selectedColor === color;
+                const isUsed = usedColors.includes(color) && !isSelected;
+                return (
+                  <Pressable
+                    key={`${color}-${index}`}
+                    onPress={() => {
+                      if (isUsed) return;
+                      onColorChange(color);
+                      setOpen(false);
+                    }}
+                    style={{
+                      backgroundColor: color,
+                      width: 48, height: 48, borderRadius: 24,
+                      alignItems: "center", justifyContent: "center",
+                      opacity: isUsed ? 0.25 : 1,
+                    }}
+                  >
+                    {isSelected && <Check size={20} color="white" strokeWidth={3} />}
+                  </Pressable>
+                );
+              })}
             </View>
           </ScrollView>
 

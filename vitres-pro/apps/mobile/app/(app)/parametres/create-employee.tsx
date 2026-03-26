@@ -12,6 +12,7 @@ import { Button } from "../../../src/ui/components/Button";
 import { toast } from "../../../src/ui/toast";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { ColorPicker } from "../../../src/ui/components/ColorPicker";
+import { useEmployees } from "../../../src/hooks/useEmployees";
 
 export default function CreateEmployeeScreen() {
   const router = useRouter();
@@ -26,6 +27,8 @@ export default function CreateEmployeeScreen() {
   const [selectedColor, setSelectedColor] = useState("#3B82F6");
   const [isAdmin, setIsAdmin] = useState(false);
   const [weeklyHours, setWeeklyHours] = useState("");
+  const { employees } = useEmployees();
+  const usedColors = employees.map((e: any) => e.color).filter(Boolean);
 
   const mutation = useMutation({
     mutationFn: async (data: any) => {
@@ -134,6 +137,7 @@ export default function CreateEmployeeScreen() {
               selectedColor={selectedColor}
               onColorChange={setSelectedColor}
               label="Couleur Planning"
+              usedColors={usedColors}
             />
 
             <Input
