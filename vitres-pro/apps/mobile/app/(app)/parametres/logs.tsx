@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  View, ScrollView, Text, Pressable, ActivityIndicator,
+  View, ScrollView, Text, Pressable, ActivityIndicator, Animated,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -168,16 +168,30 @@ export default function LogsScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const [page, setPage] = useState(0);
   const [allLogs, setAllLogs] = useState<import("../../../src/hooks/useLogs").AuditLog[]>([]);
-  const isFirstLoad = useRef(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const spinLoop = useRef<Animated.CompositeAnimation | null>(null);
 
   const actionType = filter === "all" ? undefined : filter;
   const { logs, isLoading, isFetching, hasMore, refetch } = useLogs(actionType, page);
+
+  // Animation rotation icône refresh
+  useEffect(() => {
+    if (isFetching || isRefreshing) {
+      spinLoop.current = Animated.loop(
+        Animated.timing(spinAnim, { toValue: 1, duration: 700, useNativeDriver: true })
+      );
+      spinLoop.current.start();
+    } else {
+      spinLoop.current?.stop();
+      spinAnim.setValue(0);
+    }
+  }, [isFetching, isRefreshing]);
 
   // Reset quand le filtre change
   useEffect(() => {
     setPage(0);
     setAllLogs([]);
-    isFirstLoad.current = true;
   }, [filter]);
 
   // Accumulation des pages
@@ -185,6 +199,7 @@ export default function LogsScreen() {
     if (!isLoading && !isFetching) {
       if (page === 0) {
         setAllLogs(logs);
+        setIsRefreshing(false);
       } else {
         setAllLogs((prev) => [...prev, ...logs]);
       }
@@ -192,10 +207,12 @@ export default function LogsScreen() {
   }, [logs, isLoading, isFetching, page]);
 
   const handleRefetch = () => {
+    setIsRefreshing(true);
     setPage(0);
-    setAllLogs([]);
     refetch();
   };
+
+  const spin = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
 
   return (
     <View
@@ -214,8 +231,10 @@ export default function LogsScreen() {
         <Text className="text-xl font-bold text-foreground dark:text-white ml-2 flex-1">
           Historique
         </Text>
-        <Pressable onPress={handleRefetch} className="p-2 rounded-full active:bg-muted">
-          <RefreshCw size={18} color="#64748B" />
+        <Pressable onPress={handleRefetch} disabled={isFetching} className="p-2 rounded-full active:bg-muted">
+          <Animated.View style={{ transform: [{ rotate: spin }] }}>
+            <RefreshCw size={18} color={isFetching ? "#3B82F6" : "#64748B"} />
+          </Animated.View>
         </Pressable>
       </View>
 
@@ -249,11 +268,11 @@ export default function LogsScreen() {
       </ScrollView>
 
       {/* Liste */}
-      {isLoading && page === 0 ? (
+      {isLoading && page === 0 && !isRefreshing ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#3B82F6" />
         </View>
-      ) : allLogs.length === 0 ? (
+      ) : allLogs.length === 0 && !isRefreshing ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 32 }}>
           <View style={{ backgroundColor: isDark ? "#1E293B" : "#F1F5F9", padding: 20, borderRadius: 999 }}>
             <History size={40} color="#94A3B8" />
