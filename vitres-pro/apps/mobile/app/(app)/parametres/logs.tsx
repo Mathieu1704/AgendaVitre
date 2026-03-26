@@ -46,6 +46,59 @@ const ACTION_LABELS: Record<string, string> = {
   no_reprise:    "Non repris",
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  planned:    "Planifiée",
+  in_progress: "En cours",
+  done:       "Terminée",
+  cancelled:  "Annulée",
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  title:             "titre",
+  start_time:        "date/heure de début",
+  end_time:          "date/heure de fin",
+  status:            "statut",
+  hourly_rate_id:    "taux horaire",
+  price_estimated:   "prix estimé",
+  price_real:        "prix réel",
+  notes:             "notes",
+  employee_ids:      "employés assignés",
+  items:             "prestations",
+  sub_zone:          "sous-zone",
+  time_tbd:          "heure à définir",
+  reprise_taken:     "reprise RDV",
+  reprise_note:      "note reprise",
+  payment_mode:      "mode de paiement",
+  payment_collected: "encaissement",
+  type:              "type",
+  zone:              "zone",
+  client_id:         "client",
+};
+
+function humanizeDescription(description: string): string {
+  if (!description) return description;
+
+  // "Statut: in_progress → done" ou "Statut : in_progress → done"
+  const statusMatch = description.match(/^Statut\s*:\s*(\w+)\s*→\s*(\w+)$/);
+  if (statusMatch) {
+    const from = STATUS_LABELS[statusMatch[1]] ?? statusMatch[1];
+    const to   = STATUS_LABELS[statusMatch[2]] ?? statusMatch[2];
+    return `Statut : ${from} → ${to}`;
+  }
+
+  // "Modifiée: hourly_rate_id, title" ou "Modifiée : ..."
+  const modifiedMatch = description.match(/^Modifi[eé]e\s*:\s*(.+)$/);
+  if (modifiedMatch) {
+    const fields = modifiedMatch[1].split(",").map((f) => {
+      const key = f.trim();
+      return FIELD_LABELS[key] ?? key;
+    });
+    return `Modifiée : ${fields.join(", ")}`;
+  }
+
+  return description;
+}
+
 function timeAgo(dateStr: string): string {
   const now = new Date();
   const d = new Date(dateStr);
@@ -98,7 +151,7 @@ function LogItem({ log, onPress }: { log: AuditLog; onPress?: () => void }) {
           )}
         </View>
         <Text style={{ fontSize: 13, color: "#334155", lineHeight: 18 }} numberOfLines={2}>
-          {log.description || "—"}
+          {humanizeDescription(log.description) || "—"}
         </Text>
         <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>
           {timeAgo(log.created_at)}
@@ -173,8 +226,8 @@ export default function LogsScreen() {
           <ActivityIndicator size="large" color="#3B82F6" />
         </View>
       ) : logs.length === 0 ? (
-        <View className="flex-1 items-center justify-center gap-3 px-8">
-          <View className="bg-slate-100 dark:bg-slate-800 p-5 rounded-full">
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 32 }}>
+          <View style={{ backgroundColor: isDark ? "#1E293B" : "#F1F5F9", padding: 20, borderRadius: 999 }}>
             <History size={40} color="#94A3B8" />
           </View>
           <Text className="text-lg font-bold text-foreground dark:text-white text-center">

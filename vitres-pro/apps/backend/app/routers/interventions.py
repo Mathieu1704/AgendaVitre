@@ -34,6 +34,35 @@ def _load_intervention(intervention_id: UUID, db: Session) -> Intervention:
         selectinload(Intervention.hourly_rate),
     ).filter(Intervention.id == intervention_id).first()
 
+STATUS_LABELS = {
+    "planned": "Planifiée",
+    "in_progress": "En cours",
+    "done": "Terminée",
+    "cancelled": "Annulée",
+}
+
+FIELD_LABELS = {
+    "title": "titre",
+    "start_time": "date/heure de début",
+    "end_time": "date/heure de fin",
+    "status": "statut",
+    "hourly_rate_id": "taux horaire",
+    "price_estimated": "prix estimé",
+    "price_real": "prix réel",
+    "notes": "notes",
+    "employee_ids": "employés assignés",
+    "items": "prestations",
+    "sub_zone": "sous-zone",
+    "time_tbd": "heure à définir",
+    "reprise_taken": "reprise RDV",
+    "reprise_note": "note reprise",
+    "payment_mode": "mode de paiement",
+    "payment_collected": "encaissement",
+    "type": "type",
+    "zone": "zone",
+    "client_id": "client",
+}
+
 def _add_audit(db: Session, action_type: str, employee_id, intervention_id=None, description="", metadata=None):
     log = AuditLog(
         action_type=action_type,
@@ -209,17 +238,20 @@ def update_intervention(
     # Audit log
     new_status = intervention_update.get("status")
     if new_status and new_status != old_status:
+        old_label = STATUS_LABELS.get(old_status, old_status)
+        new_label = STATUS_LABELS.get(new_status, new_status)
         _add_audit(
             db, "status_change", current_user.id, intervention_id,
-            f"Statut: {old_status} → {new_status}",
+            f"Statut : {old_label} → {new_label}",
             {"old_status": old_status, "new_status": new_status},
         )
     else:
         changed = [k for k in intervention_update if k not in ("real_start_time", "real_end_time")]
         if changed:
+            changed_labels = [FIELD_LABELS.get(k, k) for k in changed]
             _add_audit(
                 db, "modified", current_user.id, intervention_id,
-                f"Modifiée: {', '.join(changed)}",
+                f"Modifiée : {', '.join(changed_labels)}",
                 {"fields": changed},
             )
 
