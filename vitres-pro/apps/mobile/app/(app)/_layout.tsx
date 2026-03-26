@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, useWindowDimensions, ActivityIndicator, Platform } from "react-native";
+import { View, Text, useWindowDimensions, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Tabs, Redirect } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -7,6 +7,7 @@ import { supabase } from "../../src/lib/supabase";
 import { api } from "../../src/lib/api";
 import { Sidebar } from "../../src/ui/layout/Sidebar";
 import { Header } from "../../src/ui/layout/Header";
+import { CustomTabBar } from "../../src/ui/layout/CustomTabBar";
 import { useNotifications } from "../../src/hooks/useNotifications";
 import { useAuth } from "../../src/hooks/useAuth";
 import { useTheme } from "../../src/ui/components/ThemeToggle";
@@ -122,24 +123,8 @@ export default function AppLayout() {
   return (
     <View style={{ flex: 1, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
       <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarStyle: {
-            backgroundColor: isDark ? "#0F172A" : "#FFFFFF",
-            borderTopWidth: 1,
-            borderTopColor: isDark ? "#1E293B" : "#E4E4E7",
-            height: 80,
-            paddingBottom: Platform.OS === "web" ? 8 : Math.max(insets.bottom, 8),
-            paddingTop: 10,
-          },
-          tabBarActiveTintColor: "#3B82F6",
-          tabBarInactiveTintColor: isDark ? "#94A3B8" : "#71717A",
-          tabBarLabelStyle: {
-            fontSize: 11,
-            fontWeight: "600",
-            lineHeight: 14,
-          },
-        }}
+        screenOptions={{ headerShown: false }}
+        tabBar={(props) => <CustomTabBar {...props} />}
       >
         <Tabs.Screen
           name="index"
