@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View, ScrollView, Text, Pressable, ActivityIndicator,
 } from "react-native";
@@ -166,8 +166,36 @@ export default function LogsScreen() {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
   const [filter, setFilter] = useState<Filter>("all");
+  const [page, setPage] = useState(0);
+  const [allLogs, setAllLogs] = useState<import("../../../src/hooks/useLogs").AuditLog[]>([]);
+  const isFirstLoad = useRef(true);
 
-  const { logs, isLoading, refetch } = useLogs(filter === "all" ? undefined : filter);
+  const actionType = filter === "all" ? undefined : filter;
+  const { logs, isLoading, isFetching, hasMore, refetch } = useLogs(actionType, page);
+
+  // Reset quand le filtre change
+  useEffect(() => {
+    setPage(0);
+    setAllLogs([]);
+    isFirstLoad.current = true;
+  }, [filter]);
+
+  // Accumulation des pages
+  useEffect(() => {
+    if (!isLoading && !isFetching) {
+      if (page === 0) {
+        setAllLogs(logs);
+      } else {
+        setAllLogs((prev) => [...prev, ...logs]);
+      }
+    }
+  }, [logs, isLoading, isFetching, page]);
+
+  const handleRefetch = () => {
+    setPage(0);
+    setAllLogs([]);
+    refetch();
+  };
 
   return (
     <View
@@ -186,7 +214,7 @@ export default function LogsScreen() {
         <Text className="text-xl font-bold text-foreground dark:text-white ml-2 flex-1">
           Historique
         </Text>
-        <Pressable onPress={() => refetch()} className="p-2 rounded-full active:bg-muted">
+        <Pressable onPress={handleRefetch} className="p-2 rounded-full active:bg-muted">
           <RefreshCw size={18} color="#64748B" />
         </Pressable>
       </View>
@@ -221,11 +249,11 @@ export default function LogsScreen() {
       </ScrollView>
 
       {/* Liste */}
-      {isLoading ? (
+      {isLoading && page === 0 ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#3B82F6" />
         </View>
-      ) : logs.length === 0 ? (
+      ) : allLogs.length === 0 ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 32 }}>
           <View style={{ backgroundColor: isDark ? "#1E293B" : "#F1F5F9", padding: 20, borderRadius: 999 }}>
             <History size={40} color="#94A3B8" />
@@ -236,7 +264,7 @@ export default function LogsScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
-          {logs.map((log) => (
+          {allLogs.map((log) => (
             <LogItem
               key={log.id}
               log={log}
@@ -247,6 +275,29 @@ export default function LogsScreen() {
               }
             />
           ))}
+          {hasMore && (
+            <Pressable
+              onPress={() => setPage((p) => p + 1)}
+              disabled={isFetching}
+              style={{
+                marginTop: 16,
+                paddingVertical: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {isFetching ? (
+                <ActivityIndicator size="small" color="#3B82F6" />
+              ) : (
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#3B82F6" }}>
+                  Charger plus
+                </Text>
+              )}
+            </Pressable>
+          )}
         </ScrollView>
       )}
     </View>
