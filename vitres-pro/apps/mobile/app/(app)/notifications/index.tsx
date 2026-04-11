@@ -1,13 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, ScrollView, Text, Pressable, ActivityIndicator, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BellOff, CheckCheck, AlertTriangle, Info } from "lucide-react-native";
+import { BellOff, CheckCheck, AlertTriangle, Info, Trash2 } from "lucide-react-native";
+import { Dialog } from "../../../src/ui/components/Dialog";
+import { toast } from "../../../src/ui/toast";
 import {
   useNotifications,
   useMarkNotificationRead,
   useMarkAllRead,
+  useDeleteNotification,
+  useDeleteAllNotifications,
   type InAppNotification,
 } from "../../../src/hooks/useNotifications";
 
@@ -32,9 +36,11 @@ function NotifIcon({ type }: { type: string }) {
 function NotifItem({
   notif,
   onPress,
+  onDelete,
 }: {
   notif: InAppNotification;
   onPress: () => void;
+  onDelete: () => void;
 }) {
   return (
     <Pressable
@@ -75,6 +81,14 @@ function NotifItem({
           {timeAgo(notif.created_at)}
         </Text>
       </View>
+
+      <Pressable
+        onPress={(e) => { e.stopPropagation?.(); onDelete(); }}
+        style={{ padding: 6, alignSelf: "center" }}
+        hitSlop={8}
+      >
+        <Trash2 size={16} color="#CBD5E1" />
+      </Pressable>
     </Pressable>
   );
 }
@@ -86,6 +100,10 @@ export default function NotificationsScreen() {
   const { notifications, isLoading, unreadCount } = useNotifications();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllRead();
+  const deleteNotif = useDeleteNotification();
+  const deleteAll = useDeleteAllNotifications();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
   const handlePress = (notif: InAppNotification) => {
     if (!notif.is_read) markRead.mutate(notif.id);
@@ -93,6 +111,9 @@ export default function NotificationsScreen() {
       router.push(`/(app)/calendar/${notif.metadata.intervention_id}` as any);
     }
   };
+
+  const handleDeleteOne = (id: string) => setConfirmDeleteId(id);
+  const handleDeleteAll = () => setConfirmDeleteAll(true);
 
   return (
     <View
@@ -111,17 +132,30 @@ export default function NotificationsScreen() {
               <Text style={{ color: "#3B82F6", fontSize: 20 }}> ({unreadCount})</Text>
             )}
           </Text>
-          {unreadCount > 0 && (
-            <Pressable
-              onPress={() => markAllRead.mutate()}
-              className="flex-row items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 active:bg-blue-100"
-            >
-              <CheckCheck size={14} color="#3B82F6" />
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#3B82F6" }}>
-                Tout lu
-              </Text>
-            </Pressable>
-          )}
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {unreadCount > 0 && (
+              <Pressable
+                onPress={() => markAllRead.mutate()}
+                className="flex-row items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 active:bg-blue-100"
+              >
+                <CheckCheck size={14} color="#3B82F6" />
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#3B82F6" }}>
+                  Tout lu
+                </Text>
+              </Pressable>
+            )}
+            {notifications.length > 0 && (
+              <Pressable
+                onPress={handleDeleteAll}
+                style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: "#FEF2F2" }}
+              >
+                <Trash2 size={14} color="#EF4444" />
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#EF4444" }}>
+                  Tout supprimer
+                </Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       </View>
 
@@ -144,9 +178,86 @@ export default function NotificationsScreen() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={Platform.OS !== "web"} indicatorStyle="black">
           {notifications.map((notif) => (
-            <NotifItem key={notif.id} notif={notif} onPress={() => handlePress(notif)} />
+            <NotifItem
+              key={notif.id}
+              notif={notif}
+              onPress={() => handlePress(notif)}
+              onDelete={() => handleDeleteOne(notif.id)}
+            />
           ))}
         </ScrollView>
+      )}
+
+      {confirmDeleteId && (
+        <Dialog open onClose={() => setConfirmDeleteId(null)}>
+          <View className="p-5">
+            <Text className="text-lg font-bold text-foreground dark:text-white mb-2">Supprimer cette alerte ?</Text>
+            <Text className="text-muted-foreground dark:text-slate-400 mb-6">
+              Cette alerte sera supprimée définitivement.
+            </Text>
+            <View className="flex-row gap-3">
+              <View style={{ flex: 1 }}>
+                <Pressable
+                  onPress={() => setConfirmDeleteId(null)}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  className="h-12 rounded-[24px] border border-border dark:border-slate-700 items-center justify-center"
+                >
+                  <Text className="font-bold text-foreground dark:text-white">Annuler</Text>
+                </Pressable>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Pressable
+                  onPress={() => {
+                    deleteNotif.mutate(confirmDeleteId, {
+                      onSuccess: () => toast.success("Alerte supprimée"),
+                    });
+                    setConfirmDeleteId(null);
+                  }}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  className="h-12 rounded-[24px] bg-red-500 items-center justify-center"
+                >
+                  <Text className="font-bold text-white">Supprimer</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Dialog>
+      )}
+
+      {confirmDeleteAll && (
+        <Dialog open onClose={() => setConfirmDeleteAll(false)}>
+          <View className="p-5">
+            <Text className="text-lg font-bold text-foreground dark:text-white mb-2">Tout supprimer ?</Text>
+            <Text className="text-muted-foreground dark:text-slate-400 mb-6">
+              Toutes les alertes seront supprimées définitivement.
+            </Text>
+            <View className="flex-row gap-3">
+              <View style={{ flex: 1 }}>
+                <Pressable
+                  onPress={() => setConfirmDeleteAll(false)}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  className="h-12 rounded-[24px] border border-border dark:border-slate-700 items-center justify-center"
+                >
+                  <Text className="font-bold text-foreground dark:text-white">Annuler</Text>
+                </Pressable>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Pressable
+                  onPress={() => {
+                    deleteAll.mutate(undefined, {
+                      onSuccess: () => toast.success("Alertes supprimées"),
+                    });
+                    setConfirmDeleteAll(false);
+                  }}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  className="h-12 rounded-[24px] bg-red-500 items-center justify-center"
+                >
+                  <Text className="font-bold text-white">Supprimer</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Dialog>
       )}
     </View>
   );

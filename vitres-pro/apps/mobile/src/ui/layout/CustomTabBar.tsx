@@ -22,7 +22,17 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
   const activeVisibleIndex = visibleRoutes.findIndex(
     (r: any) => r.key === state.routes[state.index]?.key
   );
-  const activeIndex = activeVisibleIndex >= 0 ? activeVisibleIndex : 0;
+
+  // Si la route active est cachée (href: null), trouver la tab parente par préfixe
+  const activeIndex = (() => {
+    if (activeVisibleIndex >= 0) return activeVisibleIndex;
+    const currentName: string = state.routes[state.index]?.name ?? "";
+    const prefix = currentName.split("/")[0]; // ex: "calendar", "clients", "parametres"
+    const parentIndex = visibleRoutes.findIndex((r: any) =>
+      r.name.startsWith(prefix)
+    );
+    return parentIndex >= 0 ? parentIndex : 0;
+  })();
 
   const numTabs = visibleRoutes.length;
   const tabWidth = width / numTabs;

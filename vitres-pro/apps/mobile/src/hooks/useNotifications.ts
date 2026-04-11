@@ -41,3 +41,19 @@ export const useMarkAllRead = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
   });
 };
+
+export const useDeleteNotification = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/api/notifications/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+};
+
+export const useDeleteAllNotifications = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete("/api/notifications"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+};

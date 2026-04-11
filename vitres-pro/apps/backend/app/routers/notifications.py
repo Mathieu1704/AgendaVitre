@@ -67,6 +67,35 @@ def mark_read(
     return {"message": "ok"}
 
 
+@router.delete("/{notification_id}")
+def delete_notification(
+    notification_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    notif = db.query(InAppNotification).filter(
+        InAppNotification.id == notification_id,
+        InAppNotification.recipient_id == current_user.id,
+    ).first()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification introuvable")
+    db.delete(notif)
+    db.commit()
+    return {"message": "ok"}
+
+
+@router.delete("")
+def delete_all_notifications(
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    db.query(InAppNotification).filter(
+        InAppNotification.recipient_id == current_user.id,
+    ).delete()
+    db.commit()
+    return {"message": "ok"}
+
+
 @router.post("/read-all")
 def mark_all_read(
     db: Session = Depends(get_db),

@@ -90,6 +90,16 @@ export default function Dashboard() {
 
   const [chartWidth, setChartWidth] = useState(300);
 
+  // Fix SVG clipping on web — gifted-charts SVG has overflow:hidden by default
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const style = document.createElement("style");
+    style.setAttribute("data-gifted-charts-fix", "");
+    style.textContent = "svg { overflow: visible !important; }";
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
+
   const todayInterventions =
     interventions?.filter(
       (i: any) => i.start_time && isToday(parseISO(i.start_time)),
@@ -109,37 +119,89 @@ export default function Dashboard() {
   // Graphique : 6 derniers mois de revenus réels
   const chartData: ChartItem[] = Array.from({ length: 6 }, (_, i) => {
     const monthStart = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() - 4 + i, 0, 23, 59, 59);
-    const revenue = interventions
-      ?.filter((int: any) => {
-        if (int.status !== "done" || !int.start_time) return false;
-        const d = new Date(int.start_time);
-        return d >= monthStart && d <= monthEnd;
-      })
-      .reduce((acc: number, int: any) => acc + (Number(int.price_estimated) || 0), 0) || 0;
+    const monthEnd = new Date(
+      now.getFullYear(),
+      now.getMonth() - 4 + i,
+      0,
+      23,
+      59,
+      59,
+    );
+    const revenue =
+      interventions
+        ?.filter((int: any) => {
+          if (int.status !== "done" || !int.start_time) return false;
+          const d = new Date(int.start_time);
+          return d >= monthStart && d <= monthEnd;
+        })
+        .reduce(
+          (acc: number, int: any) => acc + (Number(int.price_estimated) || 0),
+          0,
+        ) || 0;
     const label = monthStart.toLocaleDateString("fr-FR", { month: "short" });
-    return { value: revenue, label: label.charAt(0).toUpperCase() + label.slice(1, 4) };
+    return {
+      value: revenue,
+      label: label.charAt(0).toUpperCase() + label.slice(1, 4),
+    };
   });
-  const chartMax = Math.max(...chartData.map(d => d.value), 500);
+  const chartMax = Math.max(...chartData.map((d) => d.value), 500);
   const startThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+  const endLastMonth = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    0,
+    23,
+    59,
+    59,
+  );
 
-  const revenueThisMonth = interventions
-    ?.filter((i: any) => i.status === "done" && new Date(i.start_time) >= startThisMonth)
-    .reduce((acc: number, i: any) => acc + (Number(i.price_estimated) || 0), 0) || 0;
-  const revenueLastMonth = interventions
-    ?.filter((i: any) => i.status === "done" && new Date(i.start_time) >= startLastMonth && new Date(i.start_time) <= endLastMonth)
-    .reduce((acc: number, i: any) => acc + (Number(i.price_estimated) || 0), 0) || 0;
-  const caTrendPct = revenueLastMonth > 0
-    ? Math.round(((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100)
-    : revenueThisMonth > 0 ? 100 : 0;
+  const revenueThisMonth =
+    interventions
+      ?.filter(
+        (i: any) =>
+          i.status === "done" && new Date(i.start_time) >= startThisMonth,
+      )
+      .reduce(
+        (acc: number, i: any) => acc + (Number(i.price_estimated) || 0),
+        0,
+      ) || 0;
+  const revenueLastMonth =
+    interventions
+      ?.filter(
+        (i: any) =>
+          i.status === "done" &&
+          new Date(i.start_time) >= startLastMonth &&
+          new Date(i.start_time) <= endLastMonth,
+      )
+      .reduce(
+        (acc: number, i: any) => acc + (Number(i.price_estimated) || 0),
+        0,
+      ) || 0;
+  const caTrendPct =
+    revenueLastMonth > 0
+      ? Math.round(
+          ((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100,
+        )
+      : revenueThisMonth > 0
+        ? 100
+        : 0;
 
-  const intThisMonth = interventions?.filter((i: any) => new Date(i.start_time) >= startThisMonth).length || 0;
-  const intLastMonth = interventions?.filter((i: any) => new Date(i.start_time) >= startLastMonth && new Date(i.start_time) <= endLastMonth).length || 0;
-  const intTrendPct = intLastMonth > 0
-    ? Math.round(((intThisMonth - intLastMonth) / intLastMonth) * 100)
-    : intThisMonth > 0 ? 100 : 0;
+  const intThisMonth =
+    interventions?.filter((i: any) => new Date(i.start_time) >= startThisMonth)
+      .length || 0;
+  const intLastMonth =
+    interventions?.filter(
+      (i: any) =>
+        new Date(i.start_time) >= startLastMonth &&
+        new Date(i.start_time) <= endLastMonth,
+    ).length || 0;
+  const intTrendPct =
+    intLastMonth > 0
+      ? Math.round(((intThisMonth - intLastMonth) / intLastMonth) * 100)
+      : intThisMonth > 0
+        ? 100
+        : 0;
 
   const fmtPct = (n: number) => `${n > 0 ? "+" : ""}${n}%`;
 
@@ -180,7 +242,9 @@ export default function Dashboard() {
     },
   ];
 
-  const inProgressToday = todayInterventions.filter((i: any) => i.status === "in_progress").length;
+  const inProgressToday = todayInterventions.filter(
+    (i: any) => i.status === "in_progress",
+  ).length;
   const mobileStats: StatItem[] = [
     ...stats,
     {
@@ -197,7 +261,10 @@ export default function Dashboard() {
   // Loading state
   if (loadingRole) {
     return (
-      <View className="flex-1 items-center justify-center bg-background dark:bg-slate-950" style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
+      <View
+        className="flex-1 items-center justify-center bg-background dark:bg-slate-950"
+        style={{ backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
+      >
         <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
@@ -272,11 +339,30 @@ export default function Dashboard() {
                         {stat.trend ? (
                           <View className="flex-row items-center ml-2 mb-0.5 gap-0.5">
                             {stat.trendPositive !== undefined ? (
-                              stat.trendPositive
-                                ? <ArrowUpRight size={10} color="#22C55E" strokeWidth={2.5} />
-                                : <ArrowDownRight size={10} color="#EF4444" strokeWidth={2.5} />
+                              stat.trendPositive ? (
+                                <ArrowUpRight
+                                  size={10}
+                                  color="#22C55E"
+                                  strokeWidth={2.5}
+                                />
+                              ) : (
+                                <ArrowDownRight
+                                  size={10}
+                                  color="#EF4444"
+                                  strokeWidth={2.5}
+                                />
+                              )
                             ) : null}
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: stat.trendPositive === false ? "#EF4444" : "#22C55E" }}>
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: "700",
+                                color:
+                                  stat.trendPositive === false
+                                    ? "#EF4444"
+                                    : "#22C55E",
+                              }}
+                            >
                               {stat.trend}
                             </Text>
                           </View>
@@ -314,10 +400,18 @@ export default function Dashboard() {
                     data={chartData}
                     color="#3B82F6"
                     thickness={2}
-                    startFillColor="rgba(59, 130, 246, 0.2)"
-                    endFillColor="rgba(59, 130, 246, 0.02)"
-                    startOpacity={0.8}
-                    endOpacity={0.1}
+                    startFillColor={
+                      Platform.OS === "web"
+                        ? "rgba(59, 130, 246, 0.55)"
+                        : "rgba(59, 130, 246, 0.2)"
+                    }
+                    endFillColor={
+                      Platform.OS === "web"
+                        ? "rgba(59, 130, 246, 0.12)"
+                        : "rgba(59, 130, 246, 0.02)"
+                    }
+                    startOpacity={Platform.OS === "web" ? 1 : 0.8}
+                    endOpacity={Platform.OS === "web" ? 1 : 0.1}
                     areaChart
                     curved
                     hideDataPoints={false}
@@ -342,6 +436,8 @@ export default function Dashboard() {
                       fontSize: 10,
                       fontWeight: "500",
                     }}
+                    xAxisLabelsHeight={35}
+                    xAxisLabelsVerticalShift={20}
                     hideYAxisText={false}
                     yAxisThickness={0}
                     xAxisThickness={0}
@@ -394,33 +490,39 @@ export default function Dashboard() {
                   showsVerticalScrollIndicator={true}
                   nestedScrollEnabled={true}
                 >
-                  <View className="gap-2">
-                  {todayInterventions.map((item: any, i: number) => (
-                    <View
-                      key={i}
-                      className="flex-row items-center gap-3 p-3 rounded-3xl bg-muted/40 dark:bg-slate-800/50 border border-border dark:border-slate-700"
-                    >
-                      <Avatar
-                        name={item.client?.name || item.title}
-                        size="sm"
-                      />
-                      <View className="flex-1">
-                        <Text
-                          className="text-sm font-semibold text-foreground dark:text-white"
-                          numberOfLines={1}
-                        >
-                          {item.title}
-                        </Text>
-                        <Text className="text-xs text-muted-foreground dark:text-slate-400">
-                          {item.start_time
-                            ? format(parseISO(item.start_time), "HH:mm")
-                            : "--:--"}{" "}
-                          • {item.client?.name || "Client"}
-                        </Text>
+                  <View style={{ gap: 8 }}>
+                    {todayInterventions.map((item: any, i: number) => (
+                      <View
+                        key={i}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: 12,
+                          borderRadius: 16,
+                          backgroundColor: isDark ? "rgba(30,41,59,0.5)" : "#F8FAFC",
+                          borderWidth: 1,
+                          borderColor: isDark ? "#334155" : "#E4E4E7",
+                        }}
+                      >
+                        <Avatar name={item.client?.name || item.title} size="sm" />
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            className="text-sm font-semibold text-foreground dark:text-white"
+                            numberOfLines={1}
+                          >
+                            {item.title}
+                          </Text>
+                          <Text className="text-xs text-muted-foreground dark:text-slate-400">
+                            {item.start_time
+                              ? format(parseISO(item.start_time), "HH:mm")
+                              : "--:--"}{" "}
+                            • {item.client?.name || "Client"}
+                          </Text>
+                        </View>
+                        <StatusBadge status={item.status} />
                       </View>
-                      <StatusBadge status={item.status} className="py-0.5 px-1.5" />
-                    </View>
-                  ))}
+                    ))}
                   </View>
                 </ScrollView>
               )}
@@ -457,14 +559,15 @@ export default function Dashboard() {
                         <View className="bg-blue-500/10 p-2 rounded-xl">
                           <CalendarIcon size={16} color="#3B82F6" />
                         </View>
-                        <View className="flex-1">
+                        {/* ✅ CORRECTION ICI : flex-1 et justify-center */}
+                        <View className="flex-1 justify-center">
                           <Text
                             className="text-sm font-semibold text-foreground dark:text-white"
                             numberOfLines={1}
                           >
                             {item.title}
                           </Text>
-                          <Text className="text-xs text-muted-foreground dark:text-slate-400">
+                          <Text className="text-xs text-muted-foreground dark:text-slate-400 mt-0.5">
                             {item.start_time
                               ? format(
                                   parseISO(item.start_time),
@@ -508,7 +611,7 @@ export default function Dashboard() {
   }
 
   // ========================================
-  // 💻 RENDU WEB (TON CODE ORIGINAL)
+  // RENDU WEB
   // ========================================
   return (
     <ScrollView
@@ -550,15 +653,29 @@ export default function Dashboard() {
                   </View>
                 </View>
 
-                <View className="flex-row items-center mt-2 gap-1" style={{ minHeight: 20 }}>
+                <View
+                  className="flex-row items-center mt-2 gap-1"
+                  style={{ minHeight: 20 }}
+                >
                   {stat.trend ? (
                     <>
                       {stat.trendPositive !== undefined ? (
-                        stat.trendPositive
-                          ? <ArrowUpRight size={13} color="#22C55E" />
-                          : <ArrowDownRight size={13} color="#EF4444" />
+                        stat.trendPositive ? (
+                          <ArrowUpRight size={13} color="#22C55E" />
+                        ) : (
+                          <ArrowDownRight size={13} color="#EF4444" />
+                        )
                       ) : null}
-                      <Text style={{ fontSize: 12, fontWeight: "600", color: stat.trendPositive === false ? "#EF4444" : "#22C55E" }}>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "600",
+                          color:
+                            stat.trendPositive === false
+                              ? "#EF4444"
+                              : "#22C55E",
+                        }}
+                      >
                         {stat.trend}
                       </Text>
                       <Text className="text-xs text-muted-foreground dark:text-slate-500">
@@ -588,76 +705,82 @@ export default function Dashboard() {
             <CardContent className="p-6 pt-0">
               <View
                 className="w-full"
-                style={{ paddingTop: 16, paddingBottom: 8 }}
+                style={{
+                  paddingTop: 16,
+                  paddingBottom: 40,
+                  overflow: "visible",
+                }}
                 onLayout={(e) => {
                   const containerWidth = e.nativeEvent.layout.width;
                   setChartWidth(Math.max(containerWidth - 20, 250));
                 }}
               >
-                <View
-                  style={{ alignItems: "center", justifyContent: "center" }}
-                >
-                  <LineChart
-                    data={chartData}
-                    color="#3B82F6"
-                    thickness={3}
-                    startFillColor="rgba(59, 130, 246, 0.3)"
-                    endFillColor="rgba(59, 130, 246, 0.05)"
-                    startOpacity={1}
-                    endOpacity={0.3}
-                    areaChart
-                    curved
-                    hideDataPoints={false}
-                    dataPointsColor="#3B82F6"
-                    dataPointsRadius={6}
-                    width={chartWidth}
-                    height={280}
-                    adjustToWidth={true}
-                    spacing={(chartWidth - 10) / chartData.length}
-                    initialSpacing={20}
-                    endSpacing={20}
-                    showVerticalLines={false}
-                    rulesType="solid"
-                    rulesColor="#E4E4E7"
-                    rulesThickness={1}
-                    yAxisTextStyle={{
-                      color: "#71717A",
-                      fontSize: 11,
-                      fontWeight: "400",
-                    }}
-                    xAxisLabelTextStyle={{
-                      color: "#71717A",
-                      fontSize: 12,
-                      fontWeight: "600",
-                    }}
-                    xAxisLabelsHeight={20}
-                    xAxisLabelsVerticalShift={8}
-                    hideYAxisText={false}
-                    yAxisThickness={0}
-                    xAxisThickness={1}
-                    xAxisColor="#E4E4E7"
-                    noOfSections={5}
-                    maxValue={Math.ceil(chartMax / 500) * 500}
-                    pointerConfig={{
-                      pointerStripHeight: 200,
-                      pointerStripColor: "#CBD5E1",
-                      pointerStripWidth: 2,
-                      pointerColor: "#3B82F6",
-                      radius: 6,
-                      pointerLabelWidth: 100,
-                      pointerLabelHeight: 90,
-                      activatePointersOnLongPress: false,
-                      autoAdjustPointerLabelPosition: true,
-                      pointerLabelComponent: (items: any) => (
-                        <View className="bg-slate-900 dark:bg-slate-800 px-3 py-2 rounded-lg">
-                          <Text className="text-white text-xs font-bold">
-                            {items[0].value} €
-                          </Text>
-                        </View>
-                      ),
-                    }}
-                  />
-                </View>
+                <LineChart
+                  data={chartData}
+                  color="#3B82F6"
+                  thickness={3}
+                  startFillColor={
+                    Platform.OS === "web"
+                      ? "rgba(59, 130, 246, 0.55)"
+                      : "rgba(59, 130, 246, 0.2)"
+                  }
+                  endFillColor={
+                    Platform.OS === "web"
+                      ? "rgba(59, 130, 246, 0.12)"
+                      : "rgba(59, 130, 246, 0.02)"
+                  }
+                  startOpacity={1}
+                  endOpacity={1}
+                  areaChart
+                  curved
+                  hideDataPoints={false}
+                  dataPointsColor="#3B82F6"
+                  dataPointsRadius={6}
+                  width={chartWidth}
+                  height={280}
+                  adjustToWidth={true}
+                  spacing={(chartWidth - 10) / chartData.length}
+                  initialSpacing={20}
+                  endSpacing={20}
+                  showVerticalLines={false}
+                  rulesType="solid"
+                  rulesColor="#E4E4E7"
+                  rulesThickness={1}
+                  yAxisTextStyle={{
+                    color: "#71717A",
+                    fontSize: 11,
+                    fontWeight: "400",
+                  }}
+                  xAxisLabelTextStyle={{
+                    color: "#71717A",
+                    fontSize: 12,
+                    fontWeight: "500",
+                  }}
+                  hideYAxisText={false}
+                  yAxisThickness={0}
+                  xAxisThickness={1}
+                  xAxisColor="#E4E4E7"
+                  noOfSections={4}
+                  maxValue={Math.ceil(chartMax / 500) * 500}
+                  pointerConfig={{
+                    pointerStripHeight: 200,
+                    pointerStripColor: "#CBD5E1",
+                    pointerStripWidth: 2,
+                    pointerColor: "#3B82F6",
+                    radius: 6,
+                    pointerLabelWidth: 100,
+                    pointerLabelHeight: 90,
+                    activatePointersOnLongPress: false,
+                    autoAdjustPointerLabelPosition: true,
+                    pointerLabelComponent: (items: any) => (
+                      <View className="bg-slate-900 dark:bg-slate-800 px-3 py-2 rounded-lg">
+                        <Text className="text-white text-xs font-bold">
+                          {items[0].value} €
+                        </Text>
+                      </View>
+                    ),
+                  }}
+                />
               </View>
             </CardContent>
           </Card>
@@ -690,7 +813,7 @@ export default function Dashboard() {
                     {todayInterventions.map((item: any, i: number) => (
                       <View
                         key={i}
-                        className="flex-row items-center gap-3 p-3 rounded-xl bg-muted/50 dark:bg-slate-800 border border-transparent hover:border-border dark:hover:border-slate-700 transition-all"
+                        className="flex-row items-center gap-3 p-3 rounded-3xl bg-muted/40 dark:bg-slate-800/50 border border-border dark:border-slate-700"
                       >
                         <Avatar
                           name={item.client?.name || item.title}
@@ -710,7 +833,10 @@ export default function Dashboard() {
                             • {item.client?.name || "Client"}
                           </Text>
                         </View>
-                        <StatusBadge status={item.status} />
+                        <StatusBadge
+                          status={item.status}
+                          className="py-0.5 px-1.5"
+                        />
                       </View>
                     ))}
                   </View>

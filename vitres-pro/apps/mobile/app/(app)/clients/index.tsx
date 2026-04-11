@@ -38,16 +38,19 @@ type Client = {
 export default function ClientsListScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
-  const insets = useSafeAreaInsets(); // ✅ Gestion Notch
+  const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => setDebouncedQuery(searchQuery), 150);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [searchQuery]);
 
   const { data: clients, isLoading } = useQuery({
@@ -66,73 +69,77 @@ export default function ClientsListScreen() {
         (c.address ?? "").toLowerCase().includes(debouncedQuery.toLowerCase()),
     ) || [];
 
-  const renderItem = useCallback(({ item }: { item: Client }) => (
-    <Pressable
-      onPress={() => router.push(`/(app)/clients/${item.id}` as any)}
-      className="mx-4 mb-3"
-    >
-      <Card className="active:scale-[0.99] transition-transform rounded-[32px] overflow-hidden">
-        <View className="p-5">
-          <View className="flex-row items-center">
-            <Avatar name={item.name || item.address || "?"} size="md" />
+  const renderItem = useCallback(
+    ({ item }: { item: Client }) => (
+      <Pressable
+        onPress={() => router.push(`/(app)/clients/${item.id}` as any)}
+        className="mx-4 mb-3"
+      >
+        <Card className="active:scale-[0.99] transition-transform rounded-[32px] overflow-hidden">
+          <View className="p-5">
+            <View className="flex-row items-center">
+              <Avatar name={item.name || item.address || "?"} size="md" />
 
-            <View className="ml-4 flex-1">
-              <Text className="text-base font-bold text-foreground dark:text-white mb-1">
-                {item.name || item.city || "Client anonyme"}
-              </Text>
+              <View className="ml-4 flex-1">
+                <Text className="text-base font-bold text-foreground dark:text-white mb-1">
+                  {item.name || item.city || "Client anonyme"}
+                </Text>
 
-              {item.address && (
-                <View className="flex-row items-center">
-                  <MapPin size={12} color={isDark ? "#94A3B8" : "#64748B"} />
-                  <Text
-                    className="ml-1.5 text-xs text-muted-foreground dark:text-slate-400"
-                    numberOfLines={1}
-                  >
-                    {item.address}
-                  </Text>
-                </View>
-              )}
+                {item.address && (
+                  <View className="flex-row items-center">
+                    <MapPin size={12} color={isDark ? "#94A3B8" : "#64748B"} />
+                    <Text
+                      className="ml-1.5 text-xs text-muted-foreground dark:text-slate-400"
+                      numberOfLines={1}
+                    >
+                      {item.address}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <ChevronRight size={18} color={isDark ? "#475569" : "#CBD5E1"} />
             </View>
 
-            <ChevronRight size={18} color={isDark ? "#475569" : "#CBD5E1"} />
+            {/* Contact Info Footer (si dispo) */}
+            {(item.phone || item.email) && (
+              <View className="mt-3 pt-3 dark:border-slate-800 flex-row gap-4 ml-6">
+                {item.phone && (
+                  <View className="flex-row items-center">
+                    <Phone size={12} color="#3B82F6" />
+                    <Text className="ml-2 text-xs text-foreground dark:text-slate-300">
+                      {item.phone}
+                    </Text>
+                  </View>
+                )}
+                {item.email && (
+                  <View className="flex-row items-center">
+                    <Mail size={12} color="#3B82F6" />
+                    <Text
+                      className="ml-2 text-xs text-foreground dark:text-slate-300"
+                      numberOfLines={1}
+                    >
+                      {item.email}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
-
-          {/* Contact Info Footer (si dispo) */}
-          {(item.phone || item.email) && (
-            <View className="mt-3 pt-3 dark:border-slate-800 flex-row gap-4 ml-6">
-              {item.phone && (
-                <View className="flex-row items-center">
-                  <Phone size={12} color="#3B82F6" />
-                  <Text className="ml-2 text-xs text-foreground dark:text-slate-300">
-                    {item.phone}
-                  </Text>
-                </View>
-              )}
-              {item.email && (
-                <View className="flex-row items-center">
-                  <Mail size={12} color="#3B82F6" />
-                  <Text
-                    className="ml-2 text-xs text-foreground dark:text-slate-300"
-                    numberOfLines={1}
-                  >
-                    {item.email}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-        </View>
-      </Card>
-    </Pressable>
-  ), [isDark, router]);
+        </Card>
+      </Pressable>
+    ),
+    [isDark, router],
+  );
 
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
-      // ✅ Padding Top dynamique pour éviter l'encoche
-      style={{ paddingTop: isWeb ? 0 : insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
+      style={{
+        paddingTop: isWeb ? 0 : insets.top,
+        backgroundColor: isDark ? "#020817" : "#FFFFFF",
+      }}
     >
-      {/* Header avec Recherche */}
       <View
         className="px-6 pb-4 bg-background dark:bg-slate-950 z-10"
         style={{ paddingTop: isWeb ? 24 : 10 }}
@@ -141,16 +148,47 @@ export default function ClientsListScreen() {
           Clients
         </Text>
 
-        {/* ✅ MODIFICATION ICI : "rounded-full" au lieu de "rounded-xl" */}
-        <View className="flex-row items-center bg-muted/50 dark:bg-slate-900 border border-transparent focus:border-primary rounded-full px-4 h-12">
-          <Search size={18} color="#94A3B8" />
+        {/* 2. CORRECTION ICI : Remplacement du bloc de recherche */}
+        <View
+          style={[
+            {
+              flexDirection: "row",
+              alignItems: "center",
+              height: 48,
+              paddingHorizontal: 16,
+              borderRadius: 9999, // Force l'arrondi (pilule)
+              borderWidth: 1.5, // Épaisseur de la bordure
+              backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
+              // La couleur de bordure change selon le focus
+              borderColor: isSearchFocused
+                ? "#3B82F6"
+                : isDark
+                  ? "transparent"
+                  : "#E2E8F0",
+            },
+          ]}
+        >
+          <Search size={18} color={isSearchFocused ? "#3B82F6" : "#94A3B8"} />
           <TextInput
             placeholder="Rechercher un client..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
             returnKeyType="search"
-            className="flex-1 ml-3 text-foreground dark:text-white text-base h-full"
+            // Met à jour l'état quand l'utilisateur clique dedans ou clique ailleurs
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setIsSearchFocused(false)}
+            style={[
+              {
+                flex: 1,
+                marginLeft: 12,
+                fontSize: 16,
+                height: "100%",
+                color: isDark ? "#fff" : "#09090B",
+              },
+              // 🚨 Tue le rectangle bleu natif des navigateurs
+              Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {},
+            ]}
           />
         </View>
       </View>

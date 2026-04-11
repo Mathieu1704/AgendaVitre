@@ -5,6 +5,25 @@ import { useTheme } from "./ThemeToggle";
 
 export function Card({ className, style, ...props }: ViewProps) {
   const { isDark } = useTheme();
+
+  if (Platform.OS !== "web") {
+    return (
+      <View
+        style={[
+          {
+            borderRadius: 16,
+            overflow: "hidden" as const,
+            backgroundColor: isDark ? "#0F172A" : "#FFFFFF",
+            borderColor: isDark ? "#1E293B" : "#E4E4E7",
+            borderWidth: 1,
+          },
+          style,
+        ]}
+        {...props}
+      />
+    );
+  }
+
   return (
     <View
       className={cn(
@@ -12,15 +31,7 @@ export function Card({ className, style, ...props }: ViewProps) {
         "dark:bg-slate-900 dark:border-slate-800",
         className,
       )}
-      style={[
-        Platform.OS !== "web"
-          ? {
-              backgroundColor: isDark ? "#0F172A" : "#FFFFFF",
-              borderColor: isDark ? "#1E293B" : "#E4E4E7",
-            }
-          : {},
-        style,
-      ]}
+      style={style}
       {...props}
     />
   );

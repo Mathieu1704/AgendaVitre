@@ -46,8 +46,8 @@ export function Input({
                 borderColor: isFocused
                   ? "#3B82F6"
                   : isDark
-                  ? "#334155"
-                  : "#E4E4E7",
+                    ? "#334155"
+                    : "#E4E4E7",
                 borderWidth: 1,
               }
             : {},
@@ -71,7 +71,9 @@ export function Input({
               height: "100%",
               paddingVertical: 0,
               fontSize: 16,
-              ...(Platform.OS !== "web" ? { color: isDark ? "#F8FAFC" : "#0F172A" } : {}),
+              ...(Platform.OS !== "web"
+                ? { color: isDark ? "#F8FAFC" : "#0F172A" }
+                : {}),
               ...(Platform.OS === "web"
                 ? ({ outlineStyle: "none" } as any)
                 : {}),
