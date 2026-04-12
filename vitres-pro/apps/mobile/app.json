@@ -4,7 +4,7 @@
     "slug": "LVM-Agenda",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/LVM_LOGO_Colors-01.png",
+    "icon": "./assets/images/LVM_icone_ios.png",
     "scheme": "lvm-agenda",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -14,7 +14,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.lvmagenda.app",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "be.lvmagenda.app",
@@ -33,7 +38,33 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "privacyManifests": {
+              "NSPrivacyTracking": false,
+              "NSPrivacyTrackingDomains": [],
+              "NSPrivacyCollectedDataTypes": [],
+              "NSPrivacyAccessedAPITypes": [
+                {
+                  "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+                  "NSPrivacyAccessedAPITypeReasons": [
+                    "CA92.1"
+                  ]
+                },
+                {
+                  "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+                  "NSPrivacyAccessedAPITypeReasons": [
+                    "C617.1"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

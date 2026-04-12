@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { Pressable, Text, View, Animated } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, usePathname } from "expo-router";
 import {
   LayoutDashboard,
@@ -25,6 +26,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const { unreadCount } = useNotifications();
   const { isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const colors = {
     bg: isDark ? "#0F172A" : "#FFFFFF",
@@ -110,7 +112,8 @@ export function Sidebar() {
     >
       {/* Logo Header */}
       <View style={{
-        height: 64,
+        height: 64 + insets.top,
+        paddingTop: insets.top,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: collapsed ? "center" : "flex-start",

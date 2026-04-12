@@ -4,7 +4,9 @@ import {
   Text,
   TextInput,
   Pressable,
+  Platform,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Bell, Search } from "lucide-react-native";
 import { Avatar } from "../components/Avatar";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -14,9 +16,14 @@ import { useNotifications } from "../../hooks/useNotifications";
 export const Header = ({ onMenuPress }: { onMenuPress?: () => void }) => {
   const router = useRouter();
   const { unreadCount } = useNotifications();
+  const insets = useSafeAreaInsets();
+  const topPadding = Platform.OS !== "web" ? insets.top : 0;
 
   return (
-    <View className="z-50 h-16 flex-row items-center justify-between border-b border-border bg-background px-4 lg:px-6">
+    <View
+      className="z-50 flex-row items-center justify-between border-b border-border bg-background px-4 lg:px-6"
+      style={{ height: 64 + topPadding, paddingTop: topPadding }}
+    >
       <View className="flex-row items-center gap-4 flex-1">
         <View className="relative flex-1 max-w-md hidden md:flex">
           <View className="absolute left-3 top-3 z-10">

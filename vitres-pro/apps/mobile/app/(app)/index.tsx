@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../src/ui/components/ThemeToggle";
 import {
@@ -30,6 +30,8 @@ import {
 } from "../../src/ui/components/Card";
 import { StatusBadge } from "../../src/ui/components/StatusBadge";
 import { Avatar } from "../../src/ui/components/Avatar";
+import { useQueryClient } from "@tanstack/react-query";
+import { useFocusEffect } from "expo-router";
 import { useInterventions } from "../../src/hooks/useInterventions";
 import { useClients } from "../../src/hooks/useClients";
 import { supabase } from "../../src/lib/supabase";
@@ -53,13 +55,22 @@ interface StatItem {
 export default function Dashboard() {
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
+
+  useFocusEffect(
+    useCallback(() => {
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+    }, [queryClient])
+  );
+
   const { interventions, isLoading: interventionsLoading } = useInterventions();
   const { clients } = useClients();
   const { width } = useWindowDimensions();
 
   // ✅ Détection Mobile/Desktop
-  const isMobile = width < 768;
-  const isDesktop = width >= 1024;
+  const isMobile = Platform.OS !== "web" || width < 768;
+  const isDesktop = Platform.OS === "web" && width >= 1024;
 
   // ✅ État pour le rôle utilisateur
   const [userRole, setUserRole] = useState<"admin" | "employee" | null>(null);
@@ -500,12 +511,17 @@ export default function Dashboard() {
                           gap: 12,
                           padding: 12,
                           borderRadius: 16,
-                          backgroundColor: isDark ? "rgba(30,41,59,0.5)" : "#F8FAFC",
+                          backgroundColor: isDark
+                            ? "rgba(30,41,59,0.5)"
+                            : "#F8FAFC",
                           borderWidth: 1,
                           borderColor: isDark ? "#334155" : "#E4E4E7",
                         }}
                       >
-                        <Avatar name={item.client?.name || item.title} size="sm" />
+                        <Avatar
+                          name={item.client?.name || item.title}
+                          size="sm"
+                        />
                         <View style={{ flex: 1 }}>
                           <Text
                             className="text-sm font-semibold text-foreground dark:text-white"
@@ -648,7 +664,7 @@ export default function Dashboard() {
                       {stat.value}
                     </Text>
                   </View>
-                  <View className={`p-3 rounded-xl ${stat.bg} self-start`}>
+                  <View className={`${stat.bg} self-start`} style={{ padding: 12, borderRadius: 12 }}>
                     <stat.icon size={22} color={stat.color} />
                   </View>
                 </View>
@@ -658,7 +674,7 @@ export default function Dashboard() {
                   style={{ minHeight: 20 }}
                 >
                   {stat.trend ? (
-                    <>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                       {stat.trendPositive !== undefined ? (
                         stat.trendPositive ? (
                           <ArrowUpRight size={13} color="#22C55E" />
@@ -681,7 +697,7 @@ export default function Dashboard() {
                       <Text className="text-xs text-muted-foreground dark:text-slate-500">
                         vs mois dern.
                       </Text>
-                    </>
+                    </View>
                   ) : null}
                 </View>
               </CardContent>
@@ -799,7 +815,7 @@ export default function Dashboard() {
               {todayInterventions.length === 0 ? (
                 <View className="items-center justify-center py-12">
                   <Text className="text-muted-foreground dark:text-slate-400 text-sm">
-                    Rien de prévu aujourd'hui 🎉
+                    Rien de prévu aujourd'hui !
                   </Text>
                 </View>
               ) : (

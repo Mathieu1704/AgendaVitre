@@ -51,6 +51,7 @@ export default function ParametresScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loadingPass, setLoadingPass] = useState(false);
   const [logoutDialog, setLogoutDialog] = useState(false);
+  const [privacyVisible, setPrivacyVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -170,7 +171,7 @@ export default function ParametresScreen() {
         >
           <ScrollView
             ref={scrollRef}
-            contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+            contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
           >
             {/* 2. PROFIL */}
             <Card className="mb-6 rounded-[32px] overflow-hidden">
@@ -484,8 +485,62 @@ export default function ParametresScreen() {
                 Se déconnecter
               </Text>
             </Pressable>
+
+            {/* Lien confidentialité discret */}
+            <View style={{ marginTop: 20, alignItems: "center" }}>
+              <Text
+                onPress={() => setPrivacyVisible(true)}
+                style={{ fontSize: 12, color: isDark ? "#475569" : "#94A3B8", paddingVertical: 8 }}
+              >
+                Politique de confidentialité
+              </Text>
+            </View>
           </ScrollView>
         </KeyboardAvoidingView>
+      )}
+
+      {/* Modal Politique de confidentialité */}
+      {privacyVisible && (
+        <Dialog open onClose={() => setPrivacyVisible(false)}>
+          <View style={{ padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", marginBottom: 16 }}>
+              Politique de confidentialité
+            </Text>
+
+            <Text style={{ fontSize: 13, fontWeight: "700", color: isDark ? "#94A3B8" : "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+              Données collectées
+            </Text>
+            <Text style={{ fontSize: 13, color: isDark ? "#CBD5E1" : "#475569", lineHeight: 20, marginBottom: 16 }}>
+              Cette application collecte votre adresse e-mail, votre nom et numéro de téléphone dans le cadre de votre compte employé.
+            </Text>
+
+            <Text style={{ fontSize: 13, fontWeight: "700", color: isDark ? "#94A3B8" : "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+              Utilisation
+            </Text>
+            <Text style={{ fontSize: 13, color: isDark ? "#CBD5E1" : "#475569", lineHeight: 20, marginBottom: 16 }}>
+              Vos données sont utilisées uniquement pour le fonctionnement de l'application. Elles ne sont pas partagées avec des tiers ni utilisées à des fins publicitaires.
+            </Text>
+
+            <Text style={{ fontSize: 13, fontWeight: "700", color: isDark ? "#94A3B8" : "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+              Suppression
+            </Text>
+            <Text style={{ fontSize: 13, color: isDark ? "#CBD5E1" : "#475569", lineHeight: 20, marginBottom: 20 }}>
+              Pour supprimer vos données, contactez{" "}
+              <Text style={{ fontWeight: "700" }}>max.berdoux@gmail.com</Text>
+            </Text>
+
+            <Pressable
+              onPress={() => setPrivacyVisible(false)}
+              style={({ pressed }) => ({
+                height: 48, borderRadius: 24,
+                backgroundColor: pressed ? "#2563EB" : "#3B82F6",
+                alignItems: "center", justifyContent: "center",
+              })}
+            >
+              <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Fermer</Text>
+            </Pressable>
+          </View>
+        </Dialog>
       )}
 
       {/* Confirmation déconnexion */}

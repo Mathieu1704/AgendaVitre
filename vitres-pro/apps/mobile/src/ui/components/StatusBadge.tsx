@@ -1,6 +1,7 @@
 import React from "react";
 import { Text, View } from "react-native";
 import { cn } from "../../lib/utils";
+import { Platform } from "react-native";
 
 type Status = "planned" | "in_progress" | "done" | string;
 
@@ -36,10 +37,11 @@ export const StatusBadge = ({ status, className }: StatusBadgeProps) => {
   return (
     <View
       className={cn(
-        "border px-2 py-0.5 rounded-full",
+        "border",
         config.style,
         className
       )}
+      style={{ borderRadius: 9999, paddingHorizontal: 8, paddingVertical: 2 }}
     >
       <Text
         className={cn("font-bold uppercase tracking-wide", config.textStyle)}

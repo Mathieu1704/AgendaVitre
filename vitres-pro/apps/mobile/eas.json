@@ -1,0 +1,31 @@
+{
+  "cli": {
+    "version": ">= 16.0.0"
+  },
+  "build": {
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.lvmagenda.be",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://aztcgmfylcfepffdrxdm.supabase.co"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "distribution": "store"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.lvmagenda.be",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://aztcgmfylcfepffdrxdm.supabase.co"
+      }
+    }
+  }
+}

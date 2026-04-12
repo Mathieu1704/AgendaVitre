@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, useWindowDimensions, ActivityIndicator } from "react-native";
+import { View, Text, useWindowDimensions, ActivityIndicator, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Tabs, Redirect } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,7 +22,7 @@ import {
 
 export default function AppLayout() {
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 1024;
+  const isDesktop = Platform.OS === "web" && width >= 1024;
   const insets = useSafeAreaInsets();
 
   const [isLoading, setIsLoading] = useState(true);
@@ -32,16 +32,44 @@ export default function AppLayout() {
   const { isDark } = useTheme();
   const queryClient = useQueryClient();
   const prefetchedRef = useRef(false);
+  const prefetchedAdminRef = useRef(false);
 
   const prefetchMainData = () => {
     if (prefetchedRef.current) return;
     prefetchedRef.current = true;
     const today = new Date().toISOString().split("T")[0];
-    queryClient.prefetchQuery({ queryKey: ["clients"],        queryFn: () => api.get("/api/clients").then((r) => r.data) });
-    queryClient.prefetchQuery({ queryKey: ["employees"],      queryFn: () => api.get("/api/employees").then((r) => r.data) });
-    queryClient.prefetchQuery({ queryKey: ["notifications"],  queryFn: () => api.get("/api/notifications").then((r) => r.data) });
-    queryClient.prefetchQuery({ queryKey: ["planning-stats", today, "all"], queryFn: () => api.get(`/api/planning/daily-stats?date_str=${today}`).then((r) => r.data) });
+    const STALE = 2 * 60 * 1000; // 2 min
+
+    // T+0 : interventions — données les plus utilisées (Dashboard + Planning)
+    queryClient.prefetchQuery({
+      queryKey: ["interventions"],
+      queryFn: () => api.get("/api/interventions").then((r) => r.data),
+      staleTime: STALE,
+    });
+
+    // T+800ms : clients + employees
+    setTimeout(() => {
+      queryClient.prefetchQuery({ queryKey: ["clients"],   queryFn: () => api.get("/api/clients").then((r) => r.data),   staleTime: STALE });
+      queryClient.prefetchQuery({ queryKey: ["employees"], queryFn: () => api.get("/api/employees").then((r) => r.data), staleTime: STALE });
+    }, 800);
+
+    // T+2000ms : notifications + planning-stats
+    setTimeout(() => {
+      queryClient.prefetchQuery({ queryKey: ["notifications"], queryFn: () => api.get("/api/notifications").then((r) => r.data), staleTime: STALE });
+      queryClient.prefetchQuery({ queryKey: ["planning-stats", today, "all"], queryFn: () => api.get(`/api/planning/daily-stats?date_str=${today}`).then((r) => r.data), staleTime: STALE });
+    }, 2000);
   };
+
+  // T+3000ms : données admin (team, zones, tarifs) — seulement si admin
+  useEffect(() => {
+    if (!isAdmin || prefetchedAdminRef.current) return;
+    prefetchedAdminRef.current = true;
+    const STALE = 2 * 60 * 1000;
+    setTimeout(() => {
+      queryClient.prefetchQuery({ queryKey: ["hourly-rates"], queryFn: () => api.get("/api/settings/hourly-rates").then((r) => r.data), staleTime: STALE });
+      queryClient.prefetchQuery({ queryKey: ["sub-zones"],    queryFn: () => api.get("/api/settings/zones").then((r) => r.data),    staleTime: STALE });
+    }, 3000);
+  }, [isAdmin]);
 
   useEffect(() => {
     let mounted = true;
