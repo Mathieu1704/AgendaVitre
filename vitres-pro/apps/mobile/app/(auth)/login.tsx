@@ -11,6 +11,7 @@ import {
   ScrollView,
   ActivityIndicator,
   StyleSheet,
+  Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "../../src/lib/supabase";
@@ -69,7 +70,7 @@ export default function LoginScreen() {
         password,
       });
       if (error) {
-        toast.error("Erreur de connexion", "Email ou mot de passe incorrect.");
+        toast.error("Erreur de connexion", error.message || "Email ou mot de passe incorrect.");
       } else {
         router.replace("/(app)");
       }
@@ -274,7 +275,13 @@ export default function LoginScreen() {
         >
           <Image
             source={require("../../assets/login-hero.jpg")}
-            style={StyleSheet.absoluteFillObject}
+            style={{
+              position: "absolute",
+              width: Dimensions.get("screen").width,
+              height: Dimensions.get("screen").height,
+              top: 0,
+              left: 0,
+            }}
             resizeMode="cover"
           />
           <View
