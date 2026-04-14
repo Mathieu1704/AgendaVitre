@@ -15,7 +15,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.lvmagenda.app",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -36,8 +36,15 @@
       "output": "static",
       "favicon": "./assets/images/LVM_LOGO_Colors-01.png"
     },
+    "updates": {
+      "url": "https://u.expo.dev/0e90d5a7-2d9a-46b5-88ec-c0ef3f8f061f"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "plugins": [
       "expo-router",
+      "expo-updates",
       "expo-secure-store",
       [
         "expo-build-properties",

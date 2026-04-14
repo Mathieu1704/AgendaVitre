@@ -1,9 +1,11 @@
 {
   "cli": {
-    "version": ">= 16.0.0"
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "preview": {
+      "channel": "preview",
       "android": {
         "buildType": "apk"
       },
@@ -12,19 +14,23 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.lvmagenda.be",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://aztcgmfylcfepffdrxdm.supabase.co"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://aztcgmfylcfepffdrxdm.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6dGNnbWZ5bGNmZXBmZmRyeGRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1NzYxODksImV4cCI6MjA4NDE1MjE4OX0.bOiJLFuVYgRWFqF_nyVccUmZ_SknicauwEhcsIrWwvc"
       }
     },
     "production": {
+      "channel": "production",
       "android": {
         "buildType": "app-bundle"
       },
       "ios": {
-        "distribution": "store"
+        "distribution": "store",
+        "autoIncrement": true
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.lvmagenda.be",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://aztcgmfylcfepffdrxdm.supabase.co"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://aztcgmfylcfepffdrxdm.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6dGNnbWZ5bGNmZXBmZmRyeGRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1NzYxODksImV4cCI6MjA4NDE1MjE4OX0.bOiJLFuVYgRWFqF_nyVccUmZ_SknicauwEhcsIrWwvc"
       }
     }
   }
