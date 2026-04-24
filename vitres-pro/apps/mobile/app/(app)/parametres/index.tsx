@@ -654,6 +654,7 @@ export default function ParametresScreen() {
                 setSavingHideCash(true);
                 try {
                   await api.patch("/api/settings/company", { hide_cash: hideCash });
+                  queryClient.setQueryData(["company-settings"], { hide_cash: hideCash });
                   queryClient.invalidateQueries({ queryKey: ["company-settings"] });
                   setHideCashModal(false);
                 } catch {
