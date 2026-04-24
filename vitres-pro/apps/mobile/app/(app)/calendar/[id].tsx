@@ -1,5 +1,5 @@
 import React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   ScrollView,
@@ -81,6 +81,17 @@ export default function InterventionDetailScreen() {
     refetchInterval: 500,
   });
   const hideCash = companySettings?.hide_cash ?? false;
+
+  useEffect(() => {
+    if (!intervention) return;
+    const isCash = intervention.payment_mode === "cash" || !intervention.payment_mode;
+    if (hideCash && isCash) {
+      router.replace({
+        pathname: "/(app)/calendar",
+        params: from_view ? { view: from_view, date: from_date } : {},
+      });
+    }
+  }, [hideCash, intervention]);
 
   // 3. MUTATIONS (Doivent être déclarées AVANT les returns conditionnels)
   const deleteMutation = useMutation({
