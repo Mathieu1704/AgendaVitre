@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Animated,
 } from "react-native";
 import {
   User,
@@ -23,7 +24,6 @@ import {
   Clock,
   EyeOff,
 } from "lucide-react-native";
-import { Switch } from "react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -59,6 +59,15 @@ export default function ParametresScreen() {
   const [hideCashModal, setHideCashModal] = useState(false);
   const [hideCash, setHideCash] = useState(false);
   const [savingHideCash, setSavingHideCash] = useState(false);
+  const toggleAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(toggleAnim, {
+      toValue: hideCash ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [hideCash]);
 
   useFocusEffect(
     useCallback(() => {
@@ -189,6 +198,8 @@ export default function ParametresScreen() {
             <Pressable
               onLongPress={() => isAdmin && setHideCashModal(true)}
               delayLongPress={600}
+              style={({ pressed }) => ({ opacity: 1 })}
+              android_disableSound
             >
             <Card className="mb-6 rounded-[32px] overflow-hidden">
               <CardHeader className="p-6 pb-4">
@@ -598,60 +609,71 @@ export default function ParametresScreen() {
 
       {/* Modale hide_cash (admin, long press sur Mon Profil) */}
       {hideCashModal && (
-        <Dialog onClose={() => setHideCashModal(false)}>
-          <View style={{ gap: 20 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <View style={{ backgroundColor: "#F97316", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" }}>
-                <EyeOff size={20} color="white" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: "800", fontSize: 16, color: isDark ? "#F1F5F9" : "#0F172A" }}>
-                  Masquer les interventions cash
-                </Text>
-                <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>
-                  Actif pour tout le monde
-                </Text>
-              </View>
-            </View>
-
-            <View style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              backgroundColor: isDark ? "#1E293B" : "#F1F5F9",
-              borderRadius: 16,
-              paddingHorizontal: 16,
-              paddingVertical: 14,
-            }}>
-              <Text style={{ fontWeight: "600", fontSize: 15, color: isDark ? "#F1F5F9" : "#0F172A" }}>
-                {hideCash ? "Interventions cash masquées" : "Interventions cash visibles"}
-              </Text>
-              <Switch
-                value={hideCash}
-                onValueChange={async (val) => {
-                  setSavingHideCash(true);
-                  try {
-                    await api.patch("/api/settings/company", { hide_cash: val });
-                    setHideCash(val);
-                    queryClient.invalidateQueries({ queryKey: ["company-settings"] });
-                    toast.success(val ? "Cash masqué" : "Cash réaffiché", "Appliqué pour tous.");
-                  } catch {
-                    toast.error("Erreur", "Impossible de modifier le réglage.");
-                  } finally {
-                    setSavingHideCash(false);
-                  }
+        <Dialog open onClose={() => setHideCashModal(false)} maxWidth={280}>
+          <View style={{ alignItems: "center", paddingVertical: 28, paddingHorizontal: 32, gap: 28 }}>
+            {/* Toggle custom natif */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+              <Text style={{
+                fontSize: 15, fontWeight: "700",
+                color: !hideCash ? (isDark ? "#F1F5F9" : "#0F172A") : "#94A3B8",
+              }}>OFF</Text>
+              <Pressable
+                onPress={() => setHideCash(v => !v)}
+                style={{
+                  width: 58, height: 32, borderRadius: 16,
+                  backgroundColor: hideCash ? "#EF4444" : "#E2E8F0",
+                  justifyContent: "center",
+                  padding: 3,
                 }}
-                disabled={savingHideCash}
-                trackColor={{ false: "#E2E8F0", true: "#F97316" }}
-                thumbColor="white"
-              />
+              >
+                <Animated.View style={{
+                  width: 26, height: 26, borderRadius: 13,
+                  backgroundColor: "white",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 2,
+                  elevation: 3,
+                  transform: [{
+                    translateX: toggleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, 26],
+                    }),
+                  }],
+                }} />
+              </Pressable>
+              <Text style={{
+                fontSize: 15, fontWeight: "700",
+                color: hideCash ? "#EF4444" : "#94A3B8",
+              }}>ON</Text>
             </View>
 
+            {/* Bouton confirmer */}
             <Pressable
-              onPress={() => setHideCashModal(false)}
-              style={{ backgroundColor: "#3B82F6", borderRadius: 14, paddingVertical: 12, alignItems: "center" }}
+              onPress={async () => {
+                setSavingHideCash(true);
+                try {
+                  await api.patch("/api/settings/company", { hide_cash: hideCash });
+                  queryClient.invalidateQueries({ queryKey: ["company-settings"] });
+                  setHideCashModal(false);
+                } catch {
+                  toast.error("Erreur", "Impossible de modifier le réglage.");
+                } finally {
+                  setSavingHideCash(false);
+                }
+              }}
+              disabled={savingHideCash}
+              style={{
+                backgroundColor: "#3B82F6",
+                borderRadius: 20,
+                paddingVertical: 12,
+                paddingHorizontal: 40,
+                opacity: savingHideCash ? 0.6 : 1,
+              }}
             >
-              <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Fermer</Text>
+              {savingHideCash
+                ? <ActivityIndicator color="white" size="small" />
+                : <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Confirmer</Text>}
             </Pressable>
           </View>
         </Dialog>

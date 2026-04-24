@@ -73,6 +73,13 @@ export default function InterventionDetailScreen() {
     },
   });
 
+  const { data: companySettings } = useQuery({
+    queryKey: ["company-settings"],
+    queryFn: async () => { const res = await api.get("/api/settings/company"); return res.data; },
+    staleTime: 30_000,
+  });
+  const hideCash = companySettings?.hide_cash ?? false;
+
   // 3. MUTATIONS (Doivent être déclarées AVANT les returns conditionnels)
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -290,17 +297,13 @@ export default function InterventionDetailScreen() {
 
               return (
                 <View style={{ marginBottom: 12 }}>
-                  {/* Ligne principale tappable */}
-                  <Pressable
-                    onPress={() => {
-                      setPendingPaymentMode(mode as any);
-                      setEditingPayment((v) => !v);
-                    }}
+                  {/* Ligne principale */}
+                  <View
                     style={{
                       backgroundColor: cfg.bg,
                       borderWidth: 1,
                       borderColor: cfg.border,
-                      borderRadius: editingPayment ? 16 : 16,
+                      borderRadius: 16,
                       borderBottomLeftRadius: editingPayment ? 0 : 16,
                       borderBottomRightRadius: editingPayment ? 0 : 16,
                       paddingHorizontal: 16,
@@ -317,12 +320,18 @@ export default function InterventionDetailScreen() {
                       <Text style={{ color: cfg.titleColor, fontWeight: "800", fontSize: 14, textTransform: "uppercase", marginBottom: 2 }}>{cfg.title}</Text>
                       <Text style={{ color: cfg.subColor, fontSize: 13, fontWeight: "500" }}>{cfg.sub}</Text>
                     </View>
-                    <View style={{ padding: 4 }}>
+                    <Pressable
+                      onPress={() => {
+                        setPendingPaymentMode(mode as any);
+                        setEditingPayment((v) => !v);
+                      }}
+                      style={{ padding: 8, borderRadius: 20, backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }}
+                    >
                       {editingPayment
-                        ? <X size={16} color={cfg.titleColor} />
+                        ? <X size={15} color={cfg.titleColor} />
                         : <Pencil size={15} color={cfg.titleColor} />}
-                    </View>
-                  </Pressable>
+                    </Pressable>
+                  </View>
 
                   {/* Éditeur inline */}
                   {editingPayment && (
@@ -338,10 +347,10 @@ export default function InterventionDetailScreen() {
                     }}>
                       <SlidingPillSelector
                         options={[
-                          { id: "cash",         label: "Espèces",  pillColor: "#EF4444", activeTextColor: "#fff", icon: (c) => <Banknote size={13} color={c} /> },
+                          !hideCash && { id: "cash",         label: "Espèces",  pillColor: "#EF4444", activeTextColor: "#fff", icon: (c) => <Banknote size={13} color={c} /> },
                           { id: "invoice",      label: "Facture",  pillColor: "#22C55E", activeTextColor: "#fff", icon: (c) => <FileText size={13} color={c} /> },
                           { id: "invoice_cash", label: "FAC+Esp.", pillColor: "#F97316", activeTextColor: "#fff", icon: (c) => <Wallet  size={13} color={c} /> },
-                        ]}
+                        ].filter(Boolean) as any}
                         selected={pendingPaymentMode}
                         onSelect={(id) => setPendingPaymentMode(id as any)}
                         pillColor="#3B82F6"

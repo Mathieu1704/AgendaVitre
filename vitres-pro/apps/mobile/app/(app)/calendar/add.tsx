@@ -253,6 +253,13 @@ export default function AddInterventionScreen() {
     enabled: isAdmin,
   });
 
+  const { data: companySettings } = useQuery({
+    queryKey: ["company-settings"],
+    queryFn: async () => (await api.get("/api/settings/company")).data,
+    staleTime: 30_000,
+  });
+  const hideCash = companySettings?.hide_cash ?? false;
+
   const { data: clients, refetch: refetchClients } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => (await api.get("/api/clients")).data as Client[],
@@ -528,7 +535,7 @@ export default function AddInterventionScreen() {
         setCheckedServiceIds(new Set());
         setServicePriceOverrides({});
         setAdHocItems([]);
-        setPaymentMode("cash");
+        setPaymentMode(hideCash ? "invoice" : "cash");
         setStartDateStr(defaultStart);
         setDurationHours("");
         setRecurrence(DEFAULT_RECURRENCE);
@@ -1763,7 +1770,7 @@ export default function AddInterventionScreen() {
                   </Text>
                   <SlidingPillSelector
                     options={[
-                      {
+                      !hideCash && {
                         id: "cash",
                         label: "Espèces",
                         pillColor: "#EF4444",
@@ -1784,7 +1791,7 @@ export default function AddInterventionScreen() {
                         activeTextColor: "#fff",
                         icon: (c) => <Wallet size={14} color={c} />,
                       },
-                    ]}
+                    ].filter(Boolean) as any}
                     selected={paymentMode}
                     onSelect={(id) =>
                       setPaymentMode(id as "cash" | "invoice" | "invoice_cash")
@@ -1796,7 +1803,7 @@ export default function AddInterventionScreen() {
                     fontSize={12}
                     itemPy={9}
                   />
-                  {paymentMode === "cash" && (
+                  {!hideCash && paymentMode === "cash" && (
                     <Text
                       style={{ fontSize: 11, color: "#EF4444", marginTop: 5 }}
                     >
