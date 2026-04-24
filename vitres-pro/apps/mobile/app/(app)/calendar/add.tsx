@@ -740,7 +740,10 @@ export default function AddInterventionScreen() {
       toast.success("Succès", msg);
 
       if (isRepriseMode && reprise_of) {
-        router.push(`/(app)/calendar/${reprise_of}` as any);
+        router.push({
+          pathname: "/(app)/calendar",
+          params: { date: new Date().toISOString().split("T")[0], view: "day" },
+        });
       } else {
         router.push({
           pathname: "/(app)/calendar",

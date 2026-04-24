@@ -12,10 +12,13 @@ import { Avatar } from "../components/Avatar";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { useRouter } from "expo-router";
 import { useNotifications } from "../../hooks/useNotifications";
+import { useAuth } from "../../hooks/useAuth";
 
 export const Header = ({ onMenuPress }: { onMenuPress?: () => void }) => {
   const router = useRouter();
   const { unreadCount } = useNotifications();
+  const { isAdmin, userName } = useAuth();
+  const userInitial = userName ? userName.charAt(0).toUpperCase() : "?";
   const insets = useSafeAreaInsets();
   const topPadding = Platform.OS !== "web" ? insets.top : 0;
 
@@ -40,31 +43,33 @@ export const Header = ({ onMenuPress }: { onMenuPress?: () => void }) => {
       <View className="flex-row items-center gap-2">
         <ThemeToggle />
 
-        <Pressable
-          onPress={() => router.push("/(app)/notifications" as any)}
-          className="relative p-2 rounded-full hover:bg-muted active:opacity-70"
-        >
-          <Bell size={20} color="#71717A" />
-          {unreadCount > 0 && (
-            <View style={{
-              position: "absolute", top: 6, right: 6,
-              minWidth: 16, height: 16, borderRadius: 8,
-              backgroundColor: "#EF4444",
-              alignItems: "center", justifyContent: "center",
-              paddingHorizontal: 3,
-            }}>
-              <Text style={{ color: "white", fontSize: 9, fontWeight: "700" }}>
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </Text>
-            </View>
-          )}
-        </Pressable>
+        {isAdmin && (
+          <Pressable
+            onPress={() => router.push("/(app)/notifications" as any)}
+            className="relative p-2 rounded-full hover:bg-muted active:opacity-70"
+          >
+            <Bell size={20} color="#71717A" />
+            {unreadCount > 0 && (
+              <View style={{
+                position: "absolute", top: 6, right: 6,
+                minWidth: 16, height: 16, borderRadius: 8,
+                backgroundColor: "#EF4444",
+                alignItems: "center", justifyContent: "center",
+                paddingHorizontal: 3,
+              }}>
+                <Text style={{ color: "white", fontSize: 9, fontWeight: "700" }}>
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        )}
 
         <Pressable
           onPress={() => router.push("/(app)/parametres")}
           className="flex-row items-center gap-3 border-l border-border pl-4 active:opacity-70"
         >
-          <Avatar name="M" size="sm" />
+          <Avatar name={userInitial} size="sm" />
         </Pressable>
       </View>
     </View>

@@ -28,7 +28,7 @@ export default function AppLayout() {
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
   const { unreadCount } = useNotifications();
-  const { isAdmin } = useAuth();
+  const { isAdmin, loading: authLoading } = useAuth();
   const { isDark } = useTheme();
   const queryClient = useQueryClient();
   const prefetchedRef = useRef(false);
@@ -96,7 +96,7 @@ export default function AppLayout() {
     };
   }, []);
 
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
         <ActivityIndicator size="large" color="#3B82F6" />
@@ -159,9 +159,9 @@ export default function AppLayout() {
           options={{
             title: "Accueil",
             href: isAdmin ? undefined : null,
-            tabBarIcon: ({ color, size }) => (
-              <LayoutDashboard size={size} color={color} />
-            ),
+            tabBarIcon: isAdmin
+              ? ({ color, size }) => <LayoutDashboard size={size} color={color} />
+              : undefined,
           }}
         />
         <Tabs.Screen
@@ -178,9 +178,9 @@ export default function AppLayout() {
           options={{
             title: "Clients",
             href: isAdmin ? undefined : null,
-            tabBarIcon: ({ color, size }) => (
-              <Users size={size} color={color} />
-            ),
+            tabBarIcon: isAdmin
+              ? ({ color, size }) => <Users size={size} color={color} />
+              : undefined,
           }}
         />
         <Tabs.Screen
@@ -192,24 +192,26 @@ export default function AppLayout() {
           options={{
             title: "Alertes",
             href: isAdmin ? undefined : null,
-            tabBarIcon: ({ color, size }) => (
-              <View>
-                <Bell size={size} color={color} />
-                {unreadCount > 0 && (
-                  <View style={{
-                    position: "absolute", top: -4, right: -6,
-                    minWidth: 16, height: 16, borderRadius: 8,
-                    backgroundColor: "#EF4444",
-                    alignItems: "center", justifyContent: "center",
-                    paddingHorizontal: 3,
-                  }}>
-                    <Text style={{ color: "white", fontSize: 9, fontWeight: "700" }}>
-                      {unreadCount > 99 ? "99+" : unreadCount}
-                    </Text>
+            tabBarIcon: isAdmin
+              ? ({ color, size }) => (
+                  <View>
+                    <Bell size={size} color={color} />
+                    {unreadCount > 0 && (
+                      <View style={{
+                        position: "absolute", top: -4, right: -6,
+                        minWidth: 16, height: 16, borderRadius: 8,
+                        backgroundColor: "#EF4444",
+                        alignItems: "center", justifyContent: "center",
+                        paddingHorizontal: 3,
+                      }}>
+                        <Text style={{ color: "white", fontSize: 9, fontWeight: "700" }}>
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
-            ),
+                )
+              : undefined,
           }}
         />
         <Tabs.Screen

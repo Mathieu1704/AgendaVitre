@@ -26,6 +26,10 @@ import {
   AlertCircle,
   Wallet,
   MoreVertical,
+  Pencil,
+  Banknote,
+  FileText,
+  X,
 } from "lucide-react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -41,6 +45,7 @@ import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useAuth } from "../../../src/hooks/useAuth";
 import { OptionsModal } from "../../../src/ui/components/OptionsModal";
 import { ConfirmModal } from "../../../src/ui/components/ConfirmModal";
+import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
 
 export default function InterventionDetailScreen() {
   const { id, from_view, from_date } = useLocalSearchParams();
@@ -56,6 +61,8 @@ export default function InterventionDetailScreen() {
   // 1. TOUS LES STATES
   const [menuVisible, setMenuVisible] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editingPayment, setEditingPayment] = useState(false);
+  const [pendingPaymentMode, setPendingPaymentMode] = useState<"cash" | "invoice" | "invoice_cash">("cash");
 
   // 2. QUERY (Chargement données)
   const { data: intervention, isLoading } = useQuery({
@@ -123,6 +130,21 @@ export default function InterventionDetailScreen() {
       setTimeout(() => setShowDeleteConfirm(true), 200);
     }
   };
+
+  const paymentMutation = useMutation({
+    mutationFn: async (mode: "cash" | "invoice" | "invoice_cash") =>
+      api.patch(`/api/interventions/${id}`, {
+        payment_mode: mode,
+        is_invoice: mode !== "cash",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      setEditingPayment(false);
+      toast.success("Paiement mis à jour", "");
+    },
+    onError: () => toast.error("Erreur", "Impossible de modifier le paiement."),
+  });
 
   // 5. RENDU CONDITIONNEL (Loading / Error)
   // C'est SEULEMENT ICI qu'on a le droit de faire des returns anticipés
@@ -257,114 +279,98 @@ export default function InterventionDetailScreen() {
               {intervention.title.replace(/[\r\n\u2028\u2029]+/g, " ").trim()}
             </Text>
 
-            {/* Alerte paiement — uniquement pour les interventions */}
-            {intervType === "intervention" &&
-              (intervention.payment_mode === "cash" ||
-                (!intervention.payment_mode && !intervention.is_invoice)) && (
-                <View
-                  style={{
-                    backgroundColor: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2",
-                    borderWidth: 1,
-                    borderColor: isDark ? "rgba(153,27,27,0.5)" : "#FECACA",
-                    borderRadius: 16,
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 12,
-                    marginBottom: 12,
-                  }}
-                >
-                  <View
+            {/* Bloc paiement — tappable pour modifier */}
+            {intervType === "intervention" && (() => {
+              const mode = intervention.payment_mode || (intervention.is_invoice ? "invoice" : "cash");
+              const cfg = {
+                cash:         { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${intervention.price_estimated} € maintenant.`, subColor: isDark ? "#FCA5A5" : "#DC2626" },
+                invoice_cash: { bg: isDark ? "rgba(154,52,18,0.2)" : "#FFEDD5", border: isDark ? "rgba(154,52,18,0.5)" : "#FED7AA", iconBg: "#F97316", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#FB923C" : "#C2410C", sub: `Le client doit payer ${intervention.price_estimated} € maintenant.`, subColor: isDark ? "#FDBA74" : "#EA580C" },
+                invoice:      { bg: isDark ? "rgba(21,128,61,0.15)" : "#F0FDF4", border: isDark ? "rgba(21,128,61,0.4)" : "#BBF7D0", iconBg: "#22C55E", title: "PAIEMENT PAR FACTURE", titleColor: isDark ? "#4ADE80" : "#15803D", sub: "Le client sera facturé.", subColor: isDark ? "#86EFAC" : "#16A34A" },
+              }[mode as string] ?? { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${intervention.price_estimated} € maintenant.`, subColor: isDark ? "#FCA5A5" : "#DC2626" };
+
+              return (
+                <View style={{ marginBottom: 12 }}>
+                  {/* Ligne principale tappable */}
+                  <Pressable
+                    onPress={() => {
+                      setPendingPaymentMode(mode as any);
+                      setEditingPayment((v) => !v);
+                    }}
                     style={{
-                      backgroundColor: "#EF4444",
-                      height: 40,
-                      width: 40,
-                      borderRadius: 20,
+                      backgroundColor: cfg.bg,
+                      borderWidth: 1,
+                      borderColor: cfg.border,
+                      borderRadius: editingPayment ? 16 : 16,
+                      borderBottomLeftRadius: editingPayment ? 0 : 16,
+                      borderBottomRightRadius: editingPayment ? 0 : 16,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      flexDirection: "row",
                       alignItems: "center",
-                      justifyContent: "center",
+                      gap: 12,
                     }}
                   >
-                    <Wallet size={20} color="white" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: isDark ? "#F87171" : "#B91C1C",
-                        fontWeight: "800",
-                        fontSize: 15,
-                        textTransform: "uppercase",
-                        marginBottom: 2,
-                      }}
-                    >
-                      À ENCAISSER SUR PLACE
-                    </Text>
-                    <Text
-                      style={{
-                        color: isDark ? "#FCA5A5" : "#DC2626",
-                        fontSize: 14,
-                        fontWeight: "500",
-                      }}
-                    >
-                      Le client doit payer {intervention.price_estimated} €
-                      maintenant.
-                    </Text>
-                  </View>
+                    <View style={{ backgroundColor: cfg.iconBg, height: 40, width: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" }}>
+                      <Wallet size={20} color="white" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: cfg.titleColor, fontWeight: "800", fontSize: 14, textTransform: "uppercase", marginBottom: 2 }}>{cfg.title}</Text>
+                      <Text style={{ color: cfg.subColor, fontSize: 13, fontWeight: "500" }}>{cfg.sub}</Text>
+                    </View>
+                    <View style={{ padding: 4 }}>
+                      {editingPayment
+                        ? <X size={16} color={cfg.titleColor} />
+                        : <Pencil size={15} color={cfg.titleColor} />}
+                    </View>
+                  </Pressable>
+
+                  {/* Éditeur inline */}
+                  {editingPayment && (
+                    <View style={{
+                      backgroundColor: isDark ? "#1E293B" : "#F8FAFC",
+                      borderWidth: 1,
+                      borderTopWidth: 0,
+                      borderColor: cfg.border,
+                      borderBottomLeftRadius: 16,
+                      borderBottomRightRadius: 16,
+                      padding: 14,
+                      gap: 10,
+                    }}>
+                      <SlidingPillSelector
+                        options={[
+                          { id: "cash",         label: "Espèces",  pillColor: "#EF4444", activeTextColor: "#fff", icon: (c) => <Banknote size={13} color={c} /> },
+                          { id: "invoice",      label: "Facture",  pillColor: "#22C55E", activeTextColor: "#fff", icon: (c) => <FileText size={13} color={c} /> },
+                          { id: "invoice_cash", label: "FAC+Esp.", pillColor: "#F97316", activeTextColor: "#fff", icon: (c) => <Wallet  size={13} color={c} /> },
+                        ]}
+                        selected={pendingPaymentMode}
+                        onSelect={(id) => setPendingPaymentMode(id as any)}
+                        pillColor="#3B82F6"
+                        bgColor={isDark ? "#0F172A" : "#E2E8F0"}
+                        activeTextColor="#fff"
+                        inactiveTextColor={isDark ? "#94A3B8" : "#64748B"}
+                        fontSize={12}
+                        itemPy={8}
+                      />
+                      <Pressable
+                        onPress={() => paymentMutation.mutate(pendingPaymentMode)}
+                        disabled={paymentMutation.isPending}
+                        style={{
+                          backgroundColor: "#3B82F6",
+                          borderRadius: 12,
+                          paddingVertical: 10,
+                          alignItems: "center",
+                          opacity: paymentMutation.isPending ? 0.6 : 1,
+                        }}
+                      >
+                        {paymentMutation.isPending
+                          ? <ActivityIndicator color="white" size="small" />
+                          : <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>Confirmer</Text>}
+                      </Pressable>
+                    </View>
+                  )}
                 </View>
-              )}
-            {intervType === "intervention" &&
-              intervention.payment_mode === "invoice_cash" && (
-                <View
-                  style={{
-                    backgroundColor: isDark ? "rgba(154,52,18,0.2)" : "#FFEDD5",
-                    borderWidth: 1,
-                    borderColor: isDark ? "rgba(154,52,18,0.5)" : "#FED7AA",
-                    borderRadius: 16,
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 12,
-                    marginBottom: 12,
-                  }}
-                >
-                  <View
-                    style={{
-                      backgroundColor: "#F97316",
-                      height: 40,
-                      width: 40,
-                      borderRadius: 20,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Wallet size={20} color="white" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: isDark ? "#FB923C" : "#C2410C",
-                        fontWeight: "800",
-                        fontSize: 13,
-                        textTransform: "uppercase",
-                        marginBottom: 2,
-                      }}
-                    >
-                      À ENCAISSER SUR PLACE
-                    </Text>
-                    <Text
-                      style={{
-                        color: isDark ? "#FDBA74" : "#EA580C",
-                        fontSize: 12,
-                        fontWeight: "500",
-                      }}
-                    >
-                      Le client doit payer {intervention.price_estimated} €
-                      maintenant.
-                    </Text>
-                  </View>
-                </View>
-              )}
+              );
+            })()}
 
             {/* Date + heure sur une seule ligne compacte */}
             <View
@@ -420,6 +426,13 @@ export default function InterventionDetailScreen() {
                     minute: "2-digit",
                     timeZone: "Europe/Brussels",
                   })}
+                  {intervention.end_time && (
+                    " → " + new Date(intervention.end_time).toLocaleTimeString("fr-FR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      timeZone: "Europe/Brussels",
+                    })
+                  )}
                 </Text>
               </View>
             </View>

@@ -9,6 +9,7 @@ export const useAuth = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userZone, setUserZone] = useState<"hainaut" | "ardennes">("hainaut");
+  const [userName, setUserName] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();
 
@@ -26,6 +27,7 @@ export const useAuth = () => {
         const me = employees.find((e: any) => e.email === email);
         setIsAdmin(me?.role === "admin");
         setUserZone(me?.zone === "ardennes" ? "ardennes" : "hainaut");
+        setUserName(me?.full_name ?? "");
       } catch {
         setIsAdmin(false);
       } finally {
@@ -69,5 +71,5 @@ export const useAuth = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  return { session, isAdmin, userZone, loading };
+  return { session, isAdmin, userZone, userName, loading };
 };

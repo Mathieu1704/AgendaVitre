@@ -31,7 +31,7 @@ import {
 import { StatusBadge } from "../../src/ui/components/StatusBadge";
 import { Avatar } from "../../src/ui/components/Avatar";
 import { useQueryClient } from "@tanstack/react-query";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, Redirect } from "expo-router";
 import { useInterventions } from "../../src/hooks/useInterventions";
 import { useClients } from "../../src/hooks/useClients";
 import { supabase } from "../../src/lib/supabase";
@@ -110,6 +110,8 @@ export default function Dashboard() {
     document.head.appendChild(style);
     return () => style.remove();
   }, []);
+
+  if (userRole === "employee") return <Redirect href="/(app)/calendar?view=day" />;
 
   const todayInterventions =
     interventions?.filter(

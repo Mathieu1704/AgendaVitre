@@ -14,9 +14,11 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  // Seulement les routes avec une icône (exclut les écrans href: null)
+  // Seulement les routes avec une icône ET non masquées via href: null
   const visibleRoutes = state.routes.filter(
-    (r: any) => !!descriptors[r.key].options.tabBarIcon
+    (r: any) =>
+      !!descriptors[r.key].options.tabBarIcon &&
+      descriptors[r.key].options.href !== null
   );
 
   const activeVisibleIndex = visibleRoutes.findIndex(
@@ -35,11 +37,16 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
   })();
 
   const numTabs = visibleRoutes.length;
-  const tabWidth = width / numTabs;
+  const TAB_MAX_W = 120;
+  const tabWidth = numTabs <= 3 ? Math.min(width / numTabs, TAB_MAX_W) : width / numTabs;
+  const centerOffset = (width - tabWidth * numTabs) / 2;
+
+  const pillPos = (index: number) =>
+    centerOffset + index * tabWidth + (tabWidth - PILL_W) / 2;
 
   // Pill slide
   const pillX = useRef(
-    new Animated.Value(activeIndex * tabWidth + (tabWidth - PILL_W) / 2)
+    new Animated.Value(pillPos(activeIndex))
   ).current;
 
   // Scale par icône
@@ -51,7 +58,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
 
   useEffect(() => {
     Animated.spring(pillX, {
-      toValue: activeIndex * tabWidth + (tabWidth - PILL_W) / 2,
+      toValue: pillPos(activeIndex),
       useNativeDriver: true,
       tension: 180,
       friction: 22,
@@ -81,6 +88,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
       paddingBottom: bottomPad,
       paddingTop: 10,
       flexDirection: "row",
+      justifyContent: "center",
     }}>
       {/* Pill glissante */}
       <Animated.View
@@ -120,7 +128,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
                 navigation.navigate(route.name);
               }
             }}
-            style={{ flex: 1, alignItems: "center", justifyContent: "flex-start" }}
+            style={{ width: tabWidth, alignItems: "center", justifyContent: "flex-start" }}
           >
             <Animated.View style={{
               transform: [{ scale: scaleAnims[index] }],
