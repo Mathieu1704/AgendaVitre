@@ -365,6 +365,13 @@ export default function CalendarScreen() {
     staleTime: 30 * 1000,
   });
 
+  const { data: companySettings } = useQuery({
+    queryKey: ["company-settings"],
+    queryFn: async () => (await api.get("/api/settings/company")).data,
+    staleTime: 30 * 1000,
+  });
+  const hideCash = companySettings?.hide_cash ?? false;
+
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await refetch();
@@ -390,6 +397,7 @@ export default function CalendarScreen() {
     for (const it of interventions) {
       if (!it?.start_time) continue;
       if (effectiveZone !== "all" && it.zone !== effectiveZone) continue;
+      if (hideCash && it.payment_mode === "cash") continue;
       const k = dayKeyFromDateTime(it.start_time);
       (map[k] ||= []).push(it);
     }
@@ -433,9 +441,12 @@ export default function CalendarScreen() {
   // Interventions filtrées par zone pour la vue calendrier grille
   const calendarInterventions = useMemo(() => {
     if (!interventions) return [];
-    if (effectiveZone === "all") return interventions;
-    return interventions.filter((i: any) => i.zone === effectiveZone);
-  }, [interventions, effectiveZone]);
+    return interventions.filter((i: any) => {
+      if (effectiveZone !== "all" && i.zone !== effectiveZone) return false;
+      if (hideCash && i.payment_mode === "cash") return false;
+      return true;
+    });
+  }, [interventions, effectiveZone, hideCash]);
 
   // Effective view (used for nav + title when in calendar mode)
   const effectiveView = displayMode === "calendar" ? calView : viewMode;

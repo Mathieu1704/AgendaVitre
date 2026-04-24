@@ -54,7 +54,8 @@ class CompanySettings(Base):
     """Pour stocker les paramètres globaux comme la tolérance d'heures"""
     __tablename__ = "company_settings"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    overtime_tolerance_hours = Column(Float, default=3.0) # Ex: 3h de dépassement autorisé
+    overtime_tolerance_hours = Column(Float, default=3.0)
+    hide_cash = Column(Boolean, default=False)
 
 
 class HourlyRate(Base):

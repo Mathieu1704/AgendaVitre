@@ -4,7 +4,7 @@ from typing import List
 from uuid import UUID
 import re
 
-from app.models.models import get_db, SubZone, CitySubZone, Client, Intervention, HourlyRate
+from app.models.models import get_db, SubZone, CitySubZone, Client, Intervention, HourlyRate, CompanySettings
 from app.schemas.schemas import SubZoneOut, HourlyRateOut, HourlyRateCreate, normalize_city
 from app.core.deps import get_current_user
 from pydantic import BaseModel
@@ -23,6 +23,10 @@ class SubZoneCreate(BaseModel):
 
 class CityReassign(BaseModel):
     sub_zone_id: UUID
+
+
+class CompanySettingsPatch(BaseModel):
+    hide_cash: bool
 
 
 @router.get("/zones", response_model=List[SubZoneOut])
@@ -190,3 +194,31 @@ def delete_hourly_rate(
     db.delete(hr)
     db.commit()
     return {"ok": True}
+
+
+@router.get("/company")
+def get_company_settings(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    s = db.query(CompanySettings).first()
+    if not s:
+        s = CompanySettings()
+        db.add(s)
+        db.commit()
+        db.refresh(s)
+    return {"hide_cash": s.hide_cash}
+
+
+@router.patch("/company")
+def update_company_settings(
+    body: CompanySettingsPatch,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Réservé aux admins.")
+    s = db.query(CompanySettings).first()
+    if not s:
+        s = CompanySettings()
+        db.add(s)
+    s.hide_cash = body.hide_cash
+    db.commit()
+    return {"hide_cash": s.hide_cash}

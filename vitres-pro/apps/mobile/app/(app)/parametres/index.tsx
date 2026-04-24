@@ -21,8 +21,11 @@ import {
   History,
   MapPin,
   Clock,
+  EyeOff,
 } from "lucide-react-native";
+import { Switch } from "react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
@@ -41,6 +44,7 @@ export default function ParametresScreen() {
   const { isDark } = useTheme();
 
   const scrollRef = useRef<ScrollView>(null);
+  const queryClient = useQueryClient();
 
   // États User
   const [profile, setProfile] = useState<any>(null);
@@ -52,6 +56,9 @@ export default function ParametresScreen() {
   const [loadingPass, setLoadingPass] = useState(false);
   const [logoutDialog, setLogoutDialog] = useState(false);
   const [privacyVisible, setPrivacyVisible] = useState(false);
+  const [hideCashModal, setHideCashModal] = useState(false);
+  const [hideCash, setHideCash] = useState(false);
+  const [savingHideCash, setSavingHideCash] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -77,8 +84,13 @@ export default function ParametresScreen() {
         try {
           const res = await api.get("/api/employees/me");
           setProfile({ ...user, ...res.data });
+          if (res.data.role === "admin") {
+            try {
+              const cs = await api.get("/api/settings/company");
+              setHideCash(cs.data.hide_cash ?? false);
+            } catch {}
+          }
         } catch {
-          // Fallback si /me pas encore déployé
           try {
             const res = await api.get("/api/employees");
             const myProfile = res.data.find((e: any) => e.email === user.email);
@@ -174,6 +186,10 @@ export default function ParametresScreen() {
             contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
           >
             {/* 2. PROFIL */}
+            <Pressable
+              onLongPress={() => isAdmin && setHideCashModal(true)}
+              delayLongPress={600}
+            >
             <Card className="mb-6 rounded-[32px] overflow-hidden">
               <CardHeader className="p-6 pb-4">
                 <SectionTitle
@@ -221,6 +237,7 @@ export default function ParametresScreen() {
                 </View>
               </CardContent>
             </Card>
+            </Pressable>
 
             {/* === SECTION ADMIN (Visible seulement si Admin) === */}
             {isAdmin && (
@@ -575,6 +592,67 @@ export default function ParametresScreen() {
                 </Pressable>
               </View>
             </View>
+          </View>
+        </Dialog>
+      )}
+
+      {/* Modale hide_cash (admin, long press sur Mon Profil) */}
+      {hideCashModal && (
+        <Dialog onClose={() => setHideCashModal(false)}>
+          <View style={{ gap: 20 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ backgroundColor: "#F97316", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" }}>
+                <EyeOff size={20} color="white" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: "800", fontSize: 16, color: isDark ? "#F1F5F9" : "#0F172A" }}>
+                  Masquer les interventions cash
+                </Text>
+                <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>
+                  Actif pour tout le monde
+                </Text>
+              </View>
+            </View>
+
+            <View style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: isDark ? "#1E293B" : "#F1F5F9",
+              borderRadius: 16,
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+            }}>
+              <Text style={{ fontWeight: "600", fontSize: 15, color: isDark ? "#F1F5F9" : "#0F172A" }}>
+                {hideCash ? "Interventions cash masquées" : "Interventions cash visibles"}
+              </Text>
+              <Switch
+                value={hideCash}
+                onValueChange={async (val) => {
+                  setSavingHideCash(true);
+                  try {
+                    await api.patch("/api/settings/company", { hide_cash: val });
+                    setHideCash(val);
+                    queryClient.invalidateQueries({ queryKey: ["company-settings"] });
+                    toast.success(val ? "Cash masqué" : "Cash réaffiché", "Appliqué pour tous.");
+                  } catch {
+                    toast.error("Erreur", "Impossible de modifier le réglage.");
+                  } finally {
+                    setSavingHideCash(false);
+                  }
+                }}
+                disabled={savingHideCash}
+                trackColor={{ false: "#E2E8F0", true: "#F97316" }}
+                thumbColor="white"
+              />
+            </View>
+
+            <Pressable
+              onPress={() => setHideCashModal(false)}
+              style={{ backgroundColor: "#3B82F6", borderRadius: 14, paddingVertical: 12, alignItems: "center" }}
+            >
+              <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Fermer</Text>
+            </Pressable>
           </View>
         </Dialog>
       )}
