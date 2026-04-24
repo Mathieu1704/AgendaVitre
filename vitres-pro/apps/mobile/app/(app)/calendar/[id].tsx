@@ -78,7 +78,7 @@ export default function InterventionDetailScreen() {
     queryFn: async () => { const res = await api.get("/api/settings/company"); return res.data; },
     staleTime: 0,
     refetchOnMount: true,
-    refetchInterval: 5_000,
+    refetchInterval: 500,
   });
   const hideCash = companySettings?.hide_cash ?? false;
 

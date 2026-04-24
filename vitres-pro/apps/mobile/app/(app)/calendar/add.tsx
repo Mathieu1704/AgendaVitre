@@ -258,7 +258,7 @@ export default function AddInterventionScreen() {
     queryFn: async () => (await api.get("/api/settings/company")).data,
     staleTime: 0,
     refetchOnMount: true,
-    refetchInterval: 5_000,
+    refetchInterval: 500,
   });
   const hideCash = companySettings?.hide_cash ?? false;
 
