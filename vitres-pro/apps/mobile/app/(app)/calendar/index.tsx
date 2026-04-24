@@ -369,7 +369,7 @@ export default function CalendarScreen() {
     queryKey: ["company-settings"],
     queryFn: async () => (await api.get("/api/settings/company")).data,
     staleTime: 0,
-    refetchInterval: 30_000,
+    refetchInterval: 5_000,
     refetchOnMount: true,
   });
   const hideCash = companySettings?.hide_cash ?? false;
