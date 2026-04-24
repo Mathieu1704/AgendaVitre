@@ -5,6 +5,7 @@ import {
   View,
   Text,
   ScrollView,
+  Pressable,
   useWindowDimensions,
   Platform,
   ActivityIndicator,
