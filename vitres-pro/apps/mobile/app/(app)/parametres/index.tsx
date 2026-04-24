@@ -618,12 +618,16 @@ export default function ParametresScreen() {
                 color: !hideCash ? (isDark ? "#F1F5F9" : "#0F172A") : "#94A3B8",
               }}>OFF</Text>
               <Pressable
-                onPress={() => {
+                onPress={async () => {
                   const next = !hideCash;
+                  await queryClient.cancelQueries({ queryKey: ["company-settings"] });
                   queryClient.setQueryData(["company-settings"], { hide_cash: next });
-                  api.patch("/api/settings/company", { hide_cash: next }).catch(() => {
+                  try {
+                    await api.patch("/api/settings/company", { hide_cash: next });
+                  } catch {
+                    queryClient.setQueryData(["company-settings"], { hide_cash: !next });
                     toast.error("Erreur", "Impossible de modifier le réglage.");
-                  });
+                  }
                 }}
                 style={{
                   width: 58, height: 32, borderRadius: 16,
