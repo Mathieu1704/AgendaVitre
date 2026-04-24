@@ -397,7 +397,7 @@ export default function CalendarScreen() {
     for (const it of interventions) {
       if (!it?.start_time) continue;
       if (effectiveZone !== "all" && it.zone !== effectiveZone) continue;
-      if (hideCash && it.payment_mode === "cash") continue;
+      if (hideCash && (it.payment_mode === "cash" || !it.payment_mode)) continue;
       const k = dayKeyFromDateTime(it.start_time);
       (map[k] ||= []).push(it);
     }
@@ -443,7 +443,7 @@ export default function CalendarScreen() {
     if (!interventions) return [];
     return interventions.filter((i: any) => {
       if (effectiveZone !== "all" && i.zone !== effectiveZone) return false;
-      if (hideCash && i.payment_mode === "cash") return false;
+      if (hideCash && (i.payment_mode === "cash" || !i.payment_mode)) return false;
       return true;
     });
   }, [interventions, effectiveZone, hideCash]);
