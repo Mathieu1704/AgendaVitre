@@ -256,7 +256,8 @@ export default function AddInterventionScreen() {
   const { data: companySettings } = useQuery({
     queryKey: ["company-settings"],
     queryFn: async () => (await api.get("/api/settings/company")).data,
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: true,
   });
   const hideCash = companySettings?.hide_cash ?? false;
 

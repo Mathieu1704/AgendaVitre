@@ -368,7 +368,9 @@ export default function CalendarScreen() {
   const { data: companySettings } = useQuery({
     queryKey: ["company-settings"],
     queryFn: async () => (await api.get("/api/settings/company")).data,
-    staleTime: 30 * 1000,
+    staleTime: 0,
+    refetchInterval: 30_000,
+    refetchOnMount: true,
   });
   const hideCash = companySettings?.hide_cash ?? false;
 

@@ -76,7 +76,8 @@ export default function InterventionDetailScreen() {
   const { data: companySettings } = useQuery({
     queryKey: ["company-settings"],
     queryFn: async () => { const res = await api.get("/api/settings/company"); return res.data; },
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: true,
   });
   const hideCash = companySettings?.hide_cash ?? false;
 

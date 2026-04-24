@@ -58,7 +58,6 @@ export default function ParametresScreen() {
   const [privacyVisible, setPrivacyVisible] = useState(false);
   const [hideCashModal, setHideCashModal] = useState(false);
   const [hideCash, setHideCash] = useState(false);
-  const [savingHideCash, setSavingHideCash] = useState(false);
   const toggleAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -618,7 +617,14 @@ export default function ParametresScreen() {
                 color: !hideCash ? (isDark ? "#F1F5F9" : "#0F172A") : "#94A3B8",
               }}>OFF</Text>
               <Pressable
-                onPress={() => setHideCash(v => !v)}
+                onPress={() => {
+                  const next = !hideCash;
+                  setHideCash(next);
+                  queryClient.setQueryData(["company-settings"], { hide_cash: next });
+                  api.patch("/api/settings/company", { hide_cash: next }).catch(() => {
+                    toast.error("Erreur", "Impossible de modifier le réglage.");
+                  });
+                }}
                 style={{
                   width: 58, height: 32, borderRadius: 16,
                   backgroundColor: hideCash ? "#EF4444" : "#E2E8F0",
@@ -648,34 +654,6 @@ export default function ParametresScreen() {
               }}>ON</Text>
             </View>
 
-            {/* Bouton confirmer */}
-            <Pressable
-              onPress={async () => {
-                setSavingHideCash(true);
-                try {
-                  await api.patch("/api/settings/company", { hide_cash: hideCash });
-                  queryClient.setQueryData(["company-settings"], { hide_cash: hideCash });
-                  queryClient.invalidateQueries({ queryKey: ["company-settings"] });
-                  setHideCashModal(false);
-                } catch {
-                  toast.error("Erreur", "Impossible de modifier le réglage.");
-                } finally {
-                  setSavingHideCash(false);
-                }
-              }}
-              disabled={savingHideCash}
-              style={{
-                backgroundColor: "#3B82F6",
-                borderRadius: 20,
-                paddingVertical: 12,
-                paddingHorizontal: 40,
-                opacity: savingHideCash ? 0.6 : 1,
-              }}
-            >
-              {savingHideCash
-                ? <ActivityIndicator color="white" size="small" />
-                : <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Confirmer</Text>}
-            </Pressable>
           </View>
         </Dialog>
       )}
