@@ -211,7 +211,7 @@ def update_intervention(
 
     # Filtrage des champs autorisés pour les non-admins
     if current_user.role != 'admin':
-        EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time"}
+        EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time", "payment_mode", "is_invoice"}
         intervention_update = {k: v for k, v in intervention_update.items() if k in EMPLOYEE_ALLOWED}
 
     old_status = db_intervention.status
