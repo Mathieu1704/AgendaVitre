@@ -1,13 +1,35 @@
 import { useState, useEffect } from "react";
+import { Platform } from "react-native";
 import { supabase } from "../lib/supabase";
 import { Session } from "@supabase/supabase-js";
 import { api } from "../lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 
+const ROLE_KEY = "lvm_cached_role";
+
+function getCachedRole(): boolean {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return localStorage.getItem(ROLE_KEY) === "admin";
+  }
+  return false;
+}
+
+function setCachedRole(role: string) {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    localStorage.setItem(ROLE_KEY, role);
+  }
+}
+
+function clearCachedRole() {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    localStorage.removeItem(ROLE_KEY);
+  }
+}
+
 export const useAuth = () => {
   const [session, setSession] = useState<Session | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(() => getCachedRole());
   const [userZone, setUserZone] = useState<"hainaut" | "ardennes">("hainaut");
   const [userName, setUserName] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -25,7 +47,9 @@ export const useAuth = () => {
         const cached = queryClient.getQueryData<any[]>(["employees"]);
         const employees = cached ?? (await api.get("/api/employees")).data;
         const me = employees.find((e: any) => e.email === email);
-        setIsAdmin(me?.role === "admin");
+        const role = me?.role ?? "employee";
+        setIsAdmin(role === "admin");
+        setCachedRole(role);
         setUserZone(me?.zone === "ardennes" ? "ardennes" : "hainaut");
         setUserName(me?.full_name ?? "");
       } catch {
@@ -56,6 +80,7 @@ export const useAuth = () => {
         setSession(null);
         setIsAdmin(false);
         setLoading(false);
+        clearCachedRole();
         queryClient.clear();
         router.replace("/(auth)/login");
         return;

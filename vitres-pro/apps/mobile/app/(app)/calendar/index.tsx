@@ -416,7 +416,7 @@ export default function CalendarScreen() {
       });
     }
     return map;
-  }, [interventions, dayKeyFromDateTime, effectiveZone]);
+  }, [interventions, dayKeyFromDateTime, effectiveZone, hideCash]);
 
   // --- FILTRES ---
   const filterItem = useCallback(
