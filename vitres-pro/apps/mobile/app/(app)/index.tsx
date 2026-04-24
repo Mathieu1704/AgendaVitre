@@ -20,7 +20,7 @@ import {
 } from "lucide-react-native";
 import { LineChart } from "react-native-gifted-charts";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { format, isToday, parseISO } from "date-fns";
+import { format, isToday, parseISO, formatISO } from "date-fns";
 
 import {
   Card,
@@ -31,7 +31,7 @@ import {
 import { StatusBadge } from "../../src/ui/components/StatusBadge";
 import { Avatar } from "../../src/ui/components/Avatar";
 import { useQueryClient } from "@tanstack/react-query";
-import { useFocusEffect, Redirect } from "expo-router";
+import { useFocusEffect, Redirect, useRouter } from "expo-router";
 import { useInterventions } from "../../src/hooks/useInterventions";
 import { useClients } from "../../src/hooks/useClients";
 import { supabase } from "../../src/lib/supabase";
@@ -54,6 +54,7 @@ interface StatItem {
 
 export default function Dashboard() {
   const { isDark } = useTheme();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
 
@@ -505,9 +506,10 @@ export default function Dashboard() {
                 >
                   <View style={{ gap: 8 }}>
                     {todayInterventions.map((item: any, i: number) => (
-                      <View
+                      <Pressable
                         key={i}
-                        style={{
+                        onPress={() => router.push({ pathname: "/(app)/calendar/[id]", params: { id: item.id, from_view: "day", from_date: formatISO(new Date(), { representation: "date" }) } })}
+                        style={({ pressed }) => ({
                           flexDirection: "row",
                           alignItems: "center",
                           gap: 12,
@@ -518,7 +520,8 @@ export default function Dashboard() {
                             : "#F8FAFC",
                           borderWidth: 1,
                           borderColor: isDark ? "#334155" : "#E4E4E7",
-                        }}
+                          opacity: pressed ? 0.7 : 1,
+                        })}
                       >
                         <Avatar
                           name={item.client?.name || item.title}
@@ -539,7 +542,7 @@ export default function Dashboard() {
                           </Text>
                         </View>
                         <StatusBadge status={item.status} />
-                      </View>
+                      </Pressable>
                     ))}
                   </View>
                 </ScrollView>
@@ -829,8 +832,10 @@ export default function Dashboard() {
                 >
                   <View className="gap-3">
                     {todayInterventions.map((item: any, i: number) => (
-                      <View
+                      <Pressable
                         key={i}
+                        onPress={() => router.push({ pathname: "/(app)/calendar/[id]", params: { id: item.id, from_view: "day", from_date: formatISO(new Date(), { representation: "date" }) } })}
+                        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                         className="flex-row items-center gap-3 p-3 rounded-3xl bg-muted/40 dark:bg-slate-800/50 border border-border dark:border-slate-700"
                       >
                         <Avatar
@@ -855,7 +860,7 @@ export default function Dashboard() {
                           status={item.status}
                           className="py-0.5 px-1.5"
                         />
-                      </View>
+                      </Pressable>
                     ))}
                   </View>
                 </ScrollView>
