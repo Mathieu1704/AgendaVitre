@@ -25,7 +25,7 @@ import {
   EyeOff,
 } from "lucide-react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
@@ -57,8 +57,15 @@ export default function ParametresScreen() {
   const [logoutDialog, setLogoutDialog] = useState(false);
   const [privacyVisible, setPrivacyVisible] = useState(false);
   const [hideCashModal, setHideCashModal] = useState(false);
-  const [hideCash, setHideCash] = useState(false);
-  const toggleAnim = useRef(new Animated.Value(0)).current;
+  const { data: companySettings } = useQuery({
+    queryKey: ["company-settings"],
+    queryFn: async () => (await api.get("/api/settings/company")).data,
+    staleTime: 0,
+    refetchInterval: 5_000,
+    refetchOnMount: true,
+  });
+  const hideCash = companySettings?.hide_cash ?? false;
+  const toggleAnim = useRef(new Animated.Value(companySettings?.hide_cash ? 1 : 0)).current;
 
   useEffect(() => {
     Animated.timing(toggleAnim, {
@@ -92,12 +99,6 @@ export default function ParametresScreen() {
         try {
           const res = await api.get("/api/employees/me");
           setProfile({ ...user, ...res.data });
-          if (res.data.role === "admin") {
-            try {
-              const cs = await api.get("/api/settings/company");
-              setHideCash(cs.data.hide_cash ?? false);
-            } catch {}
-          }
         } catch {
           try {
             const res = await api.get("/api/employees");
@@ -619,7 +620,6 @@ export default function ParametresScreen() {
               <Pressable
                 onPress={() => {
                   const next = !hideCash;
-                  setHideCash(next);
                   queryClient.setQueryData(["company-settings"], { hide_cash: next });
                   api.patch("/api/settings/company", { hide_cash: next }).catch(() => {
                     toast.error("Erreur", "Impossible de modifier le réglage.");
