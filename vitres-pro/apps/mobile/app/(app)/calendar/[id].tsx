@@ -67,49 +67,6 @@ export default function InterventionDetailScreen() {
   });
 
   // 3. MUTATIONS (Doivent être déclarées AVANT les returns conditionnels)
-  const statusMutation = useMutation({
-    mutationFn: async (newStatus: string) => {
-      const now = new Date().toISOString();
-      const payload: any = { status: newStatus };
-
-      if (newStatus === "in_progress") payload.real_start_time = now;
-      if (newStatus === "done") payload.real_end_time = now;
-
-      return await api.patch(`/api/interventions/${id}`, payload);
-    },
-    onMutate: async (newStatus: string) => {
-      await queryClient.cancelQueries({ queryKey: ["intervention", id] });
-      const prev = queryClient.getQueryData(["intervention", id]);
-      const now = new Date().toISOString();
-      queryClient.setQueryData(["intervention", id], (old: any) => {
-        if (!old) return old;
-        const update: any = { ...old, status: newStatus };
-        if (newStatus === "in_progress") update.real_start_time = now;
-        if (newStatus === "done") update.real_end_time = now;
-        return update;
-      });
-      // Mise à jour optimiste dans la liste aussi
-      queryClient.setQueryData<any[]>(["interventions"], (old) =>
-        old
-          ? old.map((i) => (i.id === id ? { ...i, status: newStatus } : i))
-          : old,
-      );
-      return { prev };
-    },
-    onSuccess: () => {
-      toast.success("Statut mis à jour", "L'intervention a été modifiée.");
-    },
-    onError: (_err, _vars, ctx: any) => {
-      if (ctx?.prev) queryClient.setQueryData(["intervention", id], ctx.prev);
-      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
-      queryClient.invalidateQueries({ queryKey: ["interventions"] });
-      toast.error("Erreur", "Impossible de mettre à jour le statut.");
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
-    },
-  });
-
   const deleteMutation = useMutation({
     mutationFn: async () => {
       return await api.delete(`/api/interventions/${id}`);
@@ -760,36 +717,17 @@ export default function InterventionDetailScreen() {
         className="absolute bottom-0 left-0 right-0 px-4 pt-4"
         style={{ paddingBottom: Math.max(insets.bottom, 16) }}
       >
-        {intervention.status === "planned" && (
-          <Button
-            onPress={() => statusMutation.mutate("in_progress")}
-            disabled={statusMutation.isPending}
-            className="w-full h-14 bg-blue-500 hover:bg-blue-600 rounded-full"
-          >
-            {statusMutation.isPending ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <View className="flex-row items-center">
-                <PlayCircle size={20} color="white" strokeWidth={2.5} />
-                <Text className="text-white font-bold text-lg ml-2">
-                  Démarrer l'intervention
-                </Text>
-              </View>
-            )}
-          </Button>
-        )}
-
-        {intervention.status === "in_progress" && (
+        {(intervention.status === "planned" || intervention.status === "in_progress") && (
           <Button
             onPress={() =>
               router.push(`/(app)/calendar/add?reprise_of=${id}` as any)
             }
-            className="w-full h-14 bg-green-500 hover:bg-green-600 rounded-full"
+            className="w-full h-14 bg-blue-500 hover:bg-blue-600 rounded-full"
           >
             <View className="flex-row items-center">
               <CheckCircle2 size={20} color="white" strokeWidth={2.5} />
               <Text className="text-white font-bold text-lg ml-2">
-                Terminer l'intervention
+                Intervention terminée
               </Text>
             </View>
           </Button>

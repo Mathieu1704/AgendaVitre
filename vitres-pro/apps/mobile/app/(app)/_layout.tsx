@@ -158,6 +158,7 @@ export default function AppLayout() {
           name="index"
           options={{
             title: "Accueil",
+            href: isAdmin ? undefined : null,
             tabBarIcon: ({ color, size }) => (
               <LayoutDashboard size={size} color={color} />
             ),
@@ -176,6 +177,7 @@ export default function AppLayout() {
           name="clients/index"
           options={{
             title: "Clients",
+            href: isAdmin ? undefined : null,
             tabBarIcon: ({ color, size }) => (
               <Users size={size} color={color} />
             ),
@@ -189,6 +191,7 @@ export default function AppLayout() {
           name="notifications/index"
           options={{
             title: "Alertes",
+            href: isAdmin ? undefined : null,
             tabBarIcon: ({ color, size }) => (
               <View>
                 <Bell size={size} color={color} />

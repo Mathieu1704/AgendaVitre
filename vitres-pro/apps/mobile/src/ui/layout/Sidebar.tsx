@@ -15,6 +15,7 @@ import {
 import { supabase } from "../../lib/supabase";
 import { useNotifications } from "../../hooks/useNotifications";
 import { useTheme } from "../components/ThemeToggle";
+import { useAuth } from "../../hooks/useAuth";
 
 const ITEM_HEIGHT = 44; // height of each nav item (p-3 + mb-1 ≈ 44px)
 const ITEM_MARGIN = 4;  // mb-1 = 4px
@@ -26,6 +27,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const { unreadCount } = useNotifications();
   const { isDark } = useTheme();
+  const { isAdmin } = useAuth();
   const insets = useSafeAreaInsets();
 
   const colors = {
@@ -56,13 +58,13 @@ export function Sidebar() {
 
   const items = useMemo(
     () => [
-      { path: "/(app)", label: "Dashboard", icon: LayoutDashboard, exact: true, match: "/" },
-      { path: "/(app)/calendar", label: "Planning", icon: Calendar, match: "/calendar" },
-      { path: "/(app)/clients", label: "Clients", icon: Users, match: "/clients" },
-      { path: "/(app)/notifications", label: "Alertes", icon: Bell, badge: true, match: "/notifications" },
-      { path: "/(app)/parametres", label: "Paramètres", icon: Settings, match: "/parametres" },
-    ],
-    []
+      { path: "/(app)", label: "Dashboard", icon: LayoutDashboard, exact: true, match: "/", adminOnly: true },
+      { path: "/(app)/calendar", label: "Planning", icon: Calendar, match: "/calendar", adminOnly: false },
+      { path: "/(app)/clients", label: "Clients", icon: Users, match: "/clients", adminOnly: true },
+      { path: "/(app)/notifications", label: "Alertes", icon: Bell, badge: true, match: "/notifications", adminOnly: true },
+      { path: "/(app)/parametres", label: "Paramètres", icon: Settings, match: "/parametres", adminOnly: false },
+    ].filter((item) => !item.adminOnly || isAdmin),
+    [isAdmin]
   );
 
   // Find active index

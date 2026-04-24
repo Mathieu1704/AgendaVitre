@@ -123,9 +123,6 @@ def create_intervention(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
-    if current_user.role != 'admin':
-        raise HTTPException(status_code=403, detail="Réservé aux admins.")
-
     if intervention.client_id:
         client = db.query(Client).filter(Client.id == intervention.client_id).first()
         if not client:
@@ -134,9 +131,14 @@ def create_intervention(
     data = intervention.model_dump(exclude={"employee_ids", "items"})
     if current_user.role != 'admin':
         data["zone"] = current_user.zone
+        data["hourly_rate_id"] = None
+        data["type"] = "intervention"
     new_intervention = Intervention(**data)
 
-    if intervention.employee_ids:
+    if current_user.role != 'admin':
+        employee = db.query(Employee).filter(Employee.id == current_user.id).first()
+        new_intervention.employees = [employee] if employee else []
+    elif intervention.employee_ids:
         employees = db.query(Employee).filter(Employee.id.in_(intervention.employee_ids)).all()
         new_intervention.employees = employees
 

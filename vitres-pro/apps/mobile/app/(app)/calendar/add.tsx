@@ -1,4 +1,10 @@
-import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useMemo,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+} from "react";
 import {
   View,
   ScrollView,
@@ -849,20 +855,25 @@ export default function AddInterventionScreen() {
                       flexDirection: "row",
                       alignItems: "center",
                       justifyContent: "center",
-                      backgroundColor: "#FEF2F2",
-                      borderWidth: 1.5,
-                      borderColor: "#FECACA",
-                      borderRadius: 16,
-                      padding: 14,
+                      backgroundColor: "#F97316",
+                      borderRadius: 20,
+                      paddingVertical: 16,
+                      paddingHorizontal: 20,
                       gap: 10,
+                      shadowColor: "#F97316",
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.35,
+                      shadowRadius: 8,
+                      elevation: 6,
                     }}
                   >
-                    <AlertTriangle size={18} color="#EF4444" />
+                    <AlertTriangle size={20} color="white" />
                     <Text
                       style={{
-                        color: "#EF4444",
-                        fontWeight: "700",
-                        fontSize: 15,
+                        color: "white",
+                        fontWeight: "800",
+                        fontSize: 16,
+                        letterSpacing: 0.3,
                       }}
                     >
                       RDV non repris
@@ -871,12 +882,17 @@ export default function AddInterventionScreen() {
                 ) : (
                   <View
                     style={{
-                      backgroundColor: "#FEF2F2",
-                      borderWidth: 1.5,
-                      borderColor: "#FECACA",
+                      backgroundColor: isDark ? "#1E293B" : "white",
+                      borderWidth: 2,
+                      borderColor: "#F97316",
                       borderRadius: 20,
                       padding: 16,
                       gap: 12,
+                      shadowColor: "#F97316",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 6,
+                      elevation: 4,
                     }}
                   >
                     <View
@@ -886,16 +902,16 @@ export default function AddInterventionScreen() {
                         gap: 8,
                       }}
                     >
-                      <AlertTriangle size={18} color="#EF4444" />
+                      <AlertTriangle size={18} color="#F97316" />
                       <Text
                         style={{
-                          color: "#EF4444",
-                          fontWeight: "700",
+                          color: "#F97316",
+                          fontWeight: "800",
                           fontSize: 15,
                           flex: 1,
                         }}
                       >
-                        RDV non repris
+                        Clôturer sans reprise
                       </Text>
                       <Pressable
                         onPress={() => setNoRepriseMode(false)}
@@ -908,19 +924,19 @@ export default function AddInterventionScreen() {
                       value={noRepriseNote}
                       onChangeText={setNoRepriseNote}
                       placeholder="Note optionnelle (raison, contexte...)"
-                      placeholderTextColor="#CBD5E1"
+                      placeholderTextColor="#94A3B8"
                       multiline
                       numberOfLines={3}
                       style={[
                         {
                           fontSize: 14,
                           color: isDark ? "#F1F5F9" : "#0f172a",
-                          backgroundColor: isDark ? "#1E293B" : "white",
+                          backgroundColor: isDark ? "#0F172A" : "#FFF7ED",
                           borderRadius: 12,
                           padding: 12,
                           minHeight: 70,
-                          borderWidth: 1,
-                          borderColor: "#FECACA",
+                          borderWidth: 1.5,
+                          borderColor: "#FED7AA",
                         },
                         Platform.OS === "web"
                           ? ({ outlineStyle: "none" } as any)
@@ -931,8 +947,8 @@ export default function AddInterventionScreen() {
                       onPress={handleNoReprise}
                       disabled={isSubmittingNoReprise}
                       style={{
-                        backgroundColor: "#EF4444",
-                        borderRadius: 12,
+                        backgroundColor: "#F97316",
+                        borderRadius: 14,
                         padding: 14,
                         alignItems: "center",
                         opacity: isSubmittingNoReprise ? 0.6 : 1,
@@ -944,7 +960,7 @@ export default function AddInterventionScreen() {
                         <Text
                           style={{
                             color: "white",
-                            fontWeight: "700",
+                            fontWeight: "800",
                             fontSize: 15,
                           }}
                         >
@@ -1113,25 +1129,23 @@ export default function AddInterventionScreen() {
                 </View>
               )}
 
-              {/* EMPLOYES */}
-              <View style={{ gap: 4 }}>
-                <Text className="text-sm font-semibold text-foreground dark:text-white">
-                  Qui intervient ?
-                </Text>
-                <MultiSelect
-                  items={employeeItems}
-                  selectedIds={selectedEmployeeIds}
-                  onChange={setSelectedEmployeeIds}
-                />
-              </View>
+              {/* EMPLOYES (admin seulement) */}
+              {isAdmin && (
+                <View style={{ gap: 4 }}>
+                  <Text className="text-sm font-semibold text-foreground dark:text-white">
+                    Qui intervient ?
+                  </Text>
+                  <MultiSelect
+                    items={employeeItems}
+                    selectedIds={selectedEmployeeIds}
+                    onChange={setSelectedEmployeeIds}
+                  />
+                </View>
+              )}
 
               {/* TITRE + DATE + DURÉE */}
               <View style={{ gap: 16 }}>
-                <Input
-                  label="Titre"
-                  value={title}
-                  onChangeText={setTitle}
-                />
+                <Input label="Titre" value={title} onChangeText={setTitle} />
                 <DateTimePicker
                   value={startDateStr}
                   onChange={setStartDateStr}
@@ -1358,29 +1372,30 @@ export default function AddInterventionScreen() {
                     <View
                       style={{
                         flexDirection: "row",
-                        gap: 8,
+                        gap: 6, // Légèrement réduit (était 8)
                         alignItems: "center",
                         marginBottom: 10,
                         backgroundColor: "#F0F9FF",
                         borderRadius: 10,
-                        padding: 8,
+                        padding: 6, // Légèrement réduit (était 8)
                       }}
                     >
                       <TextInput
                         autoFocus
-                        placeholder="Nom (ex: RDC, Velux…)"
+                        placeholder="Nom (ex: RDC…)" // Raccourci pour libérer de l'espace
                         placeholderTextColor="#94A3B8"
                         value={newServiceLabel}
                         onChangeText={setNewServiceLabel}
                         style={[
                           {
                             flex: 2,
+                            minWidth: 0, // 🚨 CRUCIAL SUR WEB : Permet au champ de rétrécir au lieu de déborder
                             borderWidth: 1,
                             borderColor: "#3B82F6",
                             borderRadius: 8,
-                            paddingHorizontal: 10,
+                            paddingHorizontal: 8,
                             paddingVertical: 7,
-                            fontSize: 14,
+                            fontSize: 16, // 🚨 CRUCIAL SUR SAFARI iOS : Empêche le zoom automatique !
                             backgroundColor: isDark ? "#1E293B" : "#fff",
                             color: isDark ? "#F1F5F9" : "#1E293B",
                           },
@@ -1398,12 +1413,13 @@ export default function AddInterventionScreen() {
                         style={[
                           {
                             flex: 1,
+                            minWidth: 0, // 🚨 CRUCIAL SUR WEB : Permet au champ de rétrécir
                             borderWidth: 1,
                             borderColor: isDark ? "#1E40AF" : "#3B82F6",
                             borderRadius: 8,
-                            paddingHorizontal: 10,
+                            paddingHorizontal: 8,
                             paddingVertical: 7,
-                            fontSize: 14,
+                            fontSize: 16, // 🚨 CRUCIAL SUR SAFARI iOS : Empêche le zoom automatique !
                             backgroundColor: isDark ? "#1E293B" : "#fff",
                             color: isDark ? "#F1F5F9" : "#1E293B",
                           },
@@ -1455,10 +1471,11 @@ export default function AddInterventionScreen() {
                         style={{
                           backgroundColor: "#3B82F6",
                           borderRadius: 20,
-                          width: 34,
-                          height: 34,
+                          width: 32, // Légèrement réduit pour être sûr que tout passe
+                          height: 32,
                           alignItems: "center",
                           justifyContent: "center",
+                          flexShrink: 0, // Empêche le bouton de s'écraser
                         }}
                       >
                         <Check size={16} color="#fff" strokeWidth={2.5} />
@@ -1470,10 +1487,11 @@ export default function AddInterventionScreen() {
                           borderRadius: 20,
                           borderWidth: 1.5,
                           borderColor: isDark ? "#475569" : "#CBD5E1",
-                          width: 34,
-                          height: 34,
+                          width: 32, // Légèrement réduit
+                          height: 32,
                           alignItems: "center",
                           justifyContent: "center",
+                          flexShrink: 0, // Empêche le bouton de s'écraser
                         }}
                       >
                         <X
@@ -1837,7 +1855,7 @@ export default function AddInterventionScreen() {
                     {isSubmitting
                       ? "Envoi..."
                       : isRepriseMode
-                        ? "Planifier le RDV"
+                        ? "Confirmer"
                         : isEditMode
                           ? "Mettre à jour"
                           : "Valider"}
@@ -2117,7 +2135,10 @@ export default function AddInterventionScreen() {
 
           <View style={{ gap: 12 }}>
             <Pressable
-              onPress={() => { setNcFocused("name"); ncNameRef.current?.focus(); }}
+              onPress={() => {
+                setNcFocused("name");
+                ncNameRef.current?.focus();
+              }}
               style={{
                 borderWidth: 1.5,
                 borderColor: ncFocused === "name" ? "#3B82F6" : "#E2E8F0",
@@ -2154,7 +2175,10 @@ export default function AddInterventionScreen() {
               />
             </Pressable>
             <Pressable
-              onPress={() => { setNcFocused("street"); ncStreetRef.current?.focus(); }}
+              onPress={() => {
+                setNcFocused("street");
+                ncStreetRef.current?.focus();
+              }}
               style={{
                 borderWidth: 1.5,
                 borderColor: ncFocused === "street" ? "#3B82F6" : "#E2E8F0",
@@ -2192,7 +2216,10 @@ export default function AddInterventionScreen() {
             </Pressable>
             <View style={{ flexDirection: "row", gap: 12 }}>
               <Pressable
-                onPress={() => { setNcFocused("zip"); ncZipRef.current?.focus(); }}
+                onPress={() => {
+                  setNcFocused("zip");
+                  ncZipRef.current?.focus();
+                }}
                 style={{
                   flex: 1,
                   borderWidth: 1.5,
@@ -2231,7 +2258,10 @@ export default function AddInterventionScreen() {
                 />
               </Pressable>
               <Pressable
-                onPress={() => { setNcFocused("city"); ncCityRef.current?.focus(); }}
+                onPress={() => {
+                  setNcFocused("city");
+                  ncCityRef.current?.focus();
+                }}
                 style={{
                   flex: 2,
                   borderWidth: 1.5,
@@ -2270,7 +2300,10 @@ export default function AddInterventionScreen() {
               </Pressable>
             </View>
             <Pressable
-              onPress={() => { setNcFocused("phone"); ncPhoneRef.current?.focus(); }}
+              onPress={() => {
+                setNcFocused("phone");
+                ncPhoneRef.current?.focus();
+              }}
               style={{
                 borderWidth: 1.5,
                 borderColor: ncFocused === "phone" ? "#3B82F6" : "#E2E8F0",
@@ -2308,7 +2341,10 @@ export default function AddInterventionScreen() {
               />
             </Pressable>
             <Pressable
-              onPress={() => { setNcFocused("email"); ncEmailRef.current?.focus(); }}
+              onPress={() => {
+                setNcFocused("email");
+                ncEmailRef.current?.focus();
+              }}
               style={{
                 borderWidth: 1.5,
                 borderColor: ncFocused === "email" ? "#3B82F6" : "#E2E8F0",
@@ -2347,7 +2383,10 @@ export default function AddInterventionScreen() {
               />
             </Pressable>
             <Pressable
-              onPress={() => { setNcFocused("notes"); ncNotesRef.current?.focus(); }}
+              onPress={() => {
+                setNcFocused("notes");
+                ncNotesRef.current?.focus();
+              }}
               style={{
                 borderWidth: 1.5,
                 borderColor: ncFocused === "notes" ? "#3B82F6" : "#E2E8F0",
