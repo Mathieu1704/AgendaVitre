@@ -19,7 +19,7 @@ import {
   LayoutChangeEvent,
 } from "react-native";
 import { LocaleConfig } from "react-native-calendars";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDayView } from "../../../src/ui/components/calendar/CalendarDayView";
 import { CalendarWeekView } from "../../../src/ui/components/calendar/CalendarWeekView";
@@ -373,6 +373,10 @@ export default function CalendarScreen() {
     refetchOnMount: true,
   });
   const hideCash = companySettings?.hide_cash ?? false;
+
+  useFocusEffect(useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["company-settings"] });
+  }, []));
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
