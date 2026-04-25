@@ -31,7 +31,7 @@ import {
 } from "../../src/ui/components/Card";
 import { StatusBadge } from "../../src/ui/components/StatusBadge";
 import { Avatar } from "../../src/ui/components/Avatar";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect, Redirect, useRouter } from "expo-router";
 import { useInterventions } from "../../src/hooks/useInterventions";
 import { useClients } from "../../src/hooks/useClients";
@@ -113,11 +113,24 @@ export default function Dashboard() {
     return () => style.remove();
   }, []);
 
+  const { data: companySettings } = useQuery({
+    queryKey: ["company-settings"],
+    queryFn: async () => (await api.get("/api/settings/company")).data,
+    staleTime: 0,
+    refetchInterval: 500,
+    refetchOnMount: true,
+  });
+  const hideCash = companySettings?.hide_cash ?? false;
+
   if (userRole === "employee") return <Redirect href="/(app)/calendar?view=day" />;
 
   const todayInterventions =
     interventions?.filter(
-      (i: any) => i.start_time && isToday(parseISO(i.start_time)),
+      (i: any) => {
+        if (!i.start_time || !isToday(parseISO(i.start_time))) return false;
+        if (hideCash && (i.payment_mode === "cash" || !i.payment_mode)) return false;
+        return true;
+      },
     ) || [];
 
   const upcomingInterventions =
@@ -220,18 +233,32 @@ export default function Dashboard() {
 
   const fmtPct = (n: number) => `${n > 0 ? "+" : ""}${n}%`;
 
-  const totalRevenue =
+  // CA mois en cours (interventions done)
+  const revenueThisMonthDone =
     interventions
-      ?.filter((i: any) => i.status === "done")
-      .reduce(
-        (acc: number, i: any) => acc + (Number(i.price_estimated) || 0),
-        0,
-      ) || 0;
+      ?.filter((i: any) => i.status === "done" && new Date(i.start_time) >= startThisMonth)
+      .reduce((acc: number, i: any) => acc + (Number(i.price_estimated) || 0), 0) || 0;
+
+  // CA journalier (aujourd'hui, interventions done)
+  const revenueToday =
+    interventions
+      ?.filter((i: any) => i.status === "done" && i.start_time && isToday(parseISO(i.start_time)))
+      .reduce((acc: number, i: any) => acc + (Number(i.price_estimated) || 0), 0) || 0;
+
+  // Interventions mois en cours
+  const intThisMonthCount =
+    interventions?.filter((i: any) => i.start_time && new Date(i.start_time) >= startThisMonth).length || 0;
+  const intLastMonthCount =
+    interventions?.filter((i: any) => i.start_time && new Date(i.start_time) >= startLastMonth && new Date(i.start_time) <= endLastMonth).length || 0;
+  const intTrendPctMonth =
+    intLastMonthCount > 0
+      ? Math.round(((intThisMonthCount - intLastMonthCount) / intLastMonthCount) * 100)
+      : intThisMonthCount > 0 ? 100 : 0;
 
   const stats: StatItem[] = [
     {
-      label: "Chiffre d'affaires",
-      value: `${totalRevenue.toFixed(0)} €`,
+      label: "CA ce mois",
+      value: `${revenueThisMonthDone.toFixed(0)} €`,
       icon: Euro,
       color: "#22C55E",
       bg: "bg-green-500/10",
@@ -239,13 +266,13 @@ export default function Dashboard() {
       trendPositive: caTrendPct >= 0,
     },
     {
-      label: "Interventions à venir",
-      value: upcomingInterventions.length.toString(),
+      label: "Interventions ce mois",
+      value: intThisMonthCount.toString(),
       icon: CalendarIcon,
       color: "#3B82F6",
       bg: "bg-blue-500/10",
-      trend: fmtPct(intTrendPct),
-      trendPositive: intTrendPct >= 0,
+      trend: fmtPct(intTrendPctMonth),
+      trendPositive: intTrendPctMonth >= 0,
     },
     {
       label: "Clients",
@@ -255,23 +282,17 @@ export default function Dashboard() {
       bg: "bg-orange-500/10",
       trend: "",
     },
-  ];
-
-  const inProgressToday = todayInterventions.filter(
-    (i: any) => i.status === "in_progress",
-  ).length;
-  const mobileStats: StatItem[] = [
-    ...stats,
     {
-      label: "Aujourd'hui",
-      value: todayInterventions.length.toString(),
-      icon: Clock,
+      label: "CA journalier",
+      value: `${revenueToday.toFixed(0)} €`,
+      icon: TrendingUp,
       color: "#8B5CF6",
       bg: "bg-purple-500/10",
-      trend: inProgressToday > 0 ? `${inProgressToday} en cours` : "",
-      trendPositive: true,
+      trend: "",
     },
   ];
+
+  const mobileStats: StatItem[] = [...stats];
 
   // Loading state
   if (loadingRole) {

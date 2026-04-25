@@ -1,5 +1,5 @@
 import React from "react";
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   ScrollView,
@@ -11,7 +11,7 @@ import {
   Linking,
   Alert,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Phone,
@@ -81,6 +81,23 @@ export default function InterventionDetailScreen() {
     refetchInterval: 500,
   });
   const hideCash = companySettings?.hide_cash ?? false;
+
+  const isFocused = useRef(false);
+  useFocusEffect(useCallback(() => {
+    isFocused.current = true;
+    return () => { isFocused.current = false; };
+  }, []));
+
+  useEffect(() => {
+    if (!intervention || !isFocused.current) return;
+    const isCash = intervention.payment_mode === "cash" || !intervention.payment_mode;
+    if (hideCash && isCash) {
+      router.replace({
+        pathname: "/(app)/calendar",
+        params: from_view ? { view: from_view, date: from_date } : {},
+      });
+    }
+  }, [hideCash, intervention]);
 
   // 3. MUTATIONS (Doivent être déclarées AVANT les returns conditionnels)
   const deleteMutation = useMutation({
