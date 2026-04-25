@@ -173,7 +173,7 @@ def create_hourly_rate(
 ):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin uniquement.")
-    hr = HourlyRate(rate=body.rate, label=body.label)
+    hr = HourlyRate(rate=body.rate, label=body.label, time_only=body.time_only)
     db.add(hr)
     db.commit()
     db.refresh(hr)

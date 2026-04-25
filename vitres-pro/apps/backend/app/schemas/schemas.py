@@ -143,11 +143,13 @@ class InterventionItemOut(InterventionItemBase):
 class HourlyRateCreate(BaseModel):
     rate: float
     label: Optional[str] = None
+    time_only: bool = False
 
 class HourlyRateOut(BaseModel):
     id: UUID
     rate: float
     label: Optional[str] = None
+    time_only: bool = False
     class Config:
         from_attributes = True
 

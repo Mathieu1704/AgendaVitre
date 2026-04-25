@@ -90,12 +90,15 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
         - time_tbd = True (reprise non-admin) → durée stockée (end - start)
         - Tout le reste → 0 (exclu du total planifié)
         """
-        if (interv.hourly_rate_id
-                and interv.hourly_rate
-                and interv.price_estimated
-                and float(interv.price_estimated) > 0
-                and interv.hourly_rate.rate > 0):
-            return float(interv.price_estimated) / interv.hourly_rate.rate
+        if interv.hourly_rate_id and interv.hourly_rate:
+            if interv.hourly_rate.time_only:
+                if interv.start_time and interv.end_time:
+                    return (interv.end_time - interv.start_time).total_seconds() / 3600
+                return 0.0
+            if (interv.price_estimated
+                    and float(interv.price_estimated) > 0
+                    and interv.hourly_rate.rate > 0):
+                return float(interv.price_estimated) / interv.hourly_rate.rate
         if getattr(interv, "time_tbd", False):
             return (interv.end_time - interv.start_time).total_seconds() / 3600
         return 0.0

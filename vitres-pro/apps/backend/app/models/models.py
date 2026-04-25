@@ -63,8 +63,9 @@ class HourlyRate(Base):
     __tablename__ = "hourly_rates"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    label = Column(String, nullable=True)    # ex: "Standard", "Premium" (optionnel)
-    rate = Column(Float, nullable=False)     # €/h
+    label = Column(String, nullable=True)
+    rate = Column(Float, nullable=False)
+    time_only = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class Employee(Base):
