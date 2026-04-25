@@ -63,7 +63,7 @@ export default function Dashboard() {
     useCallback(() => {
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
       queryClient.invalidateQueries({ queryKey: ["clients"] });
-    }, [queryClient])
+    }, [queryClient]),
   );
 
   const { interventions, isLoading: interventionsLoading } = useInterventions();
@@ -122,16 +122,16 @@ export default function Dashboard() {
   });
   const hideCash = companySettings?.hide_cash ?? false;
 
-  if (userRole === "employee") return <Redirect href="/(app)/calendar?view=day" />;
+  if (userRole === "employee")
+    return <Redirect href="/(app)/calendar?view=day" />;
 
   const todayInterventions =
-    interventions?.filter(
-      (i: any) => {
-        if (!i.start_time || !isToday(parseISO(i.start_time))) return false;
-        if (hideCash && (i.payment_mode === "cash" || !i.payment_mode)) return false;
-        return true;
-      },
-    ) || [];
+    interventions?.filter((i: any) => {
+      if (!i.start_time || !isToday(parseISO(i.start_time))) return false;
+      if (hideCash && (i.payment_mode === "cash" || !i.payment_mode))
+        return false;
+      return true;
+    }) || [];
 
   const upcomingInterventions =
     interventions?.filter((i: any) => {
@@ -236,26 +236,64 @@ export default function Dashboard() {
   // CA mois en cours (interventions done)
   const revenueThisMonthDone =
     interventions
-      ?.filter((i: any) => i.status === "done" && new Date(i.start_time) >= startThisMonth)
-      .reduce((acc: number, i: any) => acc + (Number(i.price_estimated) || 0), 0) || 0;
+      ?.filter(
+        (i: any) =>
+          i.status === "done" && new Date(i.start_time) >= startThisMonth,
+      )
+      .reduce(
+        (acc: number, i: any) => acc + (Number(i.price_estimated) || 0),
+        0,
+      ) || 0;
 
   // CA journalier (aujourd'hui, interventions done)
   const revenueToday =
     interventions
-      ?.filter((i: any) => i.status === "done" && i.start_time && isToday(parseISO(i.start_time)))
-      .reduce((acc: number, i: any) => acc + (Number(i.price_estimated) || 0), 0) || 0;
+      ?.filter(
+        (i: any) =>
+          i.status === "done" &&
+          i.start_time &&
+          isToday(parseISO(i.start_time)),
+      )
+      .reduce(
+        (acc: number, i: any) => acc + (Number(i.price_estimated) || 0),
+        0,
+      ) || 0;
+
+  const startNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   // Interventions mois en cours
   const intThisMonthCount =
-    interventions?.filter((i: any) => i.start_time && new Date(i.start_time) >= startThisMonth).length || 0;
+    interventions?.filter(
+      (i: any) =>
+        i.start_time &&
+        new Date(i.start_time) >= startThisMonth &&
+        new Date(i.start_time) < startNextMonth,
+    ).length || 0;
   const intLastMonthCount =
-    interventions?.filter((i: any) => i.start_time && new Date(i.start_time) >= startLastMonth && new Date(i.start_time) <= endLastMonth).length || 0;
+    interventions?.filter(
+      (i: any) =>
+        i.start_time &&
+        new Date(i.start_time) >= startLastMonth &&
+        new Date(i.start_time) <= endLastMonth,
+    ).length || 0;
   const intTrendPctMonth =
     intLastMonthCount > 0
-      ? Math.round(((intThisMonthCount - intLastMonthCount) / intLastMonthCount) * 100)
-      : intThisMonthCount > 0 ? 100 : 0;
+      ? Math.round(
+          ((intThisMonthCount - intLastMonthCount) / intLastMonthCount) * 100,
+        )
+      : intThisMonthCount > 0
+        ? 100
+        : 0;
 
   const stats: StatItem[] = [
+    {
+      label: "CA journalier",
+      value: `${revenueToday.toFixed(0)} €`,
+      icon: TrendingUp,
+      color: "#8B5CF6",
+      bg: "bg-purple-500/10",
+      trend: "",
+    },
     {
       label: "CA ce mois",
       value: `${revenueThisMonthDone.toFixed(0)} €`,
@@ -266,15 +304,6 @@ export default function Dashboard() {
       trendPositive: caTrendPct >= 0,
     },
     {
-      label: "Interventions ce mois",
-      value: intThisMonthCount.toString(),
-      icon: CalendarIcon,
-      color: "#3B82F6",
-      bg: "bg-blue-500/10",
-      trend: fmtPct(intTrendPctMonth),
-      trendPositive: intTrendPctMonth >= 0,
-    },
-    {
       label: "Clients",
       value: (clients?.length || 0).toString(),
       icon: Users,
@@ -283,12 +312,13 @@ export default function Dashboard() {
       trend: "",
     },
     {
-      label: "CA journalier",
-      value: `${revenueToday.toFixed(0)} €`,
-      icon: TrendingUp,
-      color: "#8B5CF6",
-      bg: "bg-purple-500/10",
-      trend: "",
+      label: "Interventions",
+      value: intThisMonthCount.toString(),
+      icon: CalendarIcon,
+      color: "#3B82F6",
+      bg: "bg-blue-500/10",
+      trend: fmtPct(intTrendPctMonth),
+      trendPositive: intTrendPctMonth >= 0,
     },
   ];
 
@@ -343,12 +373,12 @@ export default function Dashboard() {
                 <Animated.View
                   key={index}
                   entering={FadeInDown.delay(index * 80).springify()}
-                  style={{ width: cardWidth }}
+                  style={{ width: cardWidth, height: 108 }}
                 >
-                  <Card className="rounded-3xl">
+                  <Card className="rounded-3xl" style={{ flex: 1 }}>
                     <CardContent
                       className="p-3 items-center justify-center"
-                      style={{ minHeight: 100 }}
+                      style={{ flex: 1 }}
                     >
                       {/* 1. Icône + Label (même ligne) */}
                       <View className="flex-row items-center mb-2">
@@ -498,13 +528,11 @@ export default function Dashboard() {
                 <Text className="text-base font-semibold text-foreground dark:text-white">
                   Aujourd'hui
                 </Text>
-                {todayInterventions.length > 0 && (
-                  <View className="bg-primary/10 px-2 py-0.5 rounded-full">
-                    <Text className="text-xs font-bold text-primary">
-                      {todayInterventions.length}
-                    </Text>
-                  </View>
-                )}
+                <View className="bg-primary/10 px-2 py-0.5 rounded-full">
+                  <Text className="text-xs font-bold text-primary">
+                    {todayInterventions.length}
+                  </Text>
+                </View>
               </View>
             </CardHeader>
             <CardContent className="p-4 pt-0">
@@ -530,7 +558,18 @@ export default function Dashboard() {
                     {todayInterventions.map((item: any, i: number) => (
                       <Pressable
                         key={i}
-                        onPress={() => router.push({ pathname: "/(app)/calendar/[id]", params: { id: item.id, from_view: "day", from_date: formatISO(new Date(), { representation: "date" }) } })}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/(app)/calendar/[id]",
+                            params: {
+                              id: item.id,
+                              from_view: "day",
+                              from_date: formatISO(new Date(), {
+                                representation: "date",
+                              }),
+                            },
+                          })
+                        }
                         style={({ pressed }) => ({
                           flexDirection: "row",
                           alignItems: "center",
@@ -673,12 +712,12 @@ export default function Dashboard() {
       </View>
 
       {/* KPI CARDS */}
-      <View className="flex-row flex-wrap gap-4 mb-8">
+      <View className="flex-row gap-4 mb-8">
         {stats.map((stat, index) => (
           <Animated.View
             key={index}
             entering={FadeInDown.delay(index * 100).springify()}
-            className="w-full md:w-[32%] flex-grow"
+            style={{ flex: 1 }}
           >
             <Card className="min-h-[130px] justify-center">
               <CardContent className="p-6">
@@ -691,7 +730,10 @@ export default function Dashboard() {
                       {stat.value}
                     </Text>
                   </View>
-                  <View className={`${stat.bg} self-start`} style={{ padding: 12, borderRadius: 12 }}>
+                  <View
+                    className={`${stat.bg} self-start`}
+                    style={{ padding: 12, borderRadius: 12 }}
+                  >
                     <stat.icon size={22} color={stat.color} />
                   </View>
                 </View>
@@ -701,7 +743,13 @@ export default function Dashboard() {
                   style={{ minHeight: 20 }}
                 >
                   {stat.trend ? (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
                       {stat.trendPositive !== undefined ? (
                         stat.trendPositive ? (
                           <ArrowUpRight size={13} color="#22C55E" />
@@ -740,10 +788,10 @@ export default function Dashboard() {
         >
           <Card className="h-full">
             <CardHeader className="p-6 pb-2">
-              <CardTitle className="flex-row items-center gap-2">
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <TrendingUp size={20} color="#3B82F6" />
-                Évolution des revenus
-              </CardTitle>
+                <CardTitle>Évolution des revenus</CardTitle>
+              </View>
             </CardHeader>
             <CardContent className="p-6 pt-0">
               <View
@@ -856,8 +904,21 @@ export default function Dashboard() {
                     {todayInterventions.map((item: any, i: number) => (
                       <Pressable
                         key={i}
-                        onPress={() => router.push({ pathname: "/(app)/calendar/[id]", params: { id: item.id, from_view: "day", from_date: formatISO(new Date(), { representation: "date" }) } })}
-                        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/(app)/calendar/[id]",
+                            params: {
+                              id: item.id,
+                              from_view: "day",
+                              from_date: formatISO(new Date(), {
+                                representation: "date",
+                              }),
+                            },
+                          })
+                        }
+                        style={({ pressed }) => ({
+                          opacity: pressed ? 0.7 : 1,
+                        })}
                         className="flex-row items-center gap-3 p-3 rounded-3xl bg-muted/40 dark:bg-slate-800/50 border border-border dark:border-slate-700"
                       >
                         <Avatar

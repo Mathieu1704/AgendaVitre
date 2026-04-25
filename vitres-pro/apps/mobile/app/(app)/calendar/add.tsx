@@ -1688,7 +1688,7 @@ export default function AddInterventionScreen() {
               {isAdmin &&
                 Array.isArray(hourlyRates) &&
                 hourlyRates.length > 0 &&
-                totalPrice > 0 && (
+                (totalPrice > 0 || (hourlyRates as any[]).some((r: any) => r.time_only)) && (
                   <View className="pt-4 mt-4 border-t border-border dark:border-slate-800">
                     <Text className="text-sm font-semibold text-foreground dark:text-white mb-2">
                       Taux horaire
@@ -1734,7 +1734,9 @@ export default function AddInterventionScreen() {
                                 }}
                               >
                                 {r
-                                  ? `${r.label ? r.label + " — " : ""}${r.rate} €/h`
+                                  ? r.time_only
+                                    ? `${r.label ? r.label : "Temps interne"}`
+                                    : `${r.label ? r.label + " — " : ""}${r.rate} €/h`
                                   : "Aucun"}
                               </Text>
                             </Pressable>
@@ -1742,12 +1744,25 @@ export default function AddInterventionScreen() {
                         })}
                       </View>
                     </ScrollView>
-                    {computedHours && (
+                    {selectedRate?.time_only ? (
+                      durationHours ? (
+                        <Text className="text-sm text-muted-foreground" style={{ color: "#8B5CF6" }}>
+                          → {Number(durationHours) === Math.floor(Number(durationHours))
+                            ? `${durationHours}h`
+                            : `${Math.floor(Number(durationHours))}h${Math.round((Number(durationHours) % 1) * 60).toString().padStart(2, "0")}`
+                          } de travail comptabilisées (sans CA)
+                        </Text>
+                      ) : (
+                        <Text className="text-sm text-muted-foreground" style={{ color: "#8B5CF6" }}>
+                          → Renseigne une durée pour comptabiliser les heures
+                        </Text>
+                      )
+                    ) : computedHours ? (
                       <Text className="text-sm text-muted-foreground">
                         → {computedHours} calculées ({totalPrice.toFixed(2)} € ÷{" "}
                         {selectedRate?.rate} €/h)
                       </Text>
-                    )}
+                    ) : null}
                   </View>
                 )}
 

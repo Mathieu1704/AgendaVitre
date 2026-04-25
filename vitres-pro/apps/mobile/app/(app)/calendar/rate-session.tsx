@@ -15,6 +15,7 @@ import {
   InputAccessoryView,
   Keyboard,
   Platform,
+  Switch,
 } from "react-native";
 import {
   Stack,
@@ -29,6 +30,7 @@ import {
   Check,
   PlusCircle,
   Trash2,
+  Timer,
 } from "lucide-react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import Animated, {
@@ -94,7 +96,11 @@ function RatePill({
             color: isSelected ? "white" : isDark ? "#94A3B8" : "#64748B",
           }}
         >
-          {r ? `${r.label ? r.label + " — " : ""}${r.rate} €/h` : "Aucun"}
+          {r
+            ? r.time_only
+              ? `${r.label ? r.label : "Temps interne"}`
+              : `${r.label ? r.label + " — " : ""}${r.rate} €/h`
+            : "Aucun"}
         </Text>
       </Pressable>
     </Animated.View>
@@ -137,6 +143,7 @@ export default function RateSessionScreen() {
   const [showAddRate, setShowAddRate] = useState(false);
   const [newRateLabel, setNewRateLabel] = useState("");
   const [newRateValue, setNewRateValue] = useState("");
+  const [newRateTimeOnly, setNewRateTimeOnly] = useState(false);
 
   // État pour suppression
   const [rateToDelete, setRateToDelete] = useState<any>(null);
@@ -189,10 +196,19 @@ export default function RateSessionScreen() {
   const selectedRate = rates.find((r: any) => r.id === selectedRateId) ?? null;
 
   const price = current ? parseFloat(current.price_estimated) || 0 : 0;
-  const computedHoursRaw =
-    selectedRate && price > 0
-      ? Math.round((price / selectedRate.rate) * 2) / 2
+  const durationFromIntervention =
+    current?.start_time && current?.end_time
+      ? (new Date(current.end_time).getTime() -
+          new Date(current.start_time).getTime()) /
+        3600000
       : null;
+  const computedHoursRaw = selectedRate
+    ? selectedRate.time_only
+      ? durationFromIntervention
+      : price > 0
+        ? Math.round((price / selectedRate.rate) * 2) / 2
+        : null
+    : null;
   const computedHoursStr =
     computedHoursRaw != null ? fmtH(computedHoursRaw) : null;
 
@@ -208,8 +224,15 @@ export default function RateSessionScreen() {
       const rateId = assignments[i.id];
       if (!rateId) return sum;
       const rate = rates.find((r: any) => r.id === rateId);
+      if (!rate) return sum;
+      if (rate.time_only) {
+        if (i.start_time && i.end_time) {
+          return sum + (new Date(i.end_time).getTime() - new Date(i.start_time).getTime()) / 3600000;
+        }
+        return sum;
+      }
       const p = parseFloat(i.price_estimated) || 0;
-      if (!rate || p <= 0) return sum;
+      if (p <= 0 || rate.rate <= 0) return sum;
       return sum + Math.round((p / rate.rate) * 2) / 2;
     }, 0);
   }, [assignments, filteredList, rates]);
@@ -237,14 +260,16 @@ export default function RateSessionScreen() {
   const handlePrev = () => setCurrentIndex((i) => Math.max(0, i - 1));
 
   const handleAddRate = async () => {
-    const r = parseFloat(newRateValue.replace(",", "."));
-    if (!r || r <= 0) return;
+    const r = newRateTimeOnly ? 0 : parseFloat(newRateValue.replace(",", "."));
+    if (!newRateTimeOnly && (!r || r <= 0)) return;
     const created = await createRate.mutateAsync({
       rate: r,
       label: newRateLabel.trim() || undefined,
+      time_only: newRateTimeOnly,
     });
     setNewRateLabel("");
     setNewRateValue("");
+    setNewRateTimeOnly(false);
     setShowAddRate(false);
     // Sélectionner automatiquement le nouveau taux
     if (current && created?.id) {
@@ -362,7 +387,7 @@ export default function RateSessionScreen() {
           </View>
           <Pressable
             onPress={() => router.push("/(app)/calendar" as any)}
-            className="bg-blue-500 rounded-2xl px-6 py-4 items-center w-full"
+            className="bg-blue-500 px-6 py-4 items-center w-full" style={{ borderRadius: 999 }}
           >
             <Text className="text-white font-bold text-base">
               Retour au planning
@@ -594,14 +619,26 @@ export default function RateSessionScreen() {
                 }}
               >
                 <View>
-                  <Text className="text-xs text-blue-500 font-semibold uppercase tracking-wider mb-0.5">
-                    Heures calculées
+                  <Text
+                    className="text-xs font-semibold uppercase tracking-wider mb-0.5"
+                    style={{
+                      color: selectedRate?.time_only ? "#8B5CF6" : "#3B82F6",
+                    }}
+                  >
+                    Heures de travail
                   </Text>
                   <Text className="text-xs text-muted-foreground">
-                    {price.toFixed(0)} € ÷ {selectedRate?.rate} €/h
+                    {selectedRate?.time_only
+                      ? "Repris des horaires"
+                      : `${price.toFixed(0)} € ÷ ${selectedRate?.rate} €/h`}
                   </Text>
                 </View>
-                <Text className="text-2xl font-extrabold text-blue-500">
+                <Text
+                  className="text-2xl font-extrabold"
+                  style={{
+                    color: selectedRate?.time_only ? "#8B5CF6" : "#3B82F6",
+                  }}
+                >
                   {computedHoursStr}
                 </Text>
               </View>
@@ -682,6 +719,7 @@ export default function RateSessionScreen() {
           setShowAddRate(false);
           setNewRateLabel("");
           setNewRateValue("");
+          setNewRateTimeOnly(false);
         }}
         position="center"
       >
@@ -696,15 +734,68 @@ export default function RateSessionScreen() {
             onChangeText={setNewRateLabel}
             style={[inputStyle, { marginBottom: 10 }]}
           />
-          <TextInput
-            placeholder="Taux €/h (ex: 50)"
-            placeholderTextColor={isDark ? "#64748B" : "#94A3B8"}
-            value={newRateValue}
-            onChangeText={(v) => setNewRateValue(v.replace(/[^0-9.,]/g, ""))}
-            keyboardType="decimal-pad"
-            inputAccessoryViewID="rate-input-accessory"
-            style={[inputStyle, { marginBottom: 16 }]}
-          />
+          {/* Toggle time_only */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 10,
+            }}
+          >
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <Timer
+                size={15}
+                color={
+                  newRateTimeOnly ? "#8B5CF6" : isDark ? "#64748B" : "#94A3B8"
+                }
+              />
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "600",
+                  color: isDark ? "#CBD5E1" : "#374151",
+                }}
+              >
+                Temps de travail uniquement
+              </Text>
+            </View>
+            <Switch
+              value={newRateTimeOnly}
+              onValueChange={setNewRateTimeOnly}
+              trackColor={{
+                false: isDark ? "#334155" : "#E2E8F0",
+                true: "#8B5CF6",
+              }}
+              thumbColor="#fff"
+            />
+          </View>
+          {newRateTimeOnly ? (
+            <View
+              style={{
+                backgroundColor: isDark ? "#1E1040" : "#F5F3FF",
+                borderRadius: 12,
+                padding: 10,
+                marginBottom: 16,
+              }}
+            >
+              <Text style={{ fontSize: 12, color: "#8B5CF6" }}>
+                Comptabilise les heures de travail uniquement.
+              </Text>
+            </View>
+          ) : (
+            <TextInput
+              placeholder="Taux €/h (ex: 50)"
+              placeholderTextColor={isDark ? "#64748B" : "#94A3B8"}
+              value={newRateValue}
+              onChangeText={(v) => setNewRateValue(v.replace(/[^0-9.,]/g, ""))}
+              keyboardType="decimal-pad"
+              inputAccessoryViewID="rate-input-accessory"
+              style={[inputStyle, { marginBottom: 16 }]}
+            />
+          )}
           <View className="flex-row gap-3">
             <Button
               variant="outline"
@@ -712,6 +803,7 @@ export default function RateSessionScreen() {
                 setShowAddRate(false);
                 setNewRateLabel("");
                 setNewRateValue("");
+                setNewRateTimeOnly(false);
               }}
               className="flex-1"
             >
@@ -719,7 +811,11 @@ export default function RateSessionScreen() {
             </Button>
             <Button
               onPress={handleAddRate}
-              disabled={!newRateValue || createRate.isPending}
+              disabled={
+                (!newRateTimeOnly && !newRateValue) ||
+                (newRateTimeOnly && !newRateLabel.trim()) ||
+                createRate.isPending
+              }
               className="flex-1"
             >
               {createRate.isPending ? (
@@ -747,7 +843,10 @@ export default function RateSessionScreen() {
           </View>
           <Text className="text-muted-foreground mb-6">
             {rateToDelete?.label ? `"${rateToDelete.label}" — ` : ""}
-            {rateToDelete?.rate} €/h sera supprimé définitivement.
+            {rateToDelete?.time_only
+              ? "Temps de travail"
+              : `${rateToDelete?.rate} €/h`}{" "}
+            sera supprimé définitivement.
           </Text>
           <View className="flex-row gap-3">
             <Button
