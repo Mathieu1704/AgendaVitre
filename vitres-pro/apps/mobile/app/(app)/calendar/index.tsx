@@ -362,7 +362,9 @@ export default function CalendarScreen() {
       });
       return Array.isArray(res.data) ? res.data : [];
     },
-    staleTime: 30 * 1000,
+    staleTime: 0,
+    refetchInterval: 3000,
+    refetchOnMount: true,
   });
 
   const { data: companySettings } = useQuery({

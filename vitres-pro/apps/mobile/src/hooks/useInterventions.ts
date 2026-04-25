@@ -9,7 +9,10 @@ export const useInterventions = () => {
       const res = await api.get("/api/interventions");
       return res.data || [];
     },
-    staleTime: 2 * 60 * 1000, // 2 min — données changent régulièrement
+    staleTime: 0,
+    refetchInterval: 3000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   return {

@@ -783,7 +783,10 @@ export default function AddInterventionScreen() {
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       toast.success("Enregistré", "Intervention clôturée sans reprise.");
-      router.push(`/(app)/calendar/${reprise_of}` as any);
+      router.replace({
+        pathname: "/(app)/calendar",
+        params: from_view ? { view: from_view, date: from_date } : {},
+      });
     } catch (err: any) {
       toast.error("Erreur", err.response?.data?.detail || "Erreur inconnue");
     } finally {

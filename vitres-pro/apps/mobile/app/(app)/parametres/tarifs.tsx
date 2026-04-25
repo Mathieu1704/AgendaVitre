@@ -193,10 +193,11 @@ export default function TarifsScreen() {
                 value={newTimeOnly}
                 onValueChange={setNewTimeOnly}
                 trackColor={{
-                  false: isDark ? "#334155" : "#E2E8F0",
+                  false: Platform.OS === "ios" ? "transparent" : (isDark ? "#334155" : "#E2E8F0"),
                   true: "#8B5CF6",
                 }}
-                thumbColor="#fff"
+                ios_backgroundColor={isDark ? "#3A3A3C" : "#E5E5EA"}
+                thumbColor={Platform.OS === "ios" ? undefined : "#fff"}
               />
             </View>
             {newTimeOnly ? (
