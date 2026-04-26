@@ -208,14 +208,18 @@ export default function InterventionDetailScreen() {
     const start = new Date(intervention.start_time);
     const startStr = toBrusselsDateTimeString(start);
     setEditStartStr(startStr);
-    // Si time_tbd et durée calculée : pré-remplir la fin = maintenant + durée
+    // Si time_tbd et durée calculée : pré-remplir début = date planifiée + heure actuelle arrondie, fin = début + durée
     if (intervention.time_tbd && computedDurationMs) {
+      const datePart = toBrusselsDateTimeString(start).split("T")[0]; // date Brussels de l'intervention
       const now = new Date();
-      const roundedMinutes = Math.round(now.getMinutes() / 15) * 15;
-      const snapped = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), roundedMinutes, 0);
-      const endSnapped = new Date(snapped.getTime() + computedDurationMs);
-      setEditStartStr(toBrusselsDateTimeString(snapped));
-      setEditEndStr(toBrusselsDateTimeString(endSnapped));
+      let h = now.getHours();
+      let m = Math.round(now.getMinutes() / 15) * 15;
+      if (m === 60) { m = 0; h = Math.min(h + 1, 23); }
+      const startStr = `${datePart}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      const startParsed = parseBrusselsDateTimeString(startStr);
+      const endStr = toBrusselsDateTimeString(new Date(startParsed.getTime() + computedDurationMs));
+      setEditStartStr(startStr);
+      setEditEndStr(endStr);
     } else {
       setEditEndStr(intervention.end_time ? toBrusselsDateTimeString(new Date(intervention.end_time)) : "");
     }
