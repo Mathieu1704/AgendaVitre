@@ -116,7 +116,7 @@ function fmtZone(subZone: string): string {
 }
 
 function fmtH(h: number): string {
-  const rounded = Math.round(h * 2) / 2;
+  const rounded = Math.round(h * 4) / 4;
   const hours = Math.floor(rounded);
   const mins = Math.round((rounded % 1) * 60);
   if (mins === 0) return `${hours}h`;
@@ -205,7 +205,7 @@ export default function RateSessionScreen() {
     ? selectedRate.time_only
       ? durationFromIntervention
       : price > 0
-        ? Math.round((price / selectedRate.rate) * 2) / 2
+        ? Math.round((price / selectedRate.rate) * 4) / 4
         : null
     : null;
   const computedHoursStr =
@@ -232,7 +232,7 @@ export default function RateSessionScreen() {
       }
       const p = parseFloat(i.price_estimated) || 0;
       if (p <= 0 || rate.rate <= 0) return sum;
-      return sum + Math.round((p / rate.rate) * 2) / 2;
+      return sum + Math.round((p / rate.rate) * 4) / 4;
     }, 0);
   }, [assignments, filteredList, rates]);
 

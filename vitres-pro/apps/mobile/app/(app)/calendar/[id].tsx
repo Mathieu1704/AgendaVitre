@@ -74,6 +74,8 @@ export default function InterventionDetailScreen() {
       const res = await api.get(`/api/interventions/${id}`);
       return res.data;
     },
+    refetchInterval: 5000,
+    staleTime: 0,
   });
 
   const { data: companySettings } = useQuery({
