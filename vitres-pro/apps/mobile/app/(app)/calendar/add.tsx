@@ -50,6 +50,7 @@ import {
 import { useEmployees } from "../../../src/hooks/useEmployees";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useAuth } from "../../../src/hooks/useAuth";
+import { CityAutocomplete } from "../../../src/ui/components/CityAutocomplete";
 
 type Client = {
   id: string;
@@ -602,6 +603,18 @@ export default function AddInterventionScreen() {
           return m === 0 ? `${h}h` : `${h}h${m.toString().padStart(2, "0")}`;
         })()
       : null;
+
+  const durationHours = (() => {
+    if (timeTbd) return null;
+    const [, startTime = ""] = startDateStr.split("T");
+    const [, endTime = ""] = endDateStr.split("T");
+    if (!startTime || !endTime) return null;
+    const [sh, sm] = startTime.split(":").map(Number);
+    const [eh, em] = endTime.split(":").map(Number);
+    const diff = (eh * 60 + em) - (sh * 60 + sm);
+    if (diff <= 0) return null;
+    return diff / 60;
+  })();
 
   const toggleService = (id: string) => {
     setCheckedServiceIds((prev) => {
@@ -2339,47 +2352,51 @@ export default function AddInterventionScreen() {
                   ]}
                 />
               </Pressable>
-              <Pressable
-                onPress={() => {
-                  setNcFocused("city");
-                  ncCityRef.current?.focus();
-                }}
-                style={{
-                  flex: 2,
-                  borderWidth: 1.5,
-                  borderColor: ncFocused === "city" ? "#3B82F6" : "#E2E8F0",
-                  borderRadius: 12,
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  backgroundColor: "#F8FAFC",
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    color: ncFocused === "city" ? "#3B82F6" : "#94A3B8",
-                    fontWeight: "600",
-                    marginBottom: 4,
-                  }}
-                >
-                  VILLE *
-                </Text>
-                <TextInput
-                  ref={ncCityRef}
-                  value={newClientCity}
-                  onChangeText={setNewClientCity}
-                  placeholder="Mons"
-                  placeholderTextColor="#CBD5E1"
-                  onFocus={() => setNcFocused("city")}
-                  onBlur={() => setNcFocused(null)}
-                  style={[
-                    { fontSize: 15, color: "#0f172a" },
-                    Platform.OS === "web"
-                      ? ({ outlineStyle: "none" } as any)
-                      : {},
-                  ]}
-                />
-              </Pressable>
+              <CityAutocomplete value={newClientCity} onChangeText={setNewClientCity}>
+                {({ onChangeText: onCityChange, onFocus: onCityFocus, onBlur: onCityBlur, inputRef: cityRef }) => (
+                  <Pressable
+                    onPress={() => {
+                      setNcFocused("city");
+                      cityRef.current?.focus();
+                    }}
+                    style={{
+                      flex: 2,
+                      borderWidth: 1.5,
+                      borderColor: ncFocused === "city" ? "#3B82F6" : "#E2E8F0",
+                      borderRadius: 12,
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      backgroundColor: "#F8FAFC",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: ncFocused === "city" ? "#3B82F6" : "#94A3B8",
+                        fontWeight: "600",
+                        marginBottom: 4,
+                      }}
+                    >
+                      VILLE *
+                    </Text>
+                    <TextInput
+                      ref={cityRef}
+                      value={newClientCity}
+                      onChangeText={onCityChange}
+                      placeholder="Mons"
+                      placeholderTextColor="#CBD5E1"
+                      onFocus={() => { onCityFocus(); setNcFocused("city"); }}
+                      onBlur={() => { onCityBlur(); setNcFocused(null); }}
+                      style={[
+                        { fontSize: 15, color: "#0f172a" },
+                        Platform.OS === "web"
+                          ? ({ outlineStyle: "none" } as any)
+                          : {},
+                      ]}
+                    />
+                  </Pressable>
+                )}
+              </CityAutocomplete>
             </View>
             <Pressable
               onPress={() => {

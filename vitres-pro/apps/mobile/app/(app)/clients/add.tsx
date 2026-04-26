@@ -7,6 +7,7 @@ import { api } from "../../../src/lib/api";
 import { UserPlus, Check, ChevronLeft } from "lucide-react-native";
 
 import { Input } from "../../../src/ui/components/Input";
+import { CityAutocomplete } from "../../../src/ui/components/CityAutocomplete";
 import { Button } from "../../../src/ui/components/Button";
 import { toast } from "../../../src/ui/toast";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
@@ -160,12 +161,19 @@ export default function AddClientScreen() {
                 />
               </View>
               <View style={{ flex: 2 }}>
-                <Input
-                  label="Ville *"
-                  placeholder="Mons"
-                  value={city}
-                  onChangeText={setCity}
-                />
+                <CityAutocomplete value={city} onChangeText={setCity}>
+                  {({ onChangeText, onFocus, onBlur, inputRef }) => (
+                    <Input
+                      ref={inputRef}
+                      label="Ville *"
+                      placeholder="Mons"
+                      value={city}
+                      onChangeText={onChangeText}
+                      onFocus={onFocus}
+                      onBlur={onBlur}
+                    />
+                  )}
+                </CityAutocomplete>
               </View>
             </View>
           </View>

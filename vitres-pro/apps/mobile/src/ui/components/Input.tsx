@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, forwardRef } from "react";
 import {
   TextInput,
   View,
@@ -19,14 +19,16 @@ interface InputProps extends Omit<TextInputProps, "style"> {
   style?: StyleProp<ViewStyle>;
 }
 
-export function Input({
+export const Input = forwardRef<TextInput, InputProps>(function Input({
   label,
   className,
   containerStyle,
   inputStyle,
   style,
+  onFocus: onFocusProp,
+  onBlur: onBlurProp,
   ...props
-}: InputProps) {
+}, ref) {
   const [isFocused, setIsFocused] = useState(false);
   const { isDark } = useTheme();
 
@@ -61,9 +63,10 @@ export function Input({
         )}
       >
         <TextInput
+          ref={ref}
           placeholderTextColor={isDark ? "#64748B" : "#A1A1AA"}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          onFocus={(e) => { setIsFocused(true); onFocusProp?.(e); }}
+          onBlur={(e) => { setIsFocused(false); onBlurProp?.(e); }}
           textAlignVertical="center"
           style={[
             {
@@ -86,4 +89,4 @@ export function Input({
       </View>
     </View>
   );
-}
+});

@@ -110,6 +110,13 @@ def rename_zone(zone_id: UUID, body: LabelUpdate, db: Session = Depends(get_db),
     )
 
 
+@router.get("/zones/cities")
+def list_all_cities(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Toutes les villes connues dans city_sub_zones (pour autocomplete)."""
+    rows = db.query(CitySubZone.city).order_by(CitySubZone.city).all()
+    return [r.city for r in rows]
+
+
 @router.get("/zones/unassigned-cities")
 def list_unassigned_cities(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Villes présentes sur des clients mais sans mapping dans city_sub_zones."""
