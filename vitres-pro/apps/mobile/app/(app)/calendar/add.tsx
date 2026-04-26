@@ -1268,7 +1268,7 @@ export default function AddInterventionScreen() {
                 </View>
               )}
 
-              {/* TITRE + DATE + DURÉE */}
+              {/* TITRE + DATE + DURÉE + RÉCURRENCE */}
               <View style={{ gap: 16 }}>
                 <Input label="Titre" value={title} onChangeText={setTitle} />
 
@@ -1314,7 +1314,6 @@ export default function AddInterventionScreen() {
                     />
                   </>
                 )}
-              </View>
 
               {/* RÉCURRENCE (pas en mode édition) */}
               {!isEditMode && (
@@ -1498,6 +1497,7 @@ export default function AddInterventionScreen() {
                   )}
                 </View>
               )}
+              </View>
 
               {/* PRESTATIONS */}
               {typeNeedsItems && (
