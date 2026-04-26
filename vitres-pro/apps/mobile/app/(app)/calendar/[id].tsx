@@ -46,6 +46,9 @@ import { useAuth } from "../../../src/hooks/useAuth";
 import { OptionsModal } from "../../../src/ui/components/OptionsModal";
 import { ConfirmModal } from "../../../src/ui/components/ConfirmModal";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
+import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
+import { Dialog } from "../../../src/ui/components/Dialog";
+import { toBrusselsDateTimeString, parseBrusselsDateTimeString } from "../../../src/lib/date";
 
 export default function InterventionDetailScreen() {
   const { id, from_view, from_date } = useLocalSearchParams();
@@ -171,6 +174,40 @@ export default function InterventionDetailScreen() {
     },
     onError: () => toast.error("Erreur", "Impossible de modifier le paiement."),
   });
+
+  const [showTimeEdit, setShowTimeEdit] = useState(false);
+  const [editStartStr, setEditStartStr] = useState("");
+  const [editEndStr, setEditEndStr] = useState("");
+
+  const timeMutation = useMutation({
+    mutationFn: async ({ startIso, endIso }: { startIso: string; endIso: string }) =>
+      api.patch(`/api/interventions/${id}`, { start_time: startIso, end_time: endIso }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
+      setShowTimeEdit(false);
+      toast.success("Horaires mis à jour", "");
+    },
+    onError: () => toast.error("Erreur", "Impossible de modifier les horaires."),
+  });
+
+  const openTimeEdit = () => {
+    if (!intervention) return;
+    setEditStartStr(toBrusselsDateTimeString(new Date(intervention.start_time)));
+    setEditEndStr(intervention.end_time ? toBrusselsDateTimeString(new Date(intervention.end_time)) : "");
+    setShowTimeEdit(true);
+  };
+
+  const handleSaveTime = () => {
+    const startParsed = parseBrusselsDateTimeString(editStartStr);
+    const endParsed = editEndStr ? parseBrusselsDateTimeString(editEndStr) : null;
+    if (endParsed && endParsed.getTime() <= startParsed.getTime()) {
+      toast.error("Horaires", "L'heure de fin doit être après l'heure de début.");
+      return;
+    }
+    timeMutation.mutate({ startIso: startParsed.toISOString(), endIso: endParsed?.toISOString() ?? "" });
+  };
 
   // 5. RENDU CONDITIONNEL (Loading / Error)
   // C'est SEULEMENT ICI qu'on a le droit de faire des returns anticipés
@@ -434,7 +471,8 @@ export default function InterventionDetailScreen() {
                   })}
                 </Text>
               </View>
-              <View
+              <Pressable
+                onPress={isAdmin ? openTimeEdit : undefined}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
@@ -443,6 +481,7 @@ export default function InterventionDetailScreen() {
                   paddingHorizontal: 14,
                   paddingVertical: 8,
                   borderRadius: 20,
+                  opacity: 1,
                 }}
               >
                 <Clock size={16} color="#3B82F6" />
@@ -462,7 +501,7 @@ export default function InterventionDetailScreen() {
                     })
                   )}
                 </Text>
-              </View>
+              </Pressable>
             </View>
           </Animated.View>
         </View>
@@ -802,13 +841,56 @@ export default function InterventionDetailScreen() {
         message="Cette action est irréversible. L'intervention sera définitivement effacée du planning."
         confirmText="Supprimer"
         cancelText="Annuler"
-        isDestructive={true} // Bouton rouge
+        isDestructive={true}
         onCancel={() => setShowDeleteConfirm(false)}
         onConfirm={() => {
           setShowDeleteConfirm(false);
-          deleteMutation.mutate(); // L'action réelle
+          deleteMutation.mutate();
         }}
       />
+
+      <Dialog open={showTimeEdit} onClose={() => setShowTimeEdit(false)} position="bottom" containerStyle={{ paddingBottom: 120 }}>
+        <View style={{ padding: 16, gap: 16 }}>
+          <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", textAlign: "center" }}>
+            Modifier les horaires
+          </Text>
+          <DateTimePicker
+            value={editStartStr}
+            onChange={(v) => {
+              setEditStartStr(v);
+              // Ensure end stays after start
+              if (editEndStr) {
+                const [, st = "00:00"] = v.split("T");
+                const [, et = "00:00"] = editEndStr.split("T");
+                const [sh, sm] = st.split(":").map(Number);
+                const [eh, em] = et.split(":").map(Number);
+                if (eh * 60 + em <= sh * 60 + sm) {
+                  const adjH = Math.min(sh + 1, 23);
+                  setEditEndStr(`${v.split("T")[0]}T${String(adjH).padStart(2, "0")}:${String(sm).padStart(2, "0")}`);
+                }
+              }
+            }}
+            label="Début"
+            timeOnly
+          />
+          {editEndStr ? (
+            <DateTimePicker
+              value={editEndStr}
+              onChange={setEditEndStr}
+              label="Fin"
+              timeOnly
+            />
+          ) : null}
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <Button variant="outline" onPress={() => setShowTimeEdit(false)} style={{ flex: 1 }}>
+              Annuler
+            </Button>
+            <Button onPress={handleSaveTime} style={{ flex: 1 }} disabled={timeMutation.isPending}>
+              Enregistrer
+            </Button>
+          </View>
+        </View>
+      </Dialog>
     </View>
   );
 }

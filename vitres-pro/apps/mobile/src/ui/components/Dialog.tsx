@@ -1,16 +1,20 @@
 import React from "react";
-import { Modal, Pressable, View } from "react-native";
+import { Modal, Pressable, View, ViewStyle } from "react-native";
 
 export function Dialog({
   open,
   onClose,
   children,
   position = "center",
+  maxWidth,
+  containerStyle,
 }: {
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
   position?: "center" | "bottom";
+  maxWidth?: number;
+  containerStyle?: ViewStyle;
 }) {
   return (
     <Modal
@@ -37,10 +41,11 @@ export function Dialog({
           flex: 1,
           padding: 16,
           justifyContent: position === "bottom" ? "flex-end" : "center",
+          ...containerStyle,
         }}
         pointerEvents="box-none"
       >
-        <View className="w-full max-w-md self-center rounded-3xl border border-border dark:border-slate-800 bg-card dark:bg-slate-900 shadow-2xl overflow-hidden">
+        <View className="w-full max-w-md self-center rounded-3xl border border-border dark:border-slate-800 bg-card dark:bg-slate-900 shadow-2xl overflow-hidden" style={maxWidth ? { maxWidth } : undefined}>
           {children}
         </View>
       </View>

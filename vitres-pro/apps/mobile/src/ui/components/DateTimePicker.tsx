@@ -23,6 +23,7 @@ interface DateTimePickerProps {
   className?: string;
   style?: StyleProp<ViewStyle>;
   dateOnly?: boolean;
+  timeOnly?: boolean;
 }
 
 export function DateTimePicker({
@@ -32,6 +33,7 @@ export function DateTimePicker({
   className,
   style,
   dateOnly = false,
+  timeOnly = false,
 }: DateTimePickerProps) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -127,7 +129,7 @@ export function DateTimePicker({
         )}
 
         {/* BOUTON DATE */}
-        <Pressable
+        {!timeOnly && <Pressable
           onPress={() => setShowCalendar(true)}
           style={[{ borderRadius: 16, overflow: "hidden" }, style]}
           className={cn(
@@ -144,7 +146,7 @@ export function DateTimePicker({
               {displayDate}
             </Text>
           </View>
-        </Pressable>
+        </Pressable>}
 
         {/* BOUTON HEURE */}
         {!dateOnly && (
@@ -170,7 +172,7 @@ export function DateTimePicker({
       </View>
 
       {/* DIALOG DATE (Calendrier) */}
-      <Dialog
+      {!timeOnly && <Dialog
         open={showCalendar}
         onClose={() => setShowCalendar(false)}
         // ✅ FIX WEB : Centré sur Web, Bottom sur Mobile
@@ -199,7 +201,7 @@ export function DateTimePicker({
             Annuler
           </Button>
         </View>
-      </Dialog>
+      </Dialog>}
 
       {/* DIALOG HEURE */}
       {!dateOnly && <Dialog

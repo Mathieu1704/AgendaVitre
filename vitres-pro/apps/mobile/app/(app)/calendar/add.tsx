@@ -317,9 +317,29 @@ export default function AddInterventionScreen() {
     const datePart = toBrusselsDateTimeString(tomorrow).split("T")[0];
     return `${datePart}T09:00`;
   }, []);
+  const defaultEnd = useMemo(() => {
+    const [datePart, timePart = "09:00"] = defaultStart.split("T");
+    const [h, m] = timePart.split(":").map(Number);
+    const endH = Math.min(h + 1, 23);
+    return `${datePart}T${String(endH).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }, [defaultStart]);
   const [startDateStr, setStartDateStr] = useState(defaultStart);
-  const [durationHours, setDurationHours] = useState("");
+  const [endDateStr, setEndDateStr] = useState(defaultEnd);
   const [selectedRateId, setSelectedRateId] = useState<string | null>(null);
+
+  // Sync date part of endDateStr when startDateStr changes, and ensure end > start
+  useEffect(() => {
+    const [startDate, startTime = "09:00"] = startDateStr.split("T");
+    const endTime = endDateStr.split("T")[1] ?? "10:00";
+    const [sh, sm] = startTime.split(":").map(Number);
+    const [eh, em] = endTime.split(":").map(Number);
+    if (eh * 60 + em <= sh * 60 + sm) {
+      const adjH = Math.min(sh + 1, 23);
+      setEndDateStr(`${startDate}T${String(adjH).padStart(2, "0")}:${String(sm).padStart(2, "0")}`);
+    } else {
+      setEndDateStr(`${startDate}T${endTime}`);
+    }
+  }, [startDateStr]);
 
   // --- Récurrence ---
   const [recurrence, setRecurrence] = useState<Recurrence>(DEFAULT_RECURRENCE);
@@ -427,11 +447,7 @@ export default function AddInterventionScreen() {
       const start = new Date(interventionData.start_time);
       const end = new Date(interventionData.end_time);
       setStartDateStr(toBrusselsDateTimeString(start));
-      setDurationHours(
-        parseFloat(
-          ((end.getTime() - start.getTime()) / 3600000).toFixed(2),
-        ).toString(),
-      );
+      setEndDateStr(toBrusselsDateTimeString(end));
       const foundClient = clients.find(
         (c) => c.id === interventionData.client_id,
       );
@@ -486,12 +502,9 @@ export default function AddInterventionScreen() {
       const origEnd = new Date(repriseSource.end_time);
       const nextDate = new Date(origStart);
       nextDate.setDate(nextDate.getDate() + 7); // par défaut +1 semaine
+      const nextEnd = new Date(nextDate.getTime() + (origEnd.getTime() - origStart.getTime()));
       setStartDateStr(toBrusselsDateTimeString(nextDate));
-      setDurationHours(
-        parseFloat(
-          ((origEnd.getTime() - origStart.getTime()) / 3600000).toFixed(2),
-        ).toString(),
-      );
+      setEndDateStr(toBrusselsDateTimeString(nextEnd));
 
       const foundClient = clients.find((c) => c.id === repriseSource.client_id);
       if (foundClient) setSelectedClient(foundClient);
@@ -539,7 +552,7 @@ export default function AddInterventionScreen() {
         setAdHocItems([]);
         setPaymentMode(hideCash ? "invoice" : "cash");
         setStartDateStr(defaultStart);
-        setDurationHours("");
+        setEndDateStr(defaultEnd);
         setRecurrence(DEFAULT_RECURRENCE);
         setNoRepriseMode(false);
         setNoRepriseNote("");
@@ -634,8 +647,11 @@ export default function AddInterventionScreen() {
     if (NEEDS_CLIENT.includes(intervType) && !selectedClient)
       return toast.error("Client", "Sélectionne un client.");
     if (!title) return toast.error("Titre", "Titre requis.");
-    const dur = Number(durationHours);
-    if (!dur) return toast.error("Durée", "Durée requise.");
+    const startParsed = parseBrusselsDateTimeString(startDateStr);
+    const endParsed = parseBrusselsDateTimeString(endDateStr);
+    if (!startParsed || !endParsed) return toast.error("Date", "Vérifie les horaires.");
+    const dur = (endParsed.getTime() - startParsed.getTime()) / 3600000;
+    if (dur <= 0) return toast.error("Horaires", "L'heure de fin doit être après l'heure de début.");
 
     setIsSubmitting(true);
     try {
@@ -667,10 +683,8 @@ export default function AddInterventionScreen() {
           startIso = startUtc.toISOString();
           endIso = endUtc.toISOString();
         } else {
-          const start = parseBrusselsDateTimeString(startDateStr);
-          if (!start) return toast.error("Date", "Vérifie la date.");
-          startIso = start.toISOString();
-          endIso = new Date(start.getTime() + dur * 3600000).toISOString();
+          startIso = startParsed.toISOString();
+          endIso = endParsed.toISOString();
         }
         await api.patch(`/api/interventions/${id}`, {
           ...basePayload,
@@ -1167,11 +1181,11 @@ export default function AddInterventionScreen() {
                   label="Début de l'intervention"
                   dateOnly={!isAdmin}
                 />
-                <Input
-                  label="Durée (heures)"
-                  value={durationHours}
-                  onChangeText={setDurationHours}
-                  keyboardType="numeric"
+                <DateTimePicker
+                  value={endDateStr}
+                  onChange={setEndDateStr}
+                  label="Fin de l'intervention"
+                  timeOnly
                 />
               </View>
 
