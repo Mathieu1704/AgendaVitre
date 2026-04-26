@@ -578,6 +578,8 @@ export default function AddInterventionScreen() {
       if (foundClient) setSelectedClient(foundClient);
       else if (repriseSource.client) setSelectedClient(repriseSource.client);
 
+      if (repriseSource.hourly_rate_id)
+        setSelectedRateId(repriseSource.hourly_rate_id);
       if (repriseSource.employees)
         setSelectedEmployeeIds(repriseSource.employees.map((e: any) => e.id));
       if (repriseSource.items && repriseSource.items.length > 0) {
