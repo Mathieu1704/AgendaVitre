@@ -304,29 +304,46 @@ export default function AddInterventionScreen() {
   // Accumule toutes les stats chargées pour ne jamais perdre un mois déjà coloré
   const [allStats, setAllStats] = useState<Record<string, any>>({});
 
-  // Fenêtre glissante : aujourd'hui → calendarMonth + 4 mois complets
-  const rangeEnd = useMemo(() => {
+  const monthKey = (y: number, m: number) =>
+    `${y}-${String(m).padStart(2, "0")}`;
+
+  // Mois frontière = calendarMonth + 4
+  const horizonMonthKey = useMemo(() => {
     const [y, m] = calendarMonth.split("-").map(Number);
-    // new Date(y, m+4, 0) = dernier jour du mois m+3 (0-indexed) = calendarMonth+4
-    const d = new Date(y, m + 4, 0);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const d = new Date(y, m + 3, 1); // +4 mois (m est 1-indexed, +3 en 0-indexed = +4 réel)
+    return monthKey(d.getFullYear(), d.getMonth() + 1);
   }, [calendarMonth]);
 
-  const { data: rangeStats } = useQuery({
-    queryKey: ["range-stats-reprise", zone, rangeEnd],
+  // Charge le mois frontière (un seul mois) quand on navigue
+  const { data: horizonStats } = useQuery({
+    queryKey: ["horizon-stats", zone, horizonMonthKey],
     queryFn: async () => {
-      const today = new Date();
-      const start = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
-      return (await api.get(`/api/planning/range-stats?start_str=${start}&end_str=${rangeEnd}&zone=${zone}`)).data as Record<string, any>;
+      const [y, m] = horizonMonthKey.split("-").map(Number);
+      const start = `${y}-${String(m).padStart(2, "0")}-01`;
+      const lastDay = new Date(y, m, 0).getDate();
+      const end = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      return (await api.get(`/api/planning/range-stats?start_str=${start}&end_str=${end}&zone=${zone}`)).data as Record<string, any>;
     },
     enabled: isRepriseMode,
     staleTime: 5 * 60 * 1000,
   });
 
-  // Merge dans allStats dès qu'une nouvelle tranche arrive
-  useEffect(() => {
-    if (rangeStats) setAllStats(prev => ({ ...prev, ...rangeStats }));
-  }, [rangeStats]);
+  // Charge les 5 premiers mois une seule fois au montage
+  const { data: initialStats } = useQuery({
+    queryKey: ["initial-stats-reprise", zone],
+    queryFn: async () => {
+      const today = new Date();
+      const start = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+      const d = new Date(today.getFullYear(), today.getMonth() + 5, 0);
+      const end = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return (await api.get(`/api/planning/range-stats?start_str=${start}&end_str=${end}&zone=${zone}`)).data as Record<string, any>;
+    },
+    enabled: isRepriseMode,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  useEffect(() => { if (initialStats) setAllStats(prev => ({ ...prev, ...initialStats })); }, [initialStats]);
+  useEffect(() => { if (horizonStats) setAllStats(prev => ({ ...prev, ...horizonStats })); }, [horizonStats]);
 
   const dayColors = useMemo(() => {
     if (Object.keys(allStats).length === 0) return undefined;
