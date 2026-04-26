@@ -1,7 +1,6 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
-import { StatusBadge } from "../StatusBadge";
 
 export type AssignModalState =
   | { mode: "single"; interventionId: string; currentIds: string[] }
@@ -95,27 +94,18 @@ export const InterventionCard = React.memo(function InterventionCard({
         </View>
       )}
 
-      <View className={`flex-row items-center gap-3 ${cardPadding}`}>
+      <View className={`flex-row items-stretch gap-2.5 ${cardPadding}`}>
         <View
-          className={`items-center justify-center ${compact ? "w-11" : "w-16"} py-2.5`}
-          style={{ borderRadius: 16, backgroundColor: typeConfig.bg }}
+          className={`items-center justify-center ${compact ? "w-10" : "w-12"}`}
+          style={{ borderRadius: 12, backgroundColor: typeConfig.bg }}
         >
-          {item.time_tbd ? (
+          {item.time_tbd ? null : (
             <>
-              <Text style={{ color: typeConfig.text }} className={`font-bold ${compact ? "text-xs" : "text-base"}`}>
-                {durationLabel}
-              </Text>
-              {!compact && (
-                <Text className="text-[10px] text-muted-foreground mt-0.5 font-medium">durée</Text>
-              )}
-            </>
-          ) : (
-            <>
-              <Text style={{ color: typeConfig.text }} className={`font-bold ${compact ? "text-xs" : "text-base"}`}>
+              <Text style={{ color: typeConfig.text }} className={`font-bold ${compact ? "text-xs" : "text-sm"}`}>
                 {startTime.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}
               </Text>
               {!compact && (
-                <Text className="text-[10px] text-muted-foreground mt-0.5 font-medium">
+                <Text className="text-[9px] text-muted-foreground mt-0.5 font-medium">
                   {endTime.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}
                 </Text>
               )}
@@ -129,36 +119,29 @@ export const InterventionCard = React.memo(function InterventionCard({
         </View>
 
         <View className="flex-1 justify-center">
-          <View className="flex-row justify-between items-start">
-            <View className="flex-1 mr-2">
-              <Text
-                className={`font-extrabold text-foreground dark:text-white ${compact ? "text-sm" : "text-xl"}`}
-                numberOfLines={1}
-              >
-                {hasClient && item.client?.address ? item.client.address : item.title}
+          <Text
+            className={`font-extrabold text-foreground dark:text-white ${compact ? "text-sm" : "text-base"}`}
+            numberOfLines={compact ? 1 : 2}
+          >
+            {hasClient && item.client?.address ? item.client.address : item.title}
+          </Text>
+          {hasClient && item.client?.address && (
+            <>
+              <Text className={`text-muted-foreground dark:text-slate-400 font-medium ${compact ? "text-[10px]" : "text-xs"} mt-0.5`} numberOfLines={1}>
+                {item.title}
               </Text>
-              {hasClient && item.client?.address && (
-                <>
-                  <Text className={`text-muted-foreground dark:text-slate-400 font-medium ${compact ? "text-[10px]" : "text-sm"} mt-0.5`} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  {item.client?.name && (
-                    <Text className={`text-muted-foreground dark:text-slate-400 ${compact ? "text-[10px]" : "text-xs"}`} numberOfLines={1}>
-                      {item.client.name}
-                    </Text>
-                  )}
-                </>
-              )}
-              {hasClient && !item.client?.address && item.client?.name && (
-                <Text className={`text-muted-foreground dark:text-slate-400 font-medium ${compact ? "text-[10px]" : "text-sm"} mt-0.5`} numberOfLines={1}>
+              {item.client?.name && (
+                <Text className="text-muted-foreground dark:text-slate-400 text-[10px]" numberOfLines={1}>
                   {item.client.name}
                 </Text>
               )}
-            </View>
-            <View style={{ alignItems: "flex-end", gap: 4 }}>
-              {!compact && <StatusBadge status={item.status} className="self-center" />}
-            </View>
-          </View>
+            </>
+          )}
+          {hasClient && !item.client?.address && item.client?.name && (
+            <Text className={`text-muted-foreground dark:text-slate-400 font-medium ${compact ? "text-[10px]" : "text-xs"} mt-0.5`} numberOfLines={1}>
+              {item.client.name}
+            </Text>
+          )}
         </View>
       </View>
     </Pressable>

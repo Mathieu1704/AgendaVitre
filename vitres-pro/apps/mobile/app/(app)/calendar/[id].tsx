@@ -181,7 +181,7 @@ export default function InterventionDetailScreen() {
 
   const timeMutation = useMutation({
     mutationFn: async ({ startIso, endIso }: { startIso: string; endIso: string }) =>
-      api.patch(`/api/interventions/${id}`, { start_time: startIso, end_time: endIso }),
+      api.patch(`/api/interventions/${id}`, { start_time: startIso, end_time: endIso, time_tbd: false }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["intervention", id] });
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
@@ -477,30 +477,35 @@ export default function InterventionDetailScreen() {
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 6,
-                  backgroundColor: isDark ? "#1E3A5F" : "#EFF6FF",
+                  backgroundColor: intervention.time_tbd
+                    ? (isDark ? "#1E293B" : "#F1F5F9")
+                    : (isDark ? "#1E3A5F" : "#EFF6FF"),
                   paddingHorizontal: 14,
                   paddingVertical: 8,
                   borderRadius: 20,
-                  opacity: 1,
                 }}
               >
-                <Clock size={16} color="#3B82F6" />
-                <Text
-                  style={{ fontSize: 17, fontWeight: "700", color: "#3B82F6" }}
-                >
-                  {startTime.toLocaleTimeString("fr-FR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    timeZone: "Europe/Brussels",
-                  })}
-                  {intervention.end_time && (
-                    " → " + new Date(intervention.end_time).toLocaleTimeString("fr-FR", {
+                <Clock size={16} color={intervention.time_tbd ? "#94A3B8" : "#3B82F6"} />
+                {intervention.time_tbd ? (
+                  <Text style={{ fontSize: 15, fontWeight: "600", color: "#94A3B8" }}>
+                    À définir
+                  </Text>
+                ) : (
+                  <Text style={{ fontSize: 17, fontWeight: "700", color: "#3B82F6" }}>
+                    {startTime.toLocaleTimeString("fr-FR", {
                       hour: "2-digit",
                       minute: "2-digit",
                       timeZone: "Europe/Brussels",
-                    })
-                  )}
-                </Text>
+                    })}
+                    {intervention.end_time && (
+                      " → " + new Date(intervention.end_time).toLocaleTimeString("fr-FR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "Europe/Brussels",
+                      })
+                    )}
+                  </Text>
+                )}
               </Pressable>
             </View>
           </Animated.View>

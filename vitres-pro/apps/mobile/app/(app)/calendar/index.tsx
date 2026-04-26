@@ -411,6 +411,7 @@ export default function CalendarScreen() {
     }
     for (const k of Object.keys(map)) {
       map[k].sort((a, b) => {
+        if (a.time_tbd !== b.time_tbd) return a.time_tbd ? 1 : -1;
         const za = a.sub_zone ?? a.zone ?? "";
         const zb = b.sub_zone ?? b.zone ?? "";
         if (za !== zb) return za.localeCompare(zb);

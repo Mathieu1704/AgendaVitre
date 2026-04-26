@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   TextInput,
   KeyboardAvoidingView,
+  Switch,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -325,6 +326,7 @@ export default function AddInterventionScreen() {
   }, [defaultStart]);
   const [startDateStr, setStartDateStr] = useState(defaultStart);
   const [endDateStr, setEndDateStr] = useState(defaultEnd);
+  const [timeTbd, setTimeTbd] = useState(true);
   const [selectedRateId, setSelectedRateId] = useState<string | null>(null);
 
   // Sync date part of endDateStr when startDateStr changes, and ensure end > start
@@ -448,6 +450,7 @@ export default function AddInterventionScreen() {
       const end = new Date(interventionData.end_time);
       setStartDateStr(toBrusselsDateTimeString(start));
       setEndDateStr(toBrusselsDateTimeString(end));
+      setTimeTbd(interventionData.time_tbd ?? false);
       const foundClient = clients.find(
         (c) => c.id === interventionData.client_id,
       );
@@ -505,6 +508,7 @@ export default function AddInterventionScreen() {
       const nextEnd = new Date(nextDate.getTime() + (origEnd.getTime() - origStart.getTime()));
       setStartDateStr(toBrusselsDateTimeString(nextDate));
       setEndDateStr(toBrusselsDateTimeString(nextEnd));
+      setTimeTbd(repriseSource.time_tbd ?? true);
 
       const foundClient = clients.find((c) => c.id === repriseSource.client_id);
       if (foundClient) setSelectedClient(foundClient);
@@ -553,6 +557,7 @@ export default function AddInterventionScreen() {
         setPaymentMode(hideCash ? "invoice" : "cash");
         setStartDateStr(defaultStart);
         setEndDateStr(defaultEnd);
+        setTimeTbd(true);
         setRecurrence(DEFAULT_RECURRENCE);
         setNoRepriseMode(false);
         setNoRepriseNote("");
@@ -647,11 +652,19 @@ export default function AddInterventionScreen() {
     if (NEEDS_CLIENT.includes(intervType) && !selectedClient)
       return toast.error("Client", "Sélectionne un client.");
     if (!title) return toast.error("Titre", "Titre requis.");
-    const startParsed = parseBrusselsDateTimeString(startDateStr);
-    const endParsed = parseBrusselsDateTimeString(endDateStr);
-    if (!startParsed || !endParsed) return toast.error("Date", "Vérifie les horaires.");
-    const dur = (endParsed.getTime() - startParsed.getTime()) / 3600000;
-    if (dur <= 0) return toast.error("Horaires", "L'heure de fin doit être après l'heure de début.");
+    const datePart = startDateStr.split("T")[0];
+    let startParsed: Date, endParsed: Date, dur: number;
+    if (timeTbd) {
+      startParsed = parseBrusselsDateTimeString(`${datePart}T00:00`);
+      endParsed = parseBrusselsDateTimeString(`${datePart}T01:00`);
+      dur = 1;
+    } else {
+      startParsed = parseBrusselsDateTimeString(startDateStr);
+      endParsed = parseBrusselsDateTimeString(endDateStr);
+      if (!startParsed || !endParsed) return toast.error("Date", "Vérifie les horaires.");
+      dur = (endParsed.getTime() - startParsed.getTime()) / 3600000;
+      if (dur <= 0) return toast.error("Horaires", "L'heure de fin doit être après l'heure de début.");
+    }
 
     setIsSubmitting(true);
     try {
@@ -690,7 +703,7 @@ export default function AddInterventionScreen() {
           ...basePayload,
           start_time: startIso,
           end_time: endIso,
-          ...(isAdmin ? {} : { time_tbd: true }),
+          time_tbd: isAdmin ? timeTbd : true,
         });
         queryClient.invalidateQueries({ queryKey: ["interventions"] });
         queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
@@ -721,7 +734,7 @@ export default function AddInterventionScreen() {
           ...basePayload,
           start_time: occ.start.toISOString(),
           end_time: occ.end.toISOString(),
-          ...(isAdmin ? {} : { time_tbd: true }),
+          time_tbd: isAdmin ? timeTbd : true,
           recurrence_rule:
             occurrences.length > 1
               ? {
@@ -1175,18 +1188,43 @@ export default function AddInterventionScreen() {
               {/* TITRE + DATE + DURÉE */}
               <View style={{ gap: 16 }}>
                 <Input label="Titre" value={title} onChangeText={setTitle} />
-                <DateTimePicker
-                  value={startDateStr}
-                  onChange={setStartDateStr}
-                  label="Début de l'intervention"
-                  dateOnly={!isAdmin}
-                />
-                <DateTimePicker
-                  value={endDateStr}
-                  onChange={setEndDateStr}
-                  label="Fin de l'intervention"
-                  timeOnly
-                />
+
+                {isAdmin && (
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4 }}>
+                    <Text className="text-sm font-semibold text-foreground dark:text-white">Heure définie</Text>
+                    <Switch
+                      value={!timeTbd}
+                      onValueChange={(v) => setTimeTbd(!v)}
+                      trackColor={{ false: Platform.OS === "ios" ? "transparent" : "#E2E8F0", true: "#8B5CF6" }}
+                      ios_backgroundColor="#E2E8F0"
+                      thumbColor={Platform.OS === "ios" ? undefined : "#fff"}
+                    />
+                  </View>
+                )}
+
+                {timeTbd ? (
+                  <DateTimePicker
+                    value={startDateStr}
+                    onChange={setStartDateStr}
+                    label="Date de l'intervention"
+                    dateOnly
+                  />
+                ) : (
+                  <>
+                    <DateTimePicker
+                      value={startDateStr}
+                      onChange={setStartDateStr}
+                      label="Début de l'intervention"
+                      dateOnly={!isAdmin}
+                    />
+                    <DateTimePicker
+                      value={endDateStr}
+                      onChange={setEndDateStr}
+                      label="Fin de l'intervention"
+                      timeOnly
+                    />
+                  </>
+                )}
               </View>
 
               {/* RÉCURRENCE (pas en mode édition) */}
