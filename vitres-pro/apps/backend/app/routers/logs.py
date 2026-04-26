@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
 
+from sqlalchemy.orm import selectinload
 from app.models.models import get_db, AuditLog, Employee
 from app.schemas.schemas import AuditLogOut
 from app.core.deps import get_current_user
@@ -23,7 +24,7 @@ def get_logs(
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Réservé aux admins.")
 
-    query = db.query(AuditLog)
+    query = db.query(AuditLog).options(selectinload(AuditLog.employee))
     if action_type:
         query = query.filter(AuditLog.action_type == action_type)
     if intervention_id:
@@ -36,18 +37,15 @@ def get_logs(
         .all()
     )
 
-    result = []
-    for log in logs:
-        emp_name = None
-        if log.employee:
-            emp_name = log.employee.full_name or log.employee.email
-        result.append(AuditLogOut(
+    return [
+        AuditLogOut(
             id=log.id,
             action_type=log.action_type,
             employee_id=log.employee_id,
             intervention_id=log.intervention_id,
             description=log.description,
             created_at=log.created_at,
-            employee_name=emp_name,
-        ))
-    return result
+            employee_name=log.employee.full_name or log.employee.email if log.employee else None,
+        )
+        for log in logs
+    ]

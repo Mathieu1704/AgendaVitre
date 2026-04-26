@@ -1,8 +1,15 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, selectinload
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Dict, Optional
 from sqlalchemy.sql import func
+
+
+def _utc_bounds(d: date):
+    """Retourne les bornes UTC couvrant un jour calendaire Brussels (UTC+1/+2)."""
+    start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc) - timedelta(hours=2)
+    end   = datetime(d.year, d.month, d.day, tzinfo=timezone.utc) + timedelta(hours=26)
+    return start, end
 
 from app.models.models import get_db, Intervention, Employee, Absence, CompanySettings, ProgressiveHours, CompanyClosure
 from app.core.deps import get_current_user
@@ -51,11 +58,12 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
         emp_query = emp_query.filter(Employee.zone == zone)
     all_employees = emp_query.all()
 
+    day_start, day_end = _utc_bounds(target_date)
     absences = db.query(Absence).filter(
-        func.date(Absence.start_date) <= target_date,
-        func.date(Absence.end_date) >= target_date
+        Absence.start_date < day_end,
+        Absence.end_date >= day_start,
     ).all()
-    absent_ids = [a.employee_id for a in absences]
+    absent_ids = {a.employee_id for a in absences}
 
     progressive = db.query(ProgressiveHours).filter(
         ProgressiveHours.start_date <= target_date,
@@ -75,7 +83,8 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
         selectinload(Intervention.employees),
         selectinload(Intervention.hourly_rate),
     ).filter(
-        func.date(Intervention.start_time) == target_date
+        Intervention.start_time >= day_start,
+        Intervention.start_time < day_end,
     )
     if sub_zone:
         int_query = int_query.filter(Intervention.sub_zone == sub_zone)
@@ -170,22 +179,25 @@ def get_range_stats_endpoint(
         emp_query = emp_query.filter(Employee.zone == zone)
     employees = emp_query.all()
 
+    range_start_utc, _ = _utc_bounds(start)
+    _, range_end_utc    = _utc_bounds(end)
+
     absences = db.query(Absence).filter(
-        func.date(Absence.start_date) <= end,
-        func.date(Absence.end_date) >= start
+        Absence.start_date < range_end_utc,
+        Absence.end_date >= range_start_utc,
     ).all()
 
     progressive = db.query(ProgressiveHours).filter(
         ProgressiveHours.start_date <= end,
-        ProgressiveHours.end_date >= start
+        ProgressiveHours.end_date >= start,
     ).all()
 
     int_query = db.query(Intervention).options(
         selectinload(Intervention.employees),
         selectinload(Intervention.hourly_rate),
     ).filter(
-        func.date(Intervention.start_time) >= start,
-        func.date(Intervention.start_time) <= end,
+        Intervention.start_time >= range_start_utc,
+        Intervention.start_time < range_end_utc,
     )
     if sub_zone:
         int_query = int_query.filter(Intervention.sub_zone == sub_zone)

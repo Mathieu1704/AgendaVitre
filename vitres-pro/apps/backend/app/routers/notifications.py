@@ -20,6 +20,7 @@ def get_notifications(
         db.query(InAppNotification)
         .filter(InAppNotification.recipient_id == current_user.id)
         .order_by(InAppNotification.is_read.asc(), InAppNotification.created_at.desc())
+        .limit(100)
         .all()
     )
     result = []
