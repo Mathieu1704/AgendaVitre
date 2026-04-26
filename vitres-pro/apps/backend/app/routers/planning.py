@@ -149,11 +149,118 @@ def get_range_stats_endpoint(
     start = datetime.strptime(start_str, "%Y-%m-%d").date()
     end = datetime.strptime(end_str, "%Y-%m-%d").date()
 
+    # --- Batch : 6 requêtes pour tout le range ---
+    settings = db.query(CompanySettings).first()
+    tolerance = settings.overtime_tolerance_hours if settings else 3.0
+
+    closures = db.query(CompanyClosure).filter(
+        CompanyClosure.start_date <= end,
+        CompanyClosure.end_date >= start
+    ).all()
+    closed_dates = set()
+    for c in closures:
+        d = c.start_date
+        while d <= c.end_date:
+            if start <= d <= end:
+                closed_dates.add(d)
+            d += timedelta(days=1)
+
+    emp_query = db.query(Employee)
+    if zone:
+        emp_query = emp_query.filter(Employee.zone == zone)
+    employees = emp_query.all()
+
+    absences = db.query(Absence).filter(
+        func.date(Absence.start_date) <= end,
+        func.date(Absence.end_date) >= start
+    ).all()
+
+    progressive = db.query(ProgressiveHours).filter(
+        ProgressiveHours.start_date <= end,
+        ProgressiveHours.end_date >= start
+    ).all()
+
+    int_query = db.query(Intervention).options(
+        selectinload(Intervention.employees),
+        selectinload(Intervention.hourly_rate),
+    ).filter(
+        func.date(Intervention.start_time) >= start,
+        func.date(Intervention.start_time) <= end,
+    )
+    if sub_zone:
+        int_query = int_query.filter(Intervention.sub_zone == sub_zone)
+    elif zone:
+        int_query = int_query.filter(Intervention.zone == zone)
+    interventions = int_query.all()
+
+    # Index interventions par jour
+    from collections import defaultdict
+    interventions_by_day: Dict[date, list] = defaultdict(list)
+    for iv in interventions:
+        day = iv.start_time.date() if iv.start_time else None
+        if day:
+            interventions_by_day[day].append(iv)
+
+    # Index absences par employé
+    def is_absent(emp_id, d: date) -> bool:
+        for ab in absences:
+            if ab.employee_id == emp_id and ab.start_date.date() <= d <= ab.end_date.date():
+                return True
+        return False
+
+    def intervention_hours(iv) -> float:
+        if iv.hourly_rate_id and iv.hourly_rate:
+            if iv.hourly_rate.time_only:
+                if iv.start_time and iv.end_time:
+                    return (iv.end_time - iv.start_time).total_seconds() / 3600
+                return 0.0
+            if iv.price_estimated and float(iv.price_estimated) > 0 and iv.hourly_rate.rate > 0:
+                return float(iv.price_estimated) / iv.hourly_rate.rate
+        return 0.0
+
     results = {}
     current = start
     while current <= end:
-        stats = calculate_day_stats(current, db, zone=zone, sub_zone=sub_zone)
-        results[stats["date"]] = stats
+        if current in closed_dates:
+            results[current.strftime("%Y-%m-%d")] = {
+                "date": current.strftime("%Y-%m-%d"),
+                "capacity_hours": 0, "planned_hours": 0,
+                "tolerance": tolerance, "present_employees": 0, "status": "closed"
+            }
+            current += timedelta(days=1)
+            continue
+
+        total_capacity = 0.0
+        present_count = 0
+        for emp in employees:
+            if not is_absent(emp.id, current):
+                h = _get_employee_hours_for_day(emp, current, progressive)
+                total_capacity += h
+                if h > 0:
+                    present_count += 1
+
+        total_planned = 0.0
+        for iv in interventions_by_day.get(current, []):
+            h = intervention_hours(iv)
+            if h > 0:
+                nb = len(iv.employees)
+                total_planned += h * (nb if nb > 0 else 1)
+
+        if total_planned > (total_capacity + tolerance):
+            status = "overload"
+        elif total_planned > total_capacity:
+            status = "warning"
+        else:
+            status = "ok"
+
+        results[current.strftime("%Y-%m-%d")] = {
+            "date": current.strftime("%Y-%m-%d"),
+            "capacity_hours": round(total_capacity, 1),
+            "planned_hours": round(total_planned, 1),
+            "tolerance": tolerance,
+            "present_employees": present_count,
+            "status": status,
+        }
         current += timedelta(days=1)
 
     return results
