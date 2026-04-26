@@ -2355,10 +2355,7 @@ export default function AddInterventionScreen() {
               <CityAutocomplete value={newClientCity} onChangeText={setNewClientCity}>
                 {({ onChangeText: onCityChange, onFocus: onCityFocus, onBlur: onCityBlur, inputRef: cityRef }) => (
                   <Pressable
-                    onPress={() => {
-                      setNcFocused("city");
-                      cityRef.current?.focus();
-                    }}
+                    onPress={() => { setNcFocused("city"); cityRef.current?.focus(); }}
                     style={{
                       flex: 2,
                       borderWidth: 1.5,
