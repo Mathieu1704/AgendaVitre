@@ -203,6 +203,7 @@ export function DateTimePicker({
                 const marks: Record<string, any> = {};
                 if (dayColors) {
                   Object.entries(dayColors).forEach(([d, color]) => {
+                    if (minDate && d < minDate) return;
                     const hex = DAY_COLOR_MAP[color]?.hex ?? "#94A3B8";
                     marks[d] = {
                       customStyles: {
