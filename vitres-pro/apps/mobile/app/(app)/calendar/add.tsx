@@ -296,30 +296,57 @@ export default function AddInterventionScreen() {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
   });
+
+  const fetchMonthStats = useCallback(async (monthStr: string, z: string) => {
+    const [y, m] = monthStr.split("-").map(Number);
+    const start = `${y}-${String(m).padStart(2, "0")}-01`;
+    const lastDay = new Date(y, m, 0).getDate();
+    const end = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    return (await api.get(`/api/planning/range-stats?start_str=${start}&end_str=${end}&zone=${z}`)).data as Record<string, any>;
+  }, []);
+
+  const adjacentMonths = useMemo(() => {
+    const [y, m] = calendarMonth.split("-").map(Number);
+    const prev = new Date(y, m - 2, 1);
+    const next = new Date(y, m, 1);
+    return {
+      prev: `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-01`,
+      next: `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`,
+    };
+  }, [calendarMonth]);
+
   const { data: monthStats } = useQuery({
     queryKey: ["month-stats", calendarMonth, zone],
-    queryFn: async () => {
-      const [y, m] = calendarMonth.split("-").map(Number);
-      const start = `${y}-${String(m).padStart(2, "0")}-01`;
-      const lastDay = new Date(y, m, 0).getDate();
-      const end = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-      return (await api.get(`/api/planning/range-stats?start_str=${start}&end_str=${end}&zone=${zone}`)).data as Record<string, any>;
-    },
+    queryFn: () => fetchMonthStats(calendarMonth, zone),
     enabled: isRepriseMode,
     staleTime: 5 * 60 * 1000,
   });
-  const dayColors = useMemo(() => {
-    if (!monthStats) return undefined;
+  useQuery({
+    queryKey: ["month-stats", adjacentMonths.prev, zone],
+    queryFn: () => fetchMonthStats(adjacentMonths.prev, zone),
+    enabled: isRepriseMode,
+    staleTime: 5 * 60 * 1000,
+  });
+  useQuery({
+    queryKey: ["month-stats", adjacentMonths.next, zone],
+    queryFn: () => fetchMonthStats(adjacentMonths.next, zone),
+    enabled: isRepriseMode,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const computeColors = useCallback((stats: Record<string, any>) => {
     const colors: Record<string, "green" | "orange" | "red"> = {};
-    for (const [date, stats] of Object.entries(monthStats)) {
-      const planned = stats.planned_hours ?? 0;
-      const capacity = stats.capacity_hours ?? 0;
-      if (capacity === 0) colors[date] = "red";           // pas d'employés dispo
-      else if (planned >= capacity) colors[date] = "orange"; // jour plein
-      else colors[date] = "green";                        // capacité disponible
+    for (const [date, s] of Object.entries(stats)) {
+      const planned = s.planned_hours ?? 0;
+      const capacity = s.capacity_hours ?? 0;
+      if (capacity === 0) colors[date] = "red";
+      else if (planned >= capacity) colors[date] = "orange";
+      else colors[date] = "green";
     }
     return colors;
-  }, [monthStats]);
+  }, []);
+
+  const dayColors = useMemo(() => monthStats ? computeColors(monthStats) : undefined, [monthStats, computeColors]);
 
   // --- States formulaire ---
   const [intervType, setIntervType] = useState<IntervType>("intervention");
