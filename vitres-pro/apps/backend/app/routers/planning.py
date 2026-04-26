@@ -99,8 +99,6 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
                     and float(interv.price_estimated) > 0
                     and interv.hourly_rate.rate > 0):
                 return float(interv.price_estimated) / interv.hourly_rate.rate
-        if getattr(interv, "time_tbd", False):
-            return (interv.end_time - interv.start_time).total_seconds() / 3600
         return 0.0
 
     total_planned = 0

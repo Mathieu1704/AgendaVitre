@@ -95,28 +95,26 @@ export const InterventionCard = React.memo(function InterventionCard({
       )}
 
       <View className={`flex-row items-stretch gap-2.5 ${cardPadding}`}>
-        <View
-          className={`items-center justify-center ${compact ? "w-10" : "w-12"}`}
-          style={{ borderRadius: 12, backgroundColor: typeConfig.bg }}
-        >
-          {item.time_tbd ? null : (
-            <>
-              <Text style={{ color: typeConfig.text }} className={`font-bold ${compact ? "text-xs" : "text-sm"}`}>
-                {startTime.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}
-              </Text>
-              {!compact && (
-                <Text className="text-[9px] text-muted-foreground mt-0.5 font-medium">
-                  {endTime.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}
-                </Text>
-              )}
-            </>
-          )}
-          {!compact && item.type && item.type !== "intervention" && (
-            <Text style={{ color: typeConfig.text }} className="text-[8px] font-bold uppercase mt-0.5 tracking-wide">
-              {typeConfig.label}
+        {!item.time_tbd && (
+          <View
+            className={`items-center justify-center ${compact ? "w-10" : "w-12"}`}
+            style={{ borderRadius: 12, backgroundColor: typeConfig.bg }}
+          >
+            <Text style={{ color: typeConfig.text }} className={`font-bold ${compact ? "text-xs" : "text-sm"}`}>
+              {startTime.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}
             </Text>
-          )}
-        </View>
+            {!compact && (
+              <Text className="text-[9px] text-muted-foreground mt-0.5 font-medium">
+                {endTime.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}
+              </Text>
+            )}
+            {!compact && item.type && item.type !== "intervention" && (
+              <Text style={{ color: typeConfig.text }} className="text-[8px] font-bold uppercase mt-0.5 tracking-wide">
+                {typeConfig.label}
+              </Text>
+            )}
+          </View>
+        )}
 
         <View className="flex-1 justify-center">
           <Text
