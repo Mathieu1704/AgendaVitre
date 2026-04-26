@@ -291,66 +291,42 @@ export default function AddInterventionScreen() {
     enabled: isRepriseMode,
   });
 
+  // --- States formulaire ---
+  const [intervType, setIntervType] = useState<IntervType>("intervention");
+  const [zone, setZone] = useState<"hainaut" | "ardennes">("hainaut");
+
   // --- Stats planning pour coloration jours (reprise) ---
   const [calendarMonth, setCalendarMonth] = useState<string>(() => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
   });
 
-  const fetchMonthStats = useCallback(async (monthStr: string, z: string) => {
-    const [y, m] = monthStr.split("-").map(Number);
-    const start = `${y}-${String(m).padStart(2, "0")}-01`;
-    const lastDay = new Date(y, m, 0).getDate();
-    const end = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-    return (await api.get(`/api/planning/range-stats?start_str=${start}&end_str=${end}&zone=${z}`)).data as Record<string, any>;
-  }, []);
-
-  const adjacentMonths = useMemo(() => {
-    const [y, m] = calendarMonth.split("-").map(Number);
-    const prev = new Date(y, m - 2, 1);
-    const next = new Date(y, m, 1);
-    return {
-      prev: `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-01`,
-      next: `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`,
-    };
-  }, [calendarMonth]);
-
-  const { data: monthStats } = useQuery({
-    queryKey: ["month-stats", calendarMonth, zone],
-    queryFn: () => fetchMonthStats(calendarMonth, zone),
-    enabled: isRepriseMode,
-    staleTime: 5 * 60 * 1000,
-  });
-  useQuery({
-    queryKey: ["month-stats", adjacentMonths.prev, zone],
-    queryFn: () => fetchMonthStats(adjacentMonths.prev, zone),
-    enabled: isRepriseMode,
-    staleTime: 5 * 60 * 1000,
-  });
-  useQuery({
-    queryKey: ["month-stats", adjacentMonths.next, zone],
-    queryFn: () => fetchMonthStats(adjacentMonths.next, zone),
+  // Charge les 5 prochains mois d'un seul coup dès l'ouverture
+  const { data: rangeStats } = useQuery({
+    queryKey: ["range-stats-reprise", zone],
+    queryFn: async () => {
+      const today = new Date();
+      const start = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+      const end5 = new Date(today.getFullYear(), today.getMonth() + 5, 0);
+      const end = `${end5.getFullYear()}-${String(end5.getMonth() + 1).padStart(2, "0")}-${String(end5.getDate()).padStart(2, "0")}`;
+      return (await api.get(`/api/planning/range-stats?start_str=${start}&end_str=${end}&zone=${zone}`)).data as Record<string, any>;
+    },
     enabled: isRepriseMode,
     staleTime: 5 * 60 * 1000,
   });
 
-  const computeColors = useCallback((stats: Record<string, any>) => {
+  const dayColors = useMemo(() => {
+    if (!rangeStats) return undefined;
     const colors: Record<string, "green" | "orange" | "red"> = {};
-    for (const [date, s] of Object.entries(stats)) {
-      const planned = s.planned_hours ?? 0;
-      const capacity = s.capacity_hours ?? 0;
+    for (const [date, s] of Object.entries(rangeStats)) {
+      const planned = (s as any).planned_hours ?? 0;
+      const capacity = (s as any).capacity_hours ?? 0;
       if (capacity === 0) colors[date] = "red";
       else if (planned >= capacity) colors[date] = "orange";
       else colors[date] = "green";
     }
     return colors;
-  }, []);
-
-  const dayColors = useMemo(() => monthStats ? computeColors(monthStats) : undefined, [monthStats, computeColors]);
-
-  // --- States formulaire ---
-  const [intervType, setIntervType] = useState<IntervType>("intervention");
-  const [zone, setZone] = useState<"hainaut" | "ardennes">("hainaut");
+  }, [rangeStats]);
   const [title, setTitle] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
@@ -1279,7 +1255,6 @@ export default function AddInterventionScreen() {
                     label="Date de l'intervention"
                     dateOnly
                     dayColors={isRepriseMode ? dayColors : undefined}
-                    onMonthChange={isRepriseMode ? setCalendarMonth : undefined}
                     minDate={isRepriseMode ? new Date().toISOString().split("T")[0] : undefined}
                   />
                 ) : (
