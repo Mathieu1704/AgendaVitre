@@ -301,18 +301,23 @@ export default function AddInterventionScreen() {
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
   });
 
-  // Charge les 5 prochains mois d'un seul coup dès l'ouverture
+  // Fenêtre glissante : de aujourd'hui jusqu'à calendarMonth + 4 mois
+  const rangeEnd = useMemo(() => {
+    const [y, m] = calendarMonth.split("-").map(Number);
+    const d = new Date(y, m + 3, 0); // dernier jour de calendarMonth+4
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, [calendarMonth]);
+
   const { data: rangeStats } = useQuery({
-    queryKey: ["range-stats-reprise", zone],
+    queryKey: ["range-stats-reprise", zone, rangeEnd],
     queryFn: async () => {
       const today = new Date();
       const start = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
-      const end5 = new Date(today.getFullYear(), today.getMonth() + 5, 0);
-      const end = `${end5.getFullYear()}-${String(end5.getMonth() + 1).padStart(2, "0")}-${String(end5.getDate()).padStart(2, "0")}`;
-      return (await api.get(`/api/planning/range-stats?start_str=${start}&end_str=${end}&zone=${zone}`)).data as Record<string, any>;
+      return (await api.get(`/api/planning/range-stats?start_str=${start}&end_str=${rangeEnd}&zone=${zone}`)).data as Record<string, any>;
     },
     enabled: isRepriseMode,
     staleTime: 5 * 60 * 1000,
+    placeholderData: (prev: any) => prev,
   });
 
   const dayColors = useMemo(() => {
@@ -1255,6 +1260,7 @@ export default function AddInterventionScreen() {
                     label="Date de l'intervention"
                     dateOnly
                     dayColors={isRepriseMode ? dayColors : undefined}
+                    onMonthChange={isRepriseMode ? setCalendarMonth : undefined}
                     minDate={isRepriseMode ? new Date().toISOString().split("T")[0] : undefined}
                   />
                 ) : (
@@ -1265,6 +1271,7 @@ export default function AddInterventionScreen() {
                       label="Début de l'intervention"
                       dateOnly={!isAdmin}
                       dayColors={isRepriseMode ? dayColors : undefined}
+                    onMonthChange={isRepriseMode ? setCalendarMonth : undefined}
                       onMonthChange={isRepriseMode ? setCalendarMonth : undefined}
                       minDate={isRepriseMode ? new Date().toISOString().split("T")[0] : undefined}
                     />
