@@ -262,9 +262,9 @@ const FILTER_TYPES = [
   { id: "note",         label: "Note",         color: "#64748B" },
 ];
 const FILTER_STATUSES = [
-  { id: "planned",     label: "Planifié",  color: "#3B82F6" },
-  { id: "in_progress", label: "En cours",  color: "#F97316" },
-  { id: "done",        label: "Terminé",   color: "#22C55E" },
+  { id: "planned",     label: "Planifié",     color: "#3B82F6" },
+  { id: "done",        label: "Terminé",      color: "#22C55E" },
+  { id: "unscheduled", label: "À planifier",  color: "#94A3B8" },
 ];
 
 interface FilterChipsBarProps {

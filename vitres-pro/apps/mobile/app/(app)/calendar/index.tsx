@@ -426,8 +426,11 @@ export default function CalendarScreen() {
     (item: any) => {
       if (activeTypes.size > 0 && !activeTypes.has(item.type ?? "intervention"))
         return false;
-      if (activeStatuses.size > 0 && !activeStatuses.has(item.status))
+      if (activeStatuses.size > 0) {
+        if (activeStatuses.has("unscheduled") && item.time_tbd) return true;
+        if (!item.time_tbd && activeStatuses.has(item.status)) return true;
         return false;
+      }
       return true;
     },
     [activeTypes, activeStatuses],
