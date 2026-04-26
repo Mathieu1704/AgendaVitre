@@ -301,10 +301,14 @@ export default function AddInterventionScreen() {
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
   });
 
-  // Fenêtre glissante : de aujourd'hui jusqu'à calendarMonth + 4 mois
+  // Accumule toutes les stats chargées pour ne jamais perdre un mois déjà coloré
+  const [allStats, setAllStats] = useState<Record<string, any>>({});
+
+  // Fenêtre glissante : aujourd'hui → calendarMonth + 4 mois complets
   const rangeEnd = useMemo(() => {
     const [y, m] = calendarMonth.split("-").map(Number);
-    const d = new Date(y, m + 3, 0); // dernier jour de calendarMonth+4
+    // new Date(y, m+4, 0) = dernier jour du mois m+3 (0-indexed) = calendarMonth+4
+    const d = new Date(y, m + 4, 0);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, [calendarMonth]);
 
@@ -317,13 +321,17 @@ export default function AddInterventionScreen() {
     },
     enabled: isRepriseMode,
     staleTime: 5 * 60 * 1000,
-    placeholderData: (prev: any) => prev,
   });
 
+  // Merge dans allStats dès qu'une nouvelle tranche arrive
+  useEffect(() => {
+    if (rangeStats) setAllStats(prev => ({ ...prev, ...rangeStats }));
+  }, [rangeStats]);
+
   const dayColors = useMemo(() => {
-    if (!rangeStats) return undefined;
+    if (Object.keys(allStats).length === 0) return undefined;
     const colors: Record<string, "green" | "orange" | "red"> = {};
-    for (const [date, s] of Object.entries(rangeStats)) {
+    for (const [date, s] of Object.entries(allStats)) {
       const planned = (s as any).planned_hours ?? 0;
       const capacity = (s as any).capacity_hours ?? 0;
       if (capacity === 0) colors[date] = "red";
@@ -331,7 +339,7 @@ export default function AddInterventionScreen() {
       else colors[date] = "green";
     }
     return colors;
-  }, [rangeStats]);
+  }, [allStats]);
   const [title, setTitle] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
