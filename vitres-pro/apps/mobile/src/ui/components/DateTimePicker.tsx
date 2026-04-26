@@ -24,7 +24,15 @@ interface DateTimePickerProps {
   style?: StyleProp<ViewStyle>;
   dateOnly?: boolean;
   timeOnly?: boolean;
+  dayColors?: Record<string, "green" | "orange" | "red">;
+  onMonthChange?: (dateString: string) => void;
 }
+
+const DAY_COLOR_MAP = {
+  green:  { hex: "#22C55E" },
+  orange: { hex: "#F97316" },
+  red:    { hex: "#EF4444" },
+};
 
 export function DateTimePicker({
   value,
@@ -34,6 +42,8 @@ export function DateTimePicker({
   style,
   dateOnly = false,
   timeOnly = false,
+  dayColors,
+  onMonthChange,
 }: DateTimePickerProps) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -186,11 +196,30 @@ export function DateTimePicker({
             <Calendar
               current={datePart}
               onDayPress={handleDateSelect}
-              markedDates={{
-                [datePart]: { selected: true, selectedColor: "#3B82F6" },
-              }}
+              markingType="custom"
+              markedDates={(() => {
+                const marks: Record<string, any> = {};
+                if (dayColors) {
+                  Object.entries(dayColors).forEach(([d, color]) => {
+                    const hex = DAY_COLOR_MAP[color]?.hex ?? "#94A3B8";
+                    marks[d] = {
+                      customStyles: {
+                        text: { color: hex, fontWeight: "700" },
+                      },
+                    };
+                  });
+                }
+                marks[datePart] = {
+                  customStyles: {
+                    container: { backgroundColor: "#3B82F6", borderRadius: 16 },
+                    text: { color: "#fff", fontWeight: "bold" },
+                  },
+                };
+                return marks;
+              })()}
               firstDay={1}
               theme={calendarTheme}
+              onMonthChange={(month: any) => onMonthChange?.(month.dateString)}
             />
           </View>
           <Button

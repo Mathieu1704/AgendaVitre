@@ -291,6 +291,36 @@ export default function AddInterventionScreen() {
     enabled: isRepriseMode,
   });
 
+  // --- Stats planning pour coloration jours (reprise) ---
+  const [calendarMonth, setCalendarMonth] = useState<string>(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const { data: monthStats } = useQuery({
+    queryKey: ["month-stats", calendarMonth, zone],
+    queryFn: async () => {
+      const [y, m] = calendarMonth.split("-").map(Number);
+      const start = `${y}-${String(m).padStart(2, "0")}-01`;
+      const lastDay = new Date(y, m, 0).getDate();
+      const end = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      return (await api.get(`/api/planning/range-stats?start_str=${start}&end_str=${end}&zone=${zone}`)).data as Record<string, any>;
+    },
+    enabled: isRepriseMode,
+    staleTime: 5 * 60 * 1000,
+  });
+  const dayColors = useMemo(() => {
+    if (!monthStats) return undefined;
+    const colors: Record<string, "green" | "orange" | "red"> = {};
+    for (const [date, stats] of Object.entries(monthStats)) {
+      const planned = stats.planned_hours ?? 0;
+      const capacity = stats.capacity_hours ?? 0;
+      if (capacity === 0 || planned === 0) colors[date] = "red";
+      else if (planned >= capacity) colors[date] = "orange";
+      else colors[date] = "green";
+    }
+    return colors;
+  }, [monthStats]);
+
   // --- States formulaire ---
   const [intervType, setIntervType] = useState<IntervType>("intervention");
   const [zone, setZone] = useState<"hainaut" | "ardennes">("hainaut");
@@ -1221,6 +1251,8 @@ export default function AddInterventionScreen() {
                     onChange={setStartDateStr}
                     label="Date de l'intervention"
                     dateOnly
+                    dayColors={isRepriseMode ? dayColors : undefined}
+                    onMonthChange={isRepriseMode ? setCalendarMonth : undefined}
                   />
                 ) : (
                   <>
@@ -1229,6 +1261,8 @@ export default function AddInterventionScreen() {
                       onChange={setStartDateStr}
                       label="Début de l'intervention"
                       dateOnly={!isAdmin}
+                      dayColors={isRepriseMode ? dayColors : undefined}
+                      onMonthChange={isRepriseMode ? setCalendarMonth : undefined}
                     />
                     <DateTimePicker
                       value={endDateStr}
