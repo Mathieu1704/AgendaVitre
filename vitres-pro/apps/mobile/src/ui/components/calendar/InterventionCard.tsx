@@ -53,6 +53,20 @@ export const InterventionCard = React.memo(function InterventionCard({
     : `${durationH}h`;
 
   const typeConfig = TYPE_CONFIG[item.type ?? "intervention"] ?? TYPE_CONFIG["intervention"];
+
+  // Durée calculée quand time_tbd=true et taux non-time_only
+  const computedDurationH: number | null = (() => {
+    if (!item.time_tbd) return null;
+    const rate = item.hourly_rate;
+    if (!rate || rate.time_only) return null;
+    if (!item.price_estimated || rate.rate <= 0) return null;
+    return Math.round((item.price_estimated / rate.rate) * 4) / 4;
+  })();
+  const computedDurationLabel = computedDurationH != null
+    ? computedDurationH === Math.floor(computedDurationH)
+      ? `${computedDurationH}h`
+      : `${Math.floor(computedDurationH)}h${String(Math.round((computedDurationH % 1) * 60)).padStart(2, "0")}`
+    : null;
   const hasClient = ["intervention", "devis"].includes(item.type ?? "intervention");
 
   const employees: any[] = [...(item.employees ?? [])].sort(
@@ -95,23 +109,31 @@ export const InterventionCard = React.memo(function InterventionCard({
       )}
 
       <View className={`flex-row items-stretch gap-2.5 ${cardPadding}`}>
-        {!item.time_tbd && (
+        {(!item.time_tbd || computedDurationLabel) && (
           <View
             className={`items-center justify-center ${compact ? "w-10" : "w-12"}`}
             style={{ borderRadius: 12, backgroundColor: typeConfig.bg }}
           >
-            <Text style={{ color: typeConfig.text }} className={`font-bold ${compact ? "text-xs" : "text-sm"}`}>
-              {startTime.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}
-            </Text>
-            {!compact && (
-              <Text className="text-[9px] text-muted-foreground mt-0.5 font-medium">
-                {endTime.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}
+            {item.time_tbd ? (
+              <Text style={{ color: typeConfig.text }} className={`font-bold ${compact ? "text-xs" : "text-sm"}`}>
+                ~{computedDurationLabel}
               </Text>
-            )}
-            {!compact && item.type && item.type !== "intervention" && (
-              <Text style={{ color: typeConfig.text }} className="text-[8px] font-bold uppercase mt-0.5 tracking-wide">
-                {typeConfig.label}
-              </Text>
+            ) : (
+              <>
+                <Text style={{ color: typeConfig.text }} className={`font-bold ${compact ? "text-xs" : "text-sm"}`}>
+                  {startTime.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}
+                </Text>
+                {!compact && (
+                  <Text className="text-[9px] text-muted-foreground mt-0.5 font-medium">
+                    {endTime.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}
+                  </Text>
+                )}
+                {!compact && item.type && item.type !== "intervention" && (
+                  <Text style={{ color: typeConfig.text }} className="text-[8px] font-bold uppercase mt-0.5 tracking-wide">
+                    {typeConfig.label}
+                  </Text>
+                )}
+              </>
             )}
           </View>
         )}

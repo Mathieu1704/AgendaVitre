@@ -194,10 +194,31 @@ export default function InterventionDetailScreen() {
     onError: () => toast.error("Erreur", "Impossible de modifier les horaires."),
   });
 
+  // Durée calculée (en ms) depuis le taux horaire — utilisée pour auto-remplir la fin
+  const computedDurationMs = (() => {
+    if (!intervention?.time_tbd) return null;
+    const rate = intervention?.hourly_rate;
+    if (!rate || rate.time_only) return null;
+    if (!intervention?.price_estimated || rate.rate <= 0) return null;
+    return (intervention.price_estimated / rate.rate) * 3600000;
+  })();
+
   const openTimeEdit = () => {
     if (!intervention) return;
-    setEditStartStr(toBrusselsDateTimeString(new Date(intervention.start_time)));
-    setEditEndStr(intervention.end_time ? toBrusselsDateTimeString(new Date(intervention.end_time)) : "");
+    const start = new Date(intervention.start_time);
+    const startStr = toBrusselsDateTimeString(start);
+    setEditStartStr(startStr);
+    // Si time_tbd et durée calculée : pré-remplir la fin = maintenant + durée
+    if (intervention.time_tbd && computedDurationMs) {
+      const now = new Date();
+      const roundedMinutes = Math.round(now.getMinutes() / 15) * 15;
+      const snapped = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), roundedMinutes, 0);
+      const endSnapped = new Date(snapped.getTime() + computedDurationMs);
+      setEditStartStr(toBrusselsDateTimeString(snapped));
+      setEditEndStr(toBrusselsDateTimeString(endSnapped));
+    } else {
+      setEditEndStr(intervention.end_time ? toBrusselsDateTimeString(new Date(intervention.end_time)) : "");
+    }
     setShowTimeEdit(true);
   };
 
@@ -865,8 +886,12 @@ export default function InterventionDetailScreen() {
             value={editStartStr}
             onChange={(v) => {
               setEditStartStr(v);
-              // Ensure end stays after start
-              if (editEndStr) {
+              // Si durée calculée : fin = début + durée (et on bloque en dessous)
+              if (computedDurationMs) {
+                const startParsed = parseBrusselsDateTimeString(v);
+                const autoEnd = new Date(startParsed.getTime() + computedDurationMs);
+                setEditEndStr(toBrusselsDateTimeString(autoEnd));
+              } else if (editEndStr) {
                 const [, st = "00:00"] = v.split("T");
                 const [, et = "00:00"] = editEndStr.split("T");
                 const [sh, sm] = st.split(":").map(Number);
@@ -883,7 +908,16 @@ export default function InterventionDetailScreen() {
           {editEndStr ? (
             <DateTimePicker
               value={editEndStr}
-              onChange={setEditEndStr}
+              onChange={(v) => {
+                // Empêcher de descendre en dessous de début + durée calculée
+                if (computedDurationMs) {
+                  const startParsed = parseBrusselsDateTimeString(editStartStr);
+                  const minEnd = new Date(startParsed.getTime() + computedDurationMs);
+                  const chosen = parseBrusselsDateTimeString(v);
+                  if (chosen.getTime() < minEnd.getTime()) return;
+                }
+                setEditEndStr(v);
+              }}
               label="Fin"
               timeOnly
             />
