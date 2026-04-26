@@ -572,7 +572,7 @@ export default function AddInterventionScreen() {
       const nextEnd = new Date(nextDate.getTime() + (origEnd.getTime() - origStart.getTime()));
       setStartDateStr(toBrusselsDateTimeString(nextDate));
       setEndDateStr(toBrusselsDateTimeString(nextEnd));
-      setTimeTbd(repriseSource.time_tbd ?? true);
+      setTimeTbd(isAdmin ? (repriseSource.time_tbd ?? true) : true);
 
       const foundClient = clients.find((c) => c.id === repriseSource.client_id);
       if (foundClient) setSelectedClient(foundClient);
@@ -1303,7 +1303,6 @@ export default function AddInterventionScreen() {
                       label="Début de l'intervention"
                       dateOnly={!isAdmin}
                       dayColors={isRepriseMode ? dayColors : undefined}
-                    onMonthChange={isRepriseMode ? setCalendarMonth : undefined}
                       onMonthChange={isRepriseMode ? setCalendarMonth : undefined}
                       minDate={isRepriseMode ? new Date().toISOString().split("T")[0] : undefined}
                     />
