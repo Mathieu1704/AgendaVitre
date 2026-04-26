@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { Pressable, Text, View, ViewStyle, StyleProp, ScrollView, TextInput, Platform, useWindowDimensions } from "react-native";
+import React, { useState, useMemo, useCallback } from "react";
+import { Pressable, Text, View, ViewStyle, StyleProp, FlatList, TextInput, Platform, useWindowDimensions } from "react-native";
 import { Dialog } from "./Dialog";
 import { Button } from "./Button";
 import { cn } from "../cn";
@@ -45,6 +45,33 @@ export function Select<T extends { id: string; label: string }>({
     setOpen(false);
     setSearch("");
   };
+
+  const ITEM_HEIGHT = 50;
+
+  const renderItem = useCallback(({ item: it }: { item: T }) => {
+    const active = value?.id === it.id;
+    return (
+      <Pressable
+        key={it.id}
+        onPress={() => { onChange(it); handleClose(); }}
+        style={{
+          borderRadius: 12,
+          paddingHorizontal: 16,
+          paddingVertical: 13,
+          marginBottom: 8,
+          borderWidth: 1,
+          borderColor: active ? "#3B82F6" : isDark ? "#334155" : "#E2E8F0",
+          backgroundColor: active ? (isDark ? "#1E3A5F" : "#EFF6FF") : (isDark ? "#1E293B" : "#FFFFFF"),
+          height: ITEM_HEIGHT,
+          justifyContent: "center",
+        }}
+      >
+        <Text style={{ fontWeight: "500", fontSize: 16, color: active ? "#3B82F6" : isDark ? "#F8FAFC" : "#09090B" }} numberOfLines={1}>
+          {it.label}
+        </Text>
+      </Pressable>
+    );
+  }, [value?.id, isDark, onChange]);
 
   return (
     // ✅ 3. On l'applique sur la View parente
@@ -114,50 +141,23 @@ export function Select<T extends { id: string; label: string }>({
             />
           </View>}
 
-          <ScrollView
+          <FlatList
+            data={filteredItems}
+            keyExtractor={(it) => it.id}
+            renderItem={renderItem}
+            getItemLayout={(_, index) => ({ length: ITEM_HEIGHT + 8, offset: (ITEM_HEIGHT + 8) * index, index })}
             style={{ maxHeight: Math.min(320, screenHeight * 0.4) }}
             showsVerticalScrollIndicator={true}
-            persistentScrollbar={true}
-            contentContainerStyle={{ paddingRight: 10 }}
-          >
-            <View className="gap-2 pb-1">
-              {filteredItems.map((it) => {
-                const active = value?.id === it.id;
-                return (
-                  <Pressable
-                    key={it.id}
-                    onPress={() => {
-                      onChange(it);
-                      handleClose();
-                    }}
-                    style={{ borderRadius: 12 }}
-                    className={cn(
-                      "px-4 py-3 border",
-                      active
-                        ? "border-primary bg-primary/10"
-                        : "border-border dark:border-slate-700 bg-background dark:bg-slate-800",
-                    )}
-                  >
-                    <Text
-                      className={cn(
-                        "font-medium text-base",
-                        active
-                          ? "text-primary"
-                          : "text-foreground dark:text-white",
-                      )}
-                    >
-                      {it.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-              {filteredItems.length === 0 && (
-                <Text className="text-center text-muted-foreground py-4">
-                  Aucun résultat
-                </Text>
-              )}
-            </View>
-          </ScrollView>
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={12}
+            maxToRenderPerBatch={16}
+            windowSize={5}
+            ListEmptyComponent={
+              <Text style={{ textAlign: "center", color: "#94A3B8", paddingVertical: 16 }}>
+                Aucun résultat
+              </Text>
+            }
+          />
 
           <Button variant="ghost" onPress={handleClose} style={{ marginTop: 8 }}>
             Fermer
