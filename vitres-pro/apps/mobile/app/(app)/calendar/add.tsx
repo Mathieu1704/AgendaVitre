@@ -76,7 +76,7 @@ const TYPE_CONFIG: Record<
   note: { label: "Note", color: "#64748B", bg: "#F8FAFC" },
 };
 
-const NEEDS_CLIENT: IntervType[] = ["intervention"];
+const NEEDS_CLIENT: IntervType[] = ["intervention", "devis"];
 const NEEDS_ITEMS: IntervType[] = ["intervention"];
 
 type RecurrenceFreq =
