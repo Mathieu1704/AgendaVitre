@@ -21,8 +21,8 @@ export type InterventionGroupsCtx = {
 // ─── renderInterventionGroups ─────────────────────────────────────────────────
 
 const STATUS_ORDER: Record<string, number> = { in_progress: 0, planned: 1, done: 2 };
-export const STATUS_LABELS: Record<string, string> = { in_progress: "En cours", planned: "Planifié", done: "Terminé" };
-export const STATUS_COLORS: Record<string, string> = { in_progress: "#F97316", planned: "#3B82F6", done: "#22C55E" };
+export const STATUS_LABELS: Record<string, string> = { in_progress: "En cours", planned: "Planifié", done: "Terminé", unscheduled: "À planifier" };
+export const STATUS_COLORS: Record<string, string> = { in_progress: "#F97316", planned: "#3B82F6", done: "#22C55E", unscheduled: "#94A3B8" };
 const TYPE_ORDER: Record<string, number> = { intervention: 0, devis: 1, tournee: 2, note: 3 };
 export const TYPE_LABELS: Record<string, string> = { intervention: "Intervention", devis: "Devis", tournee: "Tournée", note: "Note" };
 export const TYPE_COLORS: Record<string, string> = { intervention: "#3B82F6", devis: "#8B5CF6", tournee: "#F97316", note: "#64748B" };
@@ -42,13 +42,18 @@ export function buildFlatRows(
 ): FlatRow[] {
   if (list.length === 0) return [];
 
-  const sorted = [...list].sort((a, b) => {
+  const scheduled = list.filter((i) => !i.time_tbd);
+  const unscheduled = list.filter((i) => i.time_tbd);
+
+  const sortItems = (items: any[]) => [...items].sort((a, b) => {
     const sd = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
     if (sd !== 0) return sd;
     const td = (TYPE_ORDER[a.type ?? "intervention"] ?? 9) - (TYPE_ORDER[b.type ?? "intervention"] ?? 9);
     if (td !== 0) return td;
     return (a.sub_zone ?? "").localeCompare(b.sub_zone ?? "");
   });
+
+  const sorted = sortItems(scheduled);
 
   const rows: FlatRow[] = [];
 
@@ -57,6 +62,9 @@ export function buildFlatRows(
     const last = statusGroups[statusGroups.length - 1];
     if (last && last.status === item.status) last.items.push(item);
     else statusGroups.push({ status: item.status, items: [item] });
+  }
+  if (unscheduled.length > 0) {
+    statusGroups.push({ status: "unscheduled", items: sortItems(unscheduled) });
   }
 
   for (const sg of statusGroups) {
@@ -121,7 +129,7 @@ export function renderInterventionGroups(
 
   const { isDark, isAdmin, subZoneMap, viewMode, selectedDate, setAssignModal, setSelectedAssignIds, setInitialAssignIds } = ctx;
 
-  const sorted = [...list].sort((a, b) => {
+  const sortItems = (items: any[]) => [...items].sort((a, b) => {
     const sd = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
     if (sd !== 0) return sd;
     const td = (TYPE_ORDER[a.type ?? "intervention"] ?? 9) - (TYPE_ORDER[b.type ?? "intervention"] ?? 9);
@@ -129,11 +137,18 @@ export function renderInterventionGroups(
     return (a.sub_zone ?? "").localeCompare(b.sub_zone ?? "");
   });
 
+  const scheduled = list.filter((i) => !i.time_tbd);
+  const unscheduled = list.filter((i) => i.time_tbd);
+  const sorted = sortItems(scheduled);
+
   const groups: { status: string; items: typeof sorted }[] = [];
   for (const item of sorted) {
     const last = groups[groups.length - 1];
     if (last && last.status === item.status) last.items.push(item);
     else groups.push({ status: item.status, items: [item] });
+  }
+  if (unscheduled.length > 0) {
+    groups.push({ status: "unscheduled", items: sortItems(unscheduled) });
   }
 
   return groups.map((group) => {
