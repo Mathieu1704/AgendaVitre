@@ -26,6 +26,7 @@ interface DateTimePickerProps {
   timeOnly?: boolean;
   dayColors?: Record<string, "green" | "orange" | "red">;
   onMonthChange?: (dateString: string) => void;
+  minDate?: string;
 }
 
 const DAY_COLOR_MAP = {
@@ -44,6 +45,7 @@ export function DateTimePicker({
   timeOnly = false,
   dayColors,
   onMonthChange,
+  minDate,
 }: DateTimePickerProps) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -219,6 +221,7 @@ export function DateTimePicker({
               })()}
               firstDay={1}
               theme={calendarTheme}
+              minDate={minDate}
               onMonthChange={(month: any) => onMonthChange?.(month.dateString)}
             />
           </View>

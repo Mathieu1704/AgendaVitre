@@ -314,9 +314,9 @@ export default function AddInterventionScreen() {
     for (const [date, stats] of Object.entries(monthStats)) {
       const planned = stats.planned_hours ?? 0;
       const capacity = stats.capacity_hours ?? 0;
-      if (capacity === 0 || planned === 0) colors[date] = "red";
-      else if (planned >= capacity) colors[date] = "orange";
-      else colors[date] = "green";
+      if (capacity === 0) colors[date] = "red";           // pas d'employés dispo
+      else if (planned >= capacity) colors[date] = "orange"; // jour plein
+      else colors[date] = "green";                        // capacité disponible
     }
     return colors;
   }, [monthStats]);
@@ -1253,6 +1253,7 @@ export default function AddInterventionScreen() {
                     dateOnly
                     dayColors={isRepriseMode ? dayColors : undefined}
                     onMonthChange={isRepriseMode ? setCalendarMonth : undefined}
+                    minDate={isRepriseMode ? new Date().toISOString().split("T")[0] : undefined}
                   />
                 ) : (
                   <>
@@ -1263,6 +1264,7 @@ export default function AddInterventionScreen() {
                       dateOnly={!isAdmin}
                       dayColors={isRepriseMode ? dayColors : undefined}
                       onMonthChange={isRepriseMode ? setCalendarMonth : undefined}
+                      minDate={isRepriseMode ? new Date().toISOString().split("T")[0] : undefined}
                     />
                     <DateTimePicker
                       value={endDateStr}
