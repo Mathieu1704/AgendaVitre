@@ -817,6 +817,7 @@ export default function AddInterventionScreen() {
           start_time: occ.start.toISOString(),
           end_time: occ.end.toISOString(),
           time_tbd: isAdmin ? timeTbd : true,
+          ...(isRepriseMode && reprise_of ? { reprise_of_id: reprise_of } : {}),
           recurrence_rule:
             occurrences.length > 1
               ? {

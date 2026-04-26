@@ -174,7 +174,7 @@ class InterventionBase(BaseModel):
     hourly_rate_id: Optional[UUID] = None
 
 class InterventionCreate(InterventionBase):
-    pass
+    reprise_of_id: Optional[UUID] = None
 
 class InterventionOutLite(BaseModel):
     id: UUID

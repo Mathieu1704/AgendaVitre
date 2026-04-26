@@ -128,11 +128,16 @@ def create_intervention(
         if not client:
             raise HTTPException(status_code=404, detail="Client introuvable")
 
-    data = intervention.model_dump(exclude={"employee_ids", "items"})
+    data = intervention.model_dump(exclude={"employee_ids", "items", "reprise_of_id"})
     if current_user.role != 'admin':
         data["zone"] = current_user.zone
-        data["hourly_rate_id"] = None
         data["type"] = "intervention"
+        # En mode reprise, hériter le taux horaire de la source
+        if intervention.reprise_of_id:
+            source = db.query(Intervention).filter(Intervention.id == intervention.reprise_of_id).first()
+            data["hourly_rate_id"] = source.hourly_rate_id if source else None
+        else:
+            data["hourly_rate_id"] = None
     new_intervention = Intervention(**data)
 
     if current_user.role != 'admin':
