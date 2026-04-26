@@ -762,7 +762,11 @@ export default function AddInterventionScreen() {
           price: Number(i.price) || 0,
           client_service_id: i.client_service_id ?? null,
         })),
-        hourly_rate_id: isAdmin ? (selectedRateId ?? null) : null,
+        hourly_rate_id: isAdmin
+          ? (selectedRateId ?? null)
+          : isRepriseMode
+          ? (repriseSource?.hourly_rate_id ?? null)
+          : null,
       };
 
       if (isEditMode) {
