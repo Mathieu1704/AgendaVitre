@@ -43,6 +43,7 @@
       "policy": "appVersion"
     },
     "plugins": [
+      "./plugins/withAdiRegistration",
       "expo-router",
       "expo-updates",
       "expo-secure-store",
