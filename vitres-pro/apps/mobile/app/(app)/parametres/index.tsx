@@ -8,6 +8,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   Animated,
+  Linking,
 } from "react-native";
 import {
   User,
@@ -552,9 +553,21 @@ export default function ParametresScreen() {
             <Text style={{ fontSize: 13, fontWeight: "700", color: isDark ? "#94A3B8" : "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
               Suppression
             </Text>
-            <Text style={{ fontSize: 13, color: isDark ? "#CBD5E1" : "#475569", lineHeight: 20, marginBottom: 20 }}>
-              Pour supprimer vos données, contactez{" "}
-              <Text style={{ fontWeight: "700" }}>max.berdoux@gmail.com</Text>
+            <Text style={{ fontSize: 13, color: isDark ? "#CBD5E1" : "#475569", lineHeight: 20, marginBottom: 8 }}>
+              Pour supprimer votre compte et vos données, envoyez un email à{" "}
+              <Text
+                style={{ fontWeight: "700", color: "#3B82F6" }}
+                onPress={() => Linking.openURL("mailto:max.berdoux@gmail.com?subject=Suppression%20de%20compte%20LVM%20Agenda")}
+              >
+                max.berdoux@gmail.com
+              </Text>
+              {" "}avec l'objet "Suppression de compte LVM Agenda".
+            </Text>
+            <Text
+              style={{ fontSize: 12, color: "#3B82F6", marginBottom: 20 }}
+              onPress={() => Linking.openURL("https://mathieu1704.github.io/lvm-privacy/#suppression")}
+            >
+              Voir la procédure complète →
             </Text>
 
             <Pressable
