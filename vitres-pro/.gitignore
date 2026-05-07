@@ -2,3 +2,6 @@
 apps/backend/scripts/*.json
 apps/backend/scripts/token.json
 apps/backend/scripts/credentials.json
+
+# Dossier builds Android hors repo
+../Android/
