@@ -34,6 +34,9 @@ interface DayViewProps {
   toggleStatus: (id: string) => void;
   setActiveTypes: React.Dispatch<React.SetStateAction<Set<string>>>;
   setActiveStatuses: React.Dispatch<React.SetStateAction<Set<string>>>;
+  activeEmployeeId: string | null;
+  setActiveEmployeeId: (id: string | null) => void;
+  employees: { id: string; full_name?: string | null; color: string }[];
   setAssignModal: React.Dispatch<React.SetStateAction<AssignModalState>>;
   setSelectedAssignIds: React.Dispatch<React.SetStateAction<string[]>>;
   setInitialAssignIds: React.Dispatch<React.SetStateAction<string[]>>;
@@ -57,6 +60,9 @@ export const DayView = React.memo(function DayView({
   toggleStatus,
   setActiveTypes,
   setActiveStatuses,
+  activeEmployeeId,
+  setActiveEmployeeId,
+  employees,
   setAssignModal,
   setSelectedAssignIds,
   setInitialAssignIds,
@@ -179,6 +185,9 @@ export const DayView = React.memo(function DayView({
           toggleStatus={toggleStatus}
           setActiveTypes={setActiveTypes}
           setActiveStatuses={setActiveStatuses}
+          activeEmployeeId={activeEmployeeId}
+          setActiveEmployeeId={setActiveEmployeeId}
+          employees={employees}
         />
       </View>
     ),

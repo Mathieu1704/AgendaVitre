@@ -270,6 +270,7 @@ export default function CalendarScreen() {
   // Filtres actifs
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
   const [activeStatuses, setActiveStatuses] = useState<Set<string>>(new Set());
+  const [activeEmployeeId, setActiveEmployeeId] = useState<string | null>(null);
   const [assignModal, setAssignModal] = useState<
     | { mode: "single"; interventionId: string; currentIds: string[] }
     | {
@@ -395,6 +396,14 @@ export default function CalendarScreen() {
   // Zone effective : admin peut choisir, employé est verrouillé sur sa zone
   const effectiveZone = isAdmin ? selectedZone : userZone;
 
+  const filterableEmployees = useMemo(() =>
+    (allEmployees ?? []).filter((e: any) =>
+      e.role !== "admin" &&
+      (effectiveZone === "all" || e.zone === effectiveZone)
+    ),
+    [allEmployees, effectiveZone],
+  );
+
   const itemsByDate = useMemo(() => {
     const map: Record<string, any[]> = {};
     if (!interventions) return map;
@@ -428,9 +437,13 @@ export default function CalendarScreen() {
         if (!item.time_tbd && activeStatuses.has(item.status)) return true;
         return false;
       }
+      if (activeEmployeeId !== null) {
+        const emps: any[] = item.employees ?? [];
+        if (!emps.some((e: any) => e.id === activeEmployeeId)) return false;
+      }
       return true;
     },
-    [activeTypes, activeStatuses],
+    [activeTypes, activeStatuses, activeEmployeeId],
   );
 
   const toggleType = useCallback((id: string) => {
@@ -727,6 +740,9 @@ export default function CalendarScreen() {
               toggleStatus={toggleStatus}
               setActiveTypes={setActiveTypes}
               setActiveStatuses={setActiveStatuses}
+              activeEmployeeId={activeEmployeeId}
+              setActiveEmployeeId={setActiveEmployeeId}
+              employees={filterableEmployees}
               setAssignModal={setAssignModal}
               setSelectedAssignIds={setSelectedAssignIds}
               setInitialAssignIds={setInitialAssignIds}
@@ -765,6 +781,9 @@ export default function CalendarScreen() {
                   toggleStatus={toggleStatus}
                   setActiveTypes={setActiveTypes}
                   setActiveStatuses={setActiveStatuses}
+                  activeEmployeeId={activeEmployeeId}
+                  setActiveEmployeeId={setActiveEmployeeId}
+                  employees={filterableEmployees}
                   setAssignModal={setAssignModal}
                   setSelectedAssignIds={setSelectedAssignIds}
                   setInitialAssignIds={setInitialAssignIds}

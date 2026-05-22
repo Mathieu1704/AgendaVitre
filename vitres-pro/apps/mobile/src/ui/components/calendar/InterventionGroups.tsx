@@ -275,6 +275,9 @@ interface FilterChipsBarProps {
   toggleStatus: (id: string) => void;
   setActiveTypes: React.Dispatch<React.SetStateAction<Set<string>>>;
   setActiveStatuses: React.Dispatch<React.SetStateAction<Set<string>>>;
+  activeEmployeeId: string | null;
+  setActiveEmployeeId: (id: string | null) => void;
+  employees: { id: string; full_name?: string | null; color: string }[];
 }
 
 export const FilterChipsBar = React.memo(function FilterChipsBar({
@@ -285,8 +288,11 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
   toggleStatus,
   setActiveTypes,
   setActiveStatuses,
+  activeEmployeeId,
+  setActiveEmployeeId,
+  employees,
 }: FilterChipsBarProps) {
-  const hasFilters = activeTypes.size > 0 || activeStatuses.size > 0;
+  const hasFilters = activeTypes.size > 0 || activeStatuses.size > 0 || activeEmployeeId !== null;
 
   return (
     <ScrollView
@@ -297,7 +303,7 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
     >
       {hasFilters && (
         <Pressable
-          onPress={() => { setActiveTypes(new Set()); setActiveStatuses(new Set()); }}
+          onPress={() => { setActiveTypes(new Set()); setActiveStatuses(new Set()); setActiveEmployeeId(null); }}
           style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginRight: 2 }}
         >
           <Text style={{ fontSize: 11, fontWeight: "700", color: isDark ? "#CBD5E1" : "#64748B" }}>✕ Tout</Text>
@@ -325,6 +331,23 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
             style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: active ? f.color : isDark ? "#1E293B" : "#F1F5F9", borderWidth: 1, borderColor: active ? f.color : isDark ? "#334155" : "#E2E8F0" }}
           >
             <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>{f.label}</Text>
+          </Pressable>
+        );
+      })}
+      {employees.length > 0 && (
+        <View style={{ width: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginHorizontal: 4 }} />
+      )}
+      {employees.map(emp => {
+        const active = activeEmployeeId === emp.id;
+        const firstName = emp.full_name?.split(" ")[0] ?? emp.full_name;
+        const chipColor = emp.color || "#3B82F6";
+        return (
+          <Pressable
+            key={emp.id}
+            onPress={() => setActiveEmployeeId(active ? null : emp.id)}
+            style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: active ? chipColor : isDark ? "#1E293B" : "#F1F5F9", borderWidth: 1, borderColor: active ? chipColor : isDark ? "#334155" : "#E2E8F0" }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>{firstName}</Text>
           </Pressable>
         );
       })}
