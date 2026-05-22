@@ -28,8 +28,7 @@ export const usePlanningStats = (dateStr: string, zone?: string) => {
       );
       return res.data as DailyStats;
     },
-    staleTime: 0,
-    refetchInterval: 3000,
+    staleTime: 30 * 1000,
     refetchOnMount: true,
   });
 

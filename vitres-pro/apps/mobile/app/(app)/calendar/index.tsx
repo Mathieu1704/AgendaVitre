@@ -362,17 +362,14 @@ export default function CalendarScreen() {
       });
       return Array.isArray(res.data) ? res.data : [];
     },
-    staleTime: 0,
-    refetchInterval: 3000,
+    staleTime: 30 * 1000,
     refetchOnMount: true,
   });
 
   const { data: companySettings } = useQuery({
     queryKey: ["company-settings"],
     queryFn: async () => (await api.get("/api/settings/company")).data,
-    staleTime: 0,
-    refetchInterval: 500,
-    refetchOnMount: true,
+    staleTime: 5 * 60 * 1000,
   });
   const hideCash = companySettings?.hide_cash ?? false;
 
