@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import React, { useState } from "react";
+import { View, Text, Pressable, ScrollView, Modal } from "react-native";
 import { Users } from "lucide-react-native";
 import { InterventionCard, AssignModalState } from "./InterventionCard";
 
@@ -292,65 +292,114 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
   setActiveEmployeeId,
   employees,
 }: FilterChipsBarProps) {
+  const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
   const hasFilters = activeTypes.size > 0 || activeStatuses.size > 0 || activeEmployeeId !== null;
+  const activeEmp = employees.find(e => e.id === activeEmployeeId);
+  const activeEmpName = activeEmp?.full_name?.split(" ")[0] ?? activeEmp?.full_name ?? null;
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ paddingVertical: 8, gap: 6 }}
-      style={{ marginBottom: 8 }}
-    >
-      {hasFilters && (
-        <Pressable
-          onPress={() => { setActiveTypes(new Set()); setActiveStatuses(new Set()); setActiveEmployeeId(null); }}
-          style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginRight: 2 }}
-        >
-          <Text style={{ fontSize: 11, fontWeight: "700", color: isDark ? "#CBD5E1" : "#64748B" }}>✕ Tout</Text>
-        </Pressable>
-      )}
-      {FILTER_TYPES.map(f => {
-        const active = activeTypes.has(f.id);
-        return (
+    <>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingVertical: 8, gap: 6 }}
+        style={{ marginBottom: 8 }}
+      >
+        {hasFilters && (
           <Pressable
-            key={f.id}
-            onPress={() => toggleType(f.id)}
-            style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: active ? f.color : isDark ? "#1E293B" : "#F1F5F9", borderWidth: 1, borderColor: active ? f.color : isDark ? "#334155" : "#E2E8F0" }}
+            onPress={() => { setActiveTypes(new Set()); setActiveStatuses(new Set()); setActiveEmployeeId(null); }}
+            style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginRight: 2 }}
           >
-            <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>{f.label}</Text>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: isDark ? "#CBD5E1" : "#64748B" }}>✕ Tout</Text>
           </Pressable>
-        );
-      })}
-      <View style={{ width: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginHorizontal: 4 }} />
-      {FILTER_STATUSES.map(f => {
-        const active = activeStatuses.has(f.id);
-        return (
-          <Pressable
-            key={f.id}
-            onPress={() => toggleStatus(f.id)}
-            style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: active ? f.color : isDark ? "#1E293B" : "#F1F5F9", borderWidth: 1, borderColor: active ? f.color : isDark ? "#334155" : "#E2E8F0" }}
-          >
-            <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>{f.label}</Text>
-          </Pressable>
-        );
-      })}
-      {employees.length > 0 && (
+        )}
+        {FILTER_TYPES.map(f => {
+          const active = activeTypes.has(f.id);
+          return (
+            <Pressable
+              key={f.id}
+              onPress={() => toggleType(f.id)}
+              style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: active ? f.color : isDark ? "#1E293B" : "#F1F5F9", borderWidth: 1, borderColor: active ? f.color : isDark ? "#334155" : "#E2E8F0" }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>{f.label}</Text>
+            </Pressable>
+          );
+        })}
         <View style={{ width: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginHorizontal: 4 }} />
-      )}
-      {employees.map(emp => {
-        const active = activeEmployeeId === emp.id;
-        const firstName = emp.full_name?.split(" ")[0] ?? emp.full_name;
-        const chipColor = emp.color || "#3B82F6";
-        return (
-          <Pressable
-            key={emp.id}
-            onPress={() => setActiveEmployeeId(active ? null : emp.id)}
-            style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: active ? chipColor : isDark ? "#1E293B" : "#F1F5F9", borderWidth: 1, borderColor: active ? chipColor : isDark ? "#334155" : "#E2E8F0" }}
-          >
-            <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>{firstName}</Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+        {FILTER_STATUSES.map(f => {
+          const active = activeStatuses.has(f.id);
+          return (
+            <Pressable
+              key={f.id}
+              onPress={() => toggleStatus(f.id)}
+              style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: active ? f.color : isDark ? "#1E293B" : "#F1F5F9", borderWidth: 1, borderColor: active ? f.color : isDark ? "#334155" : "#E2E8F0" }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>{f.label}</Text>
+            </Pressable>
+          );
+        })}
+        {employees.length > 0 && (
+          <>
+            <View style={{ width: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginHorizontal: 4 }} />
+            <Pressable
+              onPress={() => setEmpDropdownOpen(true)}
+              style={{
+                paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100,
+                backgroundColor: activeEmployeeId ? (activeEmp?.color || "#3B82F6") : isDark ? "#1E293B" : "#F1F5F9",
+                borderWidth: 1,
+                borderColor: activeEmployeeId ? (activeEmp?.color || "#3B82F6") : isDark ? "#334155" : "#E2E8F0",
+                flexDirection: "row", alignItems: "center", gap: 4,
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "700", color: activeEmployeeId ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>
+                {activeEmpName ?? "Employé"} ▾
+              </Text>
+            </Pressable>
+          </>
+        )}
+      </ScrollView>
+
+      <Modal visible={empDropdownOpen} transparent animationType="fade" onRequestClose={() => setEmpDropdownOpen(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" }} onPress={() => setEmpDropdownOpen(false)}>
+          <View style={{
+            width: 240,
+            backgroundColor: isDark ? "#1E293B" : "#fff",
+            borderRadius: 16, padding: 8,
+            shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 12, elevation: 8,
+          }}>
+            {activeEmployeeId && (
+              <Pressable
+                onPress={() => { setActiveEmployeeId(null); setEmpDropdownOpen(false); }}
+                style={{ paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, marginBottom: 4, backgroundColor: isDark ? "#334155" : "#F1F5F9" }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#CBD5E1" : "#64748B" }}>✕ Retirer le filtre</Text>
+              </Pressable>
+            )}
+            {employees.map(emp => {
+              const active = activeEmployeeId === emp.id;
+              const firstName = emp.full_name?.split(" ")[0] ?? emp.full_name ?? "?";
+              const chipColor = emp.color || "#3B82F6";
+              return (
+                <Pressable
+                  key={emp.id}
+                  onPress={() => { setActiveEmployeeId(emp.id); setEmpDropdownOpen(false); }}
+                  style={{
+                    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10,
+                    backgroundColor: active ? chipColor + "22" : "transparent",
+                    flexDirection: "row", alignItems: "center", gap: 10,
+                  }}
+                >
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: chipColor }} />
+                  <Text style={{ fontSize: 13, fontWeight: active ? "700" : "500", color: active ? chipColor : isDark ? "#E2E8F0" : "#1E293B" }}>
+                    {emp.full_name ?? firstName}
+                  </Text>
+                  {active && <Text style={{ marginLeft: "auto", color: chipColor, fontSize: 13, fontWeight: "700" }}>✓</Text>}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
+    </>
   );
 });
