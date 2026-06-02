@@ -607,7 +607,7 @@ export default function InterventionDetailScreen() {
                       intervention.client.address,
                     );
                     const url = Platform.select({
-                      ios: `maps:0,0?q=${query}`,
+                      ios: `https://maps.google.com/maps?q=${query}`,
                       android: `geo:0,0?q=${query}`,
                       web: `https://www.google.com/maps/search/?api=1&query=${query}`,
                     });
