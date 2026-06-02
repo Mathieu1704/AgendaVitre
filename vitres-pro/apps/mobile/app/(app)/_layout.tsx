@@ -124,14 +124,11 @@ export default function AppLayout() {
               }}
             >
               <Tabs.Screen name="index" />
-              <Tabs.Screen name="calendar/index" />
-              <Tabs.Screen name="clients/index" />
-              <Tabs.Screen name="facturation/index" options={{ href: null }} />
-              <Tabs.Screen name="parametres/index" />
+              <Tabs.Screen name="calendar" />
+              <Tabs.Screen name="clients" />
+              <Tabs.Screen name="facturation" options={{ href: null }} />
+              <Tabs.Screen name="parametres" />
               <Tabs.Screen name="notifications/index" options={{ href: null }} />
-              <Tabs.Screen name="calendar/add" options={{ href: null }} />
-              <Tabs.Screen name="calendar/[id]" options={{ href: null }} />
-              <Tabs.Screen name="calendar/rate-session" options={{ href: null }} />
               <Tabs.Screen name="clients/add" options={{ href: null }} />
               <Tabs.Screen name="clients/[id]" options={{ href: null }} />
               <Tabs.Screen name="facturation/add" options={{ href: null }} />
@@ -165,7 +162,7 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen
-          name="calendar/index"
+          name="calendar"
           options={{
             title: "Planning",
             tabBarIcon: ({ color, size }) => (
@@ -174,7 +171,7 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen
-          name="clients/index"
+          name="clients"
           options={{
             title: "Clients",
             href: isAdmin ? undefined : null,
@@ -184,7 +181,7 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen
-          name="facturation/index"
+          name="facturation"
           options={{ href: null }}
         />
         <Tabs.Screen
@@ -215,7 +212,7 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen
-          name="parametres/index"
+          name="parametres"
           options={{
             title: "Réglages",
             tabBarIcon: ({ color, size }) => (
@@ -223,22 +220,6 @@ export default function AppLayout() {
             ),
           }}
         />
-        {/* Écrans cachés de la tab bar */}
-        <Tabs.Screen name="calendar/add" options={{ href: null }} />
-        <Tabs.Screen name="calendar/[id]" options={{ href: null }} />
-        <Tabs.Screen name="calendar/rate-session" options={{ href: null }} />
-        <Tabs.Screen name="calendar/raw-event/[id]" options={{ href: null }} />
-        <Tabs.Screen name="clients/add" options={{ href: null }} />
-        <Tabs.Screen name="clients/[id]" options={{ href: null }} />
-        <Tabs.Screen name="facturation/add" options={{ href: null }} />
-        <Tabs.Screen
-          name="parametres/create-employee"
-          options={{ href: null }}
-        />
-        <Tabs.Screen name="parametres/team" options={{ href: null }} />
-        <Tabs.Screen name="parametres/logs" options={{ href: null }} />
-        <Tabs.Screen name="parametres/zones" options={{ href: null }} />
-        <Tabs.Screen name="parametres/tarifs" options={{ href: null }} />
       </Tabs>
     </View>
   );
