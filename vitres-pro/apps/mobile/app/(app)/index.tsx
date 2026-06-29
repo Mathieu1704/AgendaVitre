@@ -82,14 +82,8 @@ export default function Dashboard() {
   useEffect(() => {
     const loadUserRole = async () => {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (user) {
-          const res = await api.get("/api/employees");
-          const myProfile = res.data.find((e: any) => e.email === user.email);
-          setUserRole(myProfile?.role || "employee");
-        }
+        const res = await api.get("/api/employees/me");
+        setUserRole(res.data?.role || "employee");
       } catch (e) {
         setUserRole("employee");
       } finally {

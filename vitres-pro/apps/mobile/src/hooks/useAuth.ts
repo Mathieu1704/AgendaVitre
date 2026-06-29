@@ -36,17 +36,9 @@ export const useAuth = () => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const checkRole = async (email: string | undefined) => {
-      if (!email) {
-        setIsAdmin(false);
-        setLoading(false);
-        return;
-      }
+    const checkRole = async () => {
       try {
-        // Utilise le cache React Query si disponible (évite une requête réseau supplémentaire)
-        const cached = queryClient.getQueryData<any[]>(["employees"]);
-        const employees = cached ?? (await api.get("/api/employees")).data;
-        const me = employees.find((e: any) => e.email === email);
+        const me = (await api.get("/api/employees/me")).data;
         const role = me?.role ?? "employee";
         setIsAdmin(role === "admin");
         setCachedRole(role);
@@ -67,7 +59,7 @@ export const useAuth = () => {
         return;
       }
       setSession(session);
-      if (session?.user) checkRole(session.user.email);
+      if (session?.user) checkRole();
       else setLoading(false);
     });
 
@@ -86,7 +78,7 @@ export const useAuth = () => {
         return;
       }
       setSession(session);
-      if (session?.user) checkRole(session.user.email);
+      if (session?.user) checkRole();
       else {
         setIsAdmin(false);
         setLoading(false);
