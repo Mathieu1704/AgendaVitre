@@ -452,6 +452,31 @@ export default function AddInterventionScreen() {
       enabled: !!selectedClient?.id,
     });
 
+  // Détail du client sélectionné (dont ses autres RDV), pour avertir des doublons
+  const { data: selectedClientDetail } = useQuery({
+    queryKey: ["client-detail", selectedClient?.id],
+    queryFn: async () =>
+      (await api.get(`/api/clients/${selectedClient!.id}`)).data,
+    enabled: !!selectedClient?.id,
+  });
+
+  const upcomingClientInterventions = useMemo(() => {
+    if (!selectedClientDetail?.interventions) return [];
+    const now = new Date();
+    const excludedIds = new Set([id, reprise_of].filter(Boolean));
+    return selectedClientDetail.interventions
+      .filter(
+        (it: any) =>
+          ["planned", "in_progress"].includes(it.status) &&
+          new Date(it.start_time) > now &&
+          !excludedIds.has(it.id),
+      )
+      .sort(
+        (a: any, b: any) =>
+          new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
+      );
+  }, [selectedClientDetail, id, reprise_of]);
+
   const createClientMutation = useMutation({
     mutationFn: async (data: any) =>
       (await api.post("/api/clients", data)).data as Client,
@@ -1254,6 +1279,40 @@ export default function AddInterventionScreen() {
                       <UserPlus size={20} color="#3B82F6" />
                     </Pressable>
                   </View>
+
+                  {upcomingClientInterventions.length > 0 && (
+                    <View
+                      style={{
+                        marginTop: 8,
+                        padding: 12,
+                        borderRadius: 14,
+                        backgroundColor: isDark ? "rgba(249,115,22,0.1)" : "#FFF7ED",
+                        borderWidth: 1,
+                        borderColor: isDark ? "rgba(249,115,22,0.3)" : "#FED7AA",
+                        flexDirection: "row",
+                        gap: 8,
+                      }}
+                    >
+                      <AlertTriangle size={16} color="#F97316" style={{ marginTop: 2 }} />
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#C2410C" }}>
+                          {upcomingClientInterventions.length > 1
+                            ? `Ce client a déjà ${upcomingClientInterventions.length} RDV prévus`
+                            : "Ce client a déjà un RDV prévu"}
+                        </Text>
+                        {upcomingClientInterventions.slice(0, 3).map((it: any) => (
+                          <Text key={it.id} style={{ fontSize: 12, color: "#C2410C" }}>
+                            {new Date(it.start_time).toLocaleDateString("fr-FR", {
+                              day: "numeric",
+                              month: "short",
+                            })}
+                            {" — "}
+                            {it.title}
+                          </Text>
+                        ))}
+                      </View>
+                    </View>
+                  )}
                 </View>
               )}
 
