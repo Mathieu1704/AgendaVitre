@@ -31,6 +31,7 @@ import { Dialog } from "../../../src/ui/components/Dialog";
 import { Input } from "../../../src/ui/components/Input";
 import { Select } from "../../../src/ui/components/Select";
 import { ColorPicker } from "../../../src/ui/components/ColorPicker";
+import { WeekdayHoursPicker } from "../../../src/ui/components/WeekdayHoursPicker";
 import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { toast } from "../../../src/ui/toast";
@@ -55,7 +56,7 @@ export default function TeamManagementScreen() {
   const { height: screenHeight } = useWindowDimensions();
 
   const [editingEmp, setEditingEmp] = useState<any>(null);
-  const [weeklyHours, setWeeklyHours] = useState("");
+  const [hoursPerWeekday, setHoursPerWeekday] = useState<Record<string, number>>({});
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedRole, setSelectedRole] = useState<any>(null);
   const [editPhone, setEditPhone] = useState("");
@@ -156,7 +157,12 @@ export default function TeamManagementScreen() {
 
   const handleOpenEdit = (emp: any) => {
     setEditingEmp(emp);
-    setWeeklyHours(emp.weekly_hours.toString());
+    if (emp.hours_per_weekday && Object.keys(emp.hours_per_weekday).length > 0) {
+      setHoursPerWeekday(emp.hours_per_weekday);
+    } else {
+      const perDay = Math.round((emp.weekly_hours / 5) * 100) / 100;
+      setHoursPerWeekday({ "1": perDay, "2": perDay, "3": perDay, "4": perDay, "5": perDay });
+    }
     setSelectedColor(emp.color);
     setSelectedRole(roleItems.find((r) => r.id === emp.role));
     setEditPhone(emp.phone || "");
@@ -391,14 +397,15 @@ export default function TeamManagementScreen() {
                 containerStyle={{ marginBottom: 8 }}
               />
 
-              {/* Input Heures */}
-              <Input
-                label="Heures par semaine"
-                keyboardType="numeric"
-                value={weeklyHours}
-                onChangeText={setWeeklyHours}
-                containerStyle={{ marginBottom: 8 }}
-              />
+              {/* Heures par jour */}
+              <View style={{ marginBottom: 8 }}>
+                <Text className={labelClass}>Heures par jour</Text>
+                <WeekdayHoursPicker
+                  value={hoursPerWeekday}
+                  onChange={setHoursPerWeekday}
+                  isDark={isDark}
+                />
+              </View>
 
               {/* Select Rôle : On utilise la prop label pour l'alignement parfait avec Input */}
               <Select
@@ -427,7 +434,7 @@ export default function TeamManagementScreen() {
                 style={{ width: "90%", alignSelf: "center", borderRadius: 28 }}
                 onPress={() =>
                   updateMutation.mutate({
-                    weekly_hours: Number(weeklyHours),
+                    hours_per_weekday: hoursPerWeekday,
                     color: selectedColor,
                     role: selectedRole.id,
                     phone: editPhone || null,

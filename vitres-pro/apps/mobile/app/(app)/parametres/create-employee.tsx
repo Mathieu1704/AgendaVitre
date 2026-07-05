@@ -12,6 +12,7 @@ import { Button } from "../../../src/ui/components/Button";
 import { toast } from "../../../src/ui/toast";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { ColorPicker } from "../../../src/ui/components/ColorPicker";
+import { WeekdayHoursPicker } from "../../../src/ui/components/WeekdayHoursPicker";
 import { useEmployees } from "../../../src/hooks/useEmployees";
 
 export default function CreateEmployeeScreen() {
@@ -26,7 +27,13 @@ export default function CreateEmployeeScreen() {
   const [password, setPassword] = useState("Bienvenue2026!");
   const [selectedColor, setSelectedColor] = useState("#3B82F6");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [weeklyHours, setWeeklyHours] = useState("");
+  const [hoursPerWeekday, setHoursPerWeekday] = useState<Record<string, number>>({
+    "1": 7.6,
+    "2": 7.6,
+    "3": 7.6,
+    "4": 7.6,
+    "5": 7.6,
+  });
   const { employees } = useEmployees();
   const usedColors = employees.map((e: any) => e.color).filter(Boolean);
 
@@ -57,7 +64,7 @@ export default function CreateEmployeeScreen() {
       password,
       color: selectedColor,
       role: isAdmin ? "admin" : "employee",
-      weekly_hours: Number(weeklyHours) || 38,
+      hours_per_weekday: hoursPerWeekday,
     });
   };
 
@@ -140,13 +147,16 @@ export default function CreateEmployeeScreen() {
               usedColors={usedColors}
             />
 
-            <Input
-              label="Heures par semaine"
-              value={weeklyHours}
-              onChangeText={setWeeklyHours}
-              keyboardType="numeric"
-              placeholder="Ex: 38"
-            />
+            <View>
+              <Text className="text-sm font-semibold text-foreground dark:text-white mb-1.5">
+                Heures par jour
+              </Text>
+              <WeekdayHoursPicker
+                value={hoursPerWeekday}
+                onChange={setHoursPerWeekday}
+                isDark={isDark}
+              />
+            </View>
 
             {/* Switch Admin */}
             <View className="flex-row items-center justify-between pt-2 border-t border-border dark:border-slate-800">

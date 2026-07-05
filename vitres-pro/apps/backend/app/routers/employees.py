@@ -4,10 +4,12 @@ from typing import List, Optional, Dict
 from uuid import UUID
 from pydantic import BaseModel
 
+from pydantic import field_validator
+
 from app.models.models import get_db, Employee
-from app.schemas.schemas import EmployeeBase, EmployeeOut, EmployeeUpdate
+from app.schemas.schemas import EmployeeBase, EmployeeOut, EmployeeUpdate, validate_hours_per_weekday
 from app.core.deps import get_current_user
-from app.core.supabase import supabase_admin 
+from app.core.supabase import supabase_admin
 
 router = APIRouter()
 
@@ -21,6 +23,18 @@ class EmployeeCreateRequest(BaseModel):
     role: str = "employee"
     phone: Optional[str] = None
     hours_per_weekday: Optional[Dict[str, float]] = None
+
+    @field_validator("hours_per_weekday")
+    @classmethod
+    def _check_hours_per_weekday(cls, v):
+        return validate_hours_per_weekday(v)
+
+
+def _compute_hours_from_weekday(hours_per_weekday: Dict[str, float]) -> tuple[float, float]:
+    """Calcule (weekly_hours, daily_capacity) à partir d'un dict heures/jour."""
+    total = round(sum(hours_per_weekday.values()), 2)
+    worked_days = sum(1 for v in hours_per_weekday.values() if v > 0) or 5
+    return total, round(total / worked_days, 2)
 
 class PasswordResetRequest(BaseModel):
     password: str
@@ -66,6 +80,12 @@ def create_employee(
         raise HTTPException(status_code=400, detail=f"Erreur Auth: {str(e)}")
 
     # 3. Création dans la DB SQL
+    if emp_data.hours_per_weekday:
+        weekly_hours, daily_capacity = _compute_hours_from_weekday(emp_data.hours_per_weekday)
+    else:
+        weekly_hours = emp_data.weekly_hours
+        daily_capacity = round(emp_data.weekly_hours / 5, 2)
+
     new_employee = Employee(
         id=new_user_id,
         email=emp_data.email,
@@ -73,8 +93,8 @@ def create_employee(
         color=emp_data.color,
         role=emp_data.role,
         phone=emp_data.phone,
-        weekly_hours=emp_data.weekly_hours,
-        daily_capacity=round(emp_data.weekly_hours / 5, 2),
+        weekly_hours=weekly_hours,
+        daily_capacity=daily_capacity,
         hours_per_weekday=emp_data.hours_per_weekday,
     )
     
@@ -126,10 +146,15 @@ def update_employee(
         raise HTTPException(status_code=404, detail="Employé non trouvé")
 
     update_data = obj_in.model_dump(exclude_unset=True)
-    
-    # Si on change les heures hebdo, on recalcule la capacité journalière (hebdo / 5)
-    if "weekly_hours" in update_data:
-        update_data["daily_capacity"] = update_data["weekly_hours"] / 5
+
+    # Si on change les heures par jour, on recalcule weekly_hours et daily_capacity depuis leur somme
+    if update_data.get("hours_per_weekday"):
+        update_data["weekly_hours"], update_data["daily_capacity"] = _compute_hours_from_weekday(
+            update_data["hours_per_weekday"]
+        )
+    # Sinon, si on change juste les heures hebdo, on recalcule la capacité journalière (hebdo / 5)
+    elif "weekly_hours" in update_data:
+        update_data["daily_capacity"] = round(update_data["weekly_hours"] / 5, 2)
 
     for field in update_data:
         setattr(db_obj, field, update_data[field])

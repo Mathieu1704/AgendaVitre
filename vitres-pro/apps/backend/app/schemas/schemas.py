@@ -15,6 +15,19 @@ def normalize_city(v: Optional[str]) -> Optional[str]:
         v = v.replace(char, "'")
     return v
 
+VALID_WEEKDAY_KEYS = {"1", "2", "3", "4", "5"}
+
+def validate_hours_per_weekday(v: Optional[Dict[str, float]]) -> Optional[Dict[str, float]]:
+    """Valide le format de hours_per_weekday : clés '1' (lundi) à '5' (vendredi), heures entre 0 et 24."""
+    if v is None:
+        return v
+    for key, hours in v.items():
+        if key not in VALID_WEEKDAY_KEYS:
+            raise ValueError(f"Clé de jour invalide: '{key}' (attendu '1' à '5', 1=lundi..5=vendredi)")
+        if hours < 0 or hours > 24:
+            raise ValueError(f"Heures invalides pour le jour {key}: {hours}")
+    return v
+
 # --- EMPLOYEE ---
 class EmployeeBase(BaseModel):
     email: str
@@ -26,6 +39,11 @@ class EmployeeBase(BaseModel):
     weekly_hours: float = 38.0
     daily_capacity: float = 7.6
     hours_per_weekday: Optional[Dict[str, float]] = None
+
+    @field_validator("hours_per_weekday")
+    @classmethod
+    def _check_hours_per_weekday(cls, v):
+        return validate_hours_per_weekday(v)
 
 class EmployeeOut(EmployeeBase):
     id: UUID
@@ -41,6 +59,11 @@ class EmployeeUpdate(BaseModel):
     weekly_hours: Optional[float] = None
     daily_capacity: Optional[float] = None
     hours_per_weekday: Optional[Dict[str, float]] = None
+
+    @field_validator("hours_per_weekday")
+    @classmethod
+    def _check_hours_per_weekday(cls, v):
+        return validate_hours_per_weekday(v)
 
 # --- ABSENCE ---
 class AbsenceBase(BaseModel):
