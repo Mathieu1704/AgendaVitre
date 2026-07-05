@@ -126,8 +126,8 @@ class Absence(Base):
     employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id"))
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=False)
-    reason = Column(String, nullable=True) # Maladie, Congé, etc.
-    
+    type = Column(String, nullable=True) # Certificat, VA, RJF, CSS
+
     employee = relationship("Employee", back_populates="absences")
 
 class Client(Base):

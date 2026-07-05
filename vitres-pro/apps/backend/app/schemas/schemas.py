@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, field_validator
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 from uuid import UUID
 import unicodedata
@@ -66,29 +66,20 @@ class EmployeeUpdate(BaseModel):
         return validate_hours_per_weekday(v)
 
 # --- ABSENCE ---
-class AbsenceBase(BaseModel):
-    employee_id: UUID
-    start_date: datetime
-    end_date: datetime
-    reason: Optional[str] = "Maladie"
+AbsenceType = Literal["Certificat", "VA", "RJF", "CSS"]
 
-class AbsenceCreate(AbsenceBase):
-    pass
-
-class AbsenceOut(AbsenceBase):
-    id: UUID
-    class Config:
-        from_attributes = True
-
-# --- ABSENCE ---
 class AbsenceCreate(BaseModel):
     employee_id: UUID
     start_date: datetime
     end_date: datetime
-    reason: Optional[str] = "Congé"
+    type: AbsenceType = "VA"
 
-class AbsenceOut(AbsenceCreate):
+class AbsenceOut(BaseModel):
     id: UUID
+    employee_id: UUID
+    start_date: datetime
+    end_date: datetime
+    type: str  # str en sortie : couvre les anciennes valeurs libres ("Congé") antérieures aux 4 types fixes
     class Config:
         from_attributes = True
 

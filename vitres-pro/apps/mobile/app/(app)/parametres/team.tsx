@@ -33,6 +33,7 @@ import { Select } from "../../../src/ui/components/Select";
 import { ColorPicker } from "../../../src/ui/components/ColorPicker";
 import { WeekdayHoursPicker } from "../../../src/ui/components/WeekdayHoursPicker";
 import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
+import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { toast } from "../../../src/ui/toast";
 import { toISODate } from "../../../src/lib/date";
@@ -84,6 +85,13 @@ export default function TeamManagementScreen() {
     tomorrow.setDate(tomorrow.getDate() + 1);
     return toISODate(tomorrow);
   });
+  const [absType, setAbsType] = useState("VA");
+  const ABSENCE_TYPES = [
+    { id: "Certificat", label: "Certificat" },
+    { id: "VA", label: "VA" },
+    { id: "RJF", label: "RJF" },
+    { id: "CSS", label: "CSS" },
+  ];
 
   const { data: employees, isLoading } = useQuery({
     queryKey: ["employees"],
@@ -115,6 +123,7 @@ export default function TeamManagementScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["absences", editingEmp?.id] });
       toast.success("Enregistré", "Absence prise en compte");
+      setAbsType("VA");
       toggleAbsenceForm();
     },
   });
@@ -483,6 +492,13 @@ export default function TeamManagementScreen() {
                             <Text style={{ fontSize: 13, color: isDark ? "#FCA5A5" : "#B91C1C", fontWeight: "600" }}>
                               {fmt(abs.start_date)} → {fmt(abs.end_date)}
                             </Text>
+                            {abs.type && (
+                              <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, backgroundColor: isDark ? "rgba(239,68,68,0.2)" : "#FEE2E2" }}>
+                                <Text style={{ fontSize: 11, fontWeight: "700", color: isDark ? "#FCA5A5" : "#B91C1C" }}>
+                                  {abs.type}
+                                </Text>
+                              </View>
+                            )}
                           </View>
                           <Pressable
                             onPress={() => deleteAbsenceMutation.mutate(abs.id)}
@@ -522,6 +538,23 @@ export default function TeamManagementScreen() {
                       dateOnly
                     />
 
+                    <View>
+                      <Text style={{ fontSize: 13, fontWeight: "600", marginBottom: 8, color: isDark ? "#F8FAFC" : "#09090B" }}>
+                        Type d'absence
+                      </Text>
+                      <SlidingPillSelector
+                        options={ABSENCE_TYPES}
+                        selected={absType}
+                        onSelect={setAbsType}
+                        pillColor="#EF4444"
+                        bgColor={isDark ? "#1E293B" : "#F1F5F9"}
+                        activeTextColor="#fff"
+                        inactiveTextColor={isDark ? "#94A3B8" : "#64748B"}
+                        fontSize={12}
+                        itemPy={9}
+                      />
+                    </View>
+
                     <Button
                       variant="destructive"
                       onPress={() =>
@@ -529,7 +562,7 @@ export default function TeamManagementScreen() {
                           employee_id: editingEmp.id,
                           start_date: absStart + "T00:00:00",
                           end_date: absEnd + "T23:59:59",
-                          reason: "Maladie",
+                          type: absType,
                         })
                       }
                       loading={absenceMutation.isPending}
