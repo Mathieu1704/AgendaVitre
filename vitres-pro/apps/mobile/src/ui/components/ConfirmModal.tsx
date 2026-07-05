@@ -44,7 +44,8 @@ export const ConfirmModal = ({
           <View className="flex-row gap-3">
             <Pressable
               onPress={onCancel}
-              className="flex-1 py-3.5 bg-muted dark:bg-slate-800 rounded-2xl items-center active:opacity-80"
+              style={{ borderRadius: 16 }}
+              className="flex-1 py-3.5 bg-muted dark:bg-slate-800 items-center active:opacity-80"
             >
               <Text className="font-semibold text-foreground dark:text-white">
                 {cancelText}
@@ -53,7 +54,8 @@ export const ConfirmModal = ({
 
             <Pressable
               onPress={onConfirm}
-              className={`flex-1 py-3.5 rounded-2xl items-center active:opacity-80 ${
+              style={{ borderRadius: 16 }}
+              className={`flex-1 py-3.5 items-center active:opacity-80 ${
                 isDestructive ? "bg-red-500" : "bg-primary"
               }`}
             >
