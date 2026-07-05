@@ -267,6 +267,47 @@ def update_intervention(
     return db_intervention
 
 
+class ItemsDoneBody(BaseModel):
+    not_done_item_ids: List[UUID] = []
+
+
+@router.patch("/{intervention_id}/items-done", response_model=InterventionOut)
+def update_items_done(
+    intervention_id: UUID,
+    body: ItemsDoneBody,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Marque certaines prestations comme non faites lors de la clôture d'une
+    intervention, et recalcule price_estimated en conséquence."""
+    db_intervention = _load_intervention(intervention_id, db)
+    if not db_intervention:
+        raise HTTPException(status_code=404, detail="Introuvable")
+
+    valid_ids = {item.id for item in db_intervention.items}
+    not_done_ids = valid_ids.intersection(set(body.not_done_item_ids))
+
+    for item in db_intervention.items:
+        item.done = item.id not in not_done_ids
+
+    db_intervention.price_estimated = sum(
+        float(item.price) for item in db_intervention.items if item.done
+    )
+
+    _add_audit(
+        db, "items_adjusted", current_user.id, intervention_id,
+        f"Prestations ajustées : {len(not_done_ids)} non faite(s)",
+        {
+            "not_done_item_ids": [str(i) for i in not_done_ids],
+            "new_price_estimated": db_intervention.price_estimated,
+        },
+    )
+
+    db.commit()
+    db.refresh(db_intervention)
+    return db_intervention
+
+
 @router.delete("/{intervention_id}")
 def delete_intervention(
     intervention_id: UUID,

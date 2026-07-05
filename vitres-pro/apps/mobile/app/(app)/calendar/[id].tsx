@@ -30,6 +30,7 @@ import {
   Banknote,
   FileText,
   X,
+  Check,
 } from "lucide-react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -66,6 +67,9 @@ export default function InterventionDetailScreen() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editingPayment, setEditingPayment] = useState(false);
   const [pendingPaymentMode, setPendingPaymentMode] = useState<"cash" | "invoice" | "invoice_cash">("cash");
+  const [showAllDoneConfirm, setShowAllDoneConfirm] = useState(false);
+  const [showItemsChecklist, setShowItemsChecklist] = useState(false);
+  const [notDoneIds, setNotDoneIds] = useState<Set<string>>(new Set());
 
   // 2. QUERY (Chargement données)
   const { data: intervention, isLoading } = useQuery({
@@ -175,6 +179,20 @@ export default function InterventionDetailScreen() {
       toast.success("Paiement mis à jour", "");
     },
     onError: () => toast.error("Erreur", "Impossible de modifier le paiement."),
+  });
+
+  const itemsDoneMutation = useMutation({
+    mutationFn: async (notDoneItemIds: string[]) =>
+      api.patch(`/api/interventions/${id}/items-done`, {
+        not_done_item_ids: notDoneItemIds,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      setShowItemsChecklist(false);
+      router.push(`/(app)/calendar/add?reprise_of=${id}` as any);
+    },
+    onError: () => toast.error("Erreur", "Impossible d'enregistrer les prestations."),
   });
 
   const [showTimeEdit, setShowTimeEdit] = useState(false);
@@ -776,10 +794,22 @@ export default function InterventionDetailScreen() {
                               key={idx}
                               className="flex-row justify-between items-center pb-2 border-b border-border dark:border-slate-800 last:border-0"
                             >
-                              <Text className="text-foreground dark:text-white font-medium flex-1 mr-4">
+                              <Text
+                                className={`font-medium flex-1 mr-4 ${
+                                  item.done === false
+                                    ? "text-muted-foreground line-through"
+                                    : "text-foreground dark:text-white"
+                                }`}
+                              >
                                 {item.label}
                               </Text>
-                              <Text className="text-foreground dark:text-white font-bold">
+                              <Text
+                                className={`font-bold ${
+                                  item.done === false
+                                    ? "text-muted-foreground line-through"
+                                    : "text-foreground dark:text-white"
+                                }`}
+                              >
                                 {item.price} €
                               </Text>
                             </View>
@@ -831,9 +861,14 @@ export default function InterventionDetailScreen() {
       >
         {(intervention.status === "planned" || intervention.status === "in_progress") && (
           <Button
-            onPress={() =>
-              router.push(`/(app)/calendar/add?reprise_of=${id}` as any)
-            }
+            onPress={() => {
+              if (!intervention.items || intervention.items.length === 0) {
+                router.push(`/(app)/calendar/add?reprise_of=${id}` as any);
+                return;
+              }
+              setNotDoneIds(new Set());
+              setShowAllDoneConfirm(true);
+            }}
             className="w-full h-14 bg-blue-500 hover:bg-blue-600 rounded-full"
           >
             <View className="flex-row items-center">
@@ -880,6 +915,111 @@ export default function InterventionDetailScreen() {
           deleteMutation.mutate();
         }}
       />
+
+      {/* Clôture d'intervention : confirmation "tous les services faits ?" */}
+      <ConfirmModal
+        visible={showAllDoneConfirm}
+        title="Intervention terminée"
+        message="Tous les services ont été faits ?"
+        confirmText="Oui"
+        cancelText="Non"
+        onConfirm={() => {
+          setShowAllDoneConfirm(false);
+          router.push(`/(app)/calendar/add?reprise_of=${id}` as any);
+        }}
+        onCancel={() => {
+          setShowAllDoneConfirm(false);
+          setShowItemsChecklist(true);
+        }}
+      />
+
+      {/* Clôture d'intervention : checklist des prestations réalisées */}
+      <Dialog open={showItemsChecklist} onClose={() => setShowItemsChecklist(false)}>
+        <View style={{ padding: 20, gap: 16 }}>
+          <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", textAlign: "center" }}>
+            Quelles prestations ont été faites ?
+          </Text>
+          <View style={{ gap: 10 }}>
+            {(intervention?.items || []).map((item: any) => {
+              const checked = !notDoneIds.has(item.id);
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() =>
+                    setNotDoneIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(item.id)) next.delete(item.id);
+                      else next.add(item.id);
+                      return next;
+                    })
+                  }
+                  style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+                >
+                  <View
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 6,
+                      borderWidth: 2,
+                      borderColor: checked ? "#3B82F6" : "#CBD5E1",
+                      backgroundColor: checked ? "#3B82F6" : "transparent",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {checked && <Check size={13} color="#fff" />}
+                  </View>
+                  <Text
+                    style={{
+                      flex: 1,
+                      color: isDark ? "#F8FAFC" : "#09090B",
+                      textDecorationLine: checked ? "none" : "line-through",
+                      opacity: checked ? 1 : 0.5,
+                    }}
+                  >
+                    {item.label}
+                  </Text>
+                  <Text style={{ fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B" }}>
+                    {item.price} €
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTopWidth: 1, borderTopColor: isDark ? "#1E293B" : "#E2E8F0" }}>
+            <Text style={{ fontWeight: "700", fontSize: 16, color: isDark ? "#F8FAFC" : "#09090B" }}>
+              Total
+            </Text>
+            <Text style={{ fontWeight: "800", fontSize: 18, color: "#3B82F6" }}>
+              {(intervention?.items || [])
+                .filter((item: any) => !notDoneIds.has(item.id))
+                .reduce((sum: number, item: any) => sum + Number(item.price), 0)
+                .toFixed(2)}{" "}
+              €
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <Pressable
+              onPress={() => setShowItemsChecklist(false)}
+              style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: isDark ? "#1E293B" : "#F1F5F9" }}
+            >
+              <Text style={{ fontWeight: "600", color: isDark ? "#F8FAFC" : "#09090B" }}>
+                Annuler
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => itemsDoneMutation.mutate(Array.from(notDoneIds))}
+              disabled={itemsDoneMutation.isPending}
+              style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: "#3B82F6", opacity: itemsDoneMutation.isPending ? 0.6 : 1 }}
+            >
+              <Text style={{ fontWeight: "700", color: "#fff" }}>
+                Valider
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Dialog>
 
       <Dialog open={showTimeEdit} onClose={() => setShowTimeEdit(false)} position="bottom" containerStyle={{ paddingBottom: 120 }}>
         <View style={{ padding: 16, gap: 16 }}>

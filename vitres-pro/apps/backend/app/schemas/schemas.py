@@ -153,6 +153,7 @@ class InterventionItemBase(BaseModel):
     label: str  # Ex: "RDC", "Velux"
     price: float # Ex: 35.0
     client_service_id: Optional[UUID] = None
+    done: bool = True
 
 class InterventionItemCreate(InterventionItemBase):
     pass
