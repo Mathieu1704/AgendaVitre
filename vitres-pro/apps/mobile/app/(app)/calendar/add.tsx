@@ -367,6 +367,9 @@ export default function AddInterventionScreen() {
   const [servicePriceOverrides, setServicePriceOverrides] = useState<
     Record<string, string>
   >({});
+  const [focusedServiceLabelId, setFocusedServiceLabelId] = useState<
+    string | null
+  >(null);
   const [adHocItems, setAdHocItems] = useState<Item[]>([]);
   const [isAddingService, setIsAddingService] = useState(false);
   const [newServiceLabel, setNewServiceLabel] = useState("");
@@ -1707,6 +1710,13 @@ export default function AddInterventionScreen() {
                                 /* silently ignore */
                               }
                             }}
+                            onFocus={() => setFocusedServiceLabelId(svc.id)}
+                            onBlur={() => setFocusedServiceLabelId(null)}
+                            selection={
+                              focusedServiceLabelId === svc.id
+                                ? undefined
+                                : { start: 0, end: 0 }
+                            }
                             style={[
                               {
                                 borderWidth: 1,

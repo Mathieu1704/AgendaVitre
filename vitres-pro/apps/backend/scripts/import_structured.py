@@ -17,7 +17,7 @@ from collections import defaultdict
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app.models.models import get_db, Client, Intervention, InterventionItem
+from app.models.models import get_db, Client, Intervention, InterventionItem, ClientService
 from sqlalchemy.sql import func as sqlfunc
 import pytz
 import uuid
@@ -29,32 +29,35 @@ FALLBACK_UNTIL = date_type(2026, 12, 31)
 
 
 def normalize_event(ev: dict) -> dict:
-    """Normalise le format brut Google Calendar vers le format structuré."""
-    if "date" in ev:
-        return ev  # Déjà structuré
+    """Normalise le format structuré IA vers le format interne attendu par import_event."""
     import re
-    # Format brut : summary, start (ISO datetime), end, google_event_id, recurrence_rule
-    start_str = ev.get("start", "")
-    end_str   = ev.get("end", "")
-    sm = re.match(r"(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})", start_str)
-    em = re.match(r"(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})", end_str)
+    # Extraire HH:MM depuis "YYYY-MM-DD HH:MM" ou "HH:MM"
+    def extract_time(s: str) -> str:
+        if not s:
+            return "00:00"
+        m = re.search(r'(\d{2}:\d{2})$', s.strip())
+        return m.group(1) if m else "00:00"
+
     return {
-        "original_summary": ev.get("summary", ""),
-        "date":             sm.group(1) if sm else "",
-        "client_name":      "",
-        "client_street":    "",
-        "client_zip":       "",
-        "client_city":      "",
-        "client_phone":     "",
-        "client_email":     "",
-        "client_notes":     "",
-        "start_time":       sm.group(2) if sm else "00:00",
-        "end_time":         em.group(2) if em else "00:00",
-        "is_invoice":       False,
-        "total_price":      0.0,
-        "full_description": ev.get("description", ""),
-        "services_json":    [],
-        "google_event_id":  ev.get("google_event_id", ""),
+        "gid":              ev.get("gid") or ev.get("google_event_id", ""),
+        "cal":              ev.get("cal", "hainaut"),
+        "date":             ev.get("date", ""),
+        "start_time":       ev.get("start_time") or extract_time(ev.get("start", "")),
+        "end_time":         ev.get("end_time")   or extract_time(ev.get("end", "")),
+        "title":            ev.get("title") or ev.get("original_summary", ""),
+        "type":             ev.get("type", "intervention"),
+        "is_invoice":       ev.get("is_invoice", False),
+        "payment_mode":     ev.get("payment_mode", "cash"),
+        "price_estimated":  ev.get("price_estimated") or ev.get("total_price") or 0.0,
+        "client_name":      ev.get("client_name", ""),
+        "client_street":    ev.get("client_street", ""),
+        "client_zip":       ev.get("client_zip", ""),
+        "client_city":      ev.get("client_city", ""),
+        "client_phone":     ev.get("client_phone", ""),
+        "client_email":     ev.get("client_email", ""),
+        "client_notes":     ev.get("client_notes", ""),
+        "full_description": ev.get("full_description", ""),
+        "services_json":    ev.get("services_json", []),
         "recurrence_rule":  ev.get("recurrence_rule"),
     }
 
@@ -64,12 +67,9 @@ def load_events(file_paths: list[str]) -> list[dict]:
     for fp in file_paths:
         with open(fp, encoding="utf-8") as f:
             events = json.load(f)
-        zone = "ardennes" if "ardennes" in os.path.basename(fp) else "hainaut"
         normalized = [normalize_event(ev) for ev in events]
-        for ev in normalized:
-            ev["_zone"] = zone
         all_events.extend(normalized)
-        print(f"  📂 {os.path.basename(fp)} : {len(events)} événements [{zone}]")
+        print(f"  📂 {os.path.basename(fp)} : {len(events)} événements")
     return all_events
 
 
@@ -120,10 +120,11 @@ def expand_recurrences(events: list[dict]) -> list[dict]:
 
 
 def deduplicate(events: list[dict]) -> list[dict]:
-    """Déduplique par (date, original_summary, start_time)."""
+    """Déduplique par gid, puis par (date, title, start_time)."""
     groups: dict[tuple, dict] = {}
     for ev in events:
-        key = (ev["date"], ev["original_summary"], ev["start_time"])
+        gid = ev.get("gid") or ""
+        key = (gid,) if gid else (ev["date"], ev["title"], ev["start_time"])
         if key not in groups:
             groups[key] = ev
     result = list(groups.values())
@@ -136,15 +137,20 @@ def deduplicate(events: list[dict]) -> list[dict]:
 def import_event(db, ev: dict) -> str:
     """Importe un événement structuré. Retourne 'created', 'skipped' ou 'error'."""
 
-    # Vérifier si déjà importé — même clé que la déduplication : (titre, date Brussels, heure début)
-    _date_str  = ev["date"]
-    _start_utc = BRUSSELS_TZ.localize(
-        datetime.strptime(f"{_date_str} {ev['start_time']}", "%Y-%m-%d %H:%M")
-    ).astimezone(pytz.utc)
-    already_exists = db.query(Intervention).filter(
-        Intervention.title == ev.get("original_summary", ""),
-        Intervention.start_time == _start_utc,
-    ).first()
+    # Vérifier si déjà importé — par gid d'abord, sinon par (titre, start_time)
+    gid = ev.get("gid") or ""
+    if gid:
+        already_exists = db.query(Intervention).filter(
+            Intervention.google_event_id == gid
+        ).first()
+    else:
+        _start_utc = BRUSSELS_TZ.localize(
+            datetime.strptime(f"{ev['date']} {ev['start_time']}", "%Y-%m-%d %H:%M")
+        ).astimezone(pytz.utc)
+        already_exists = db.query(Intervention).filter(
+            Intervention.title == ev.get("title", ""),
+            Intervention.start_time == _start_utc,
+        ).first()
     if already_exists:
         return "skipped"
 
@@ -221,28 +227,50 @@ def import_event(db, ev: dict) -> str:
     end_dt   = BRUSSELS_TZ.localize(end_naive).astimezone(pytz.utc)
 
     # Créer l'intervention
-    total = ev.get("total_price") or 0.0
+    price = ev.get("price_estimated") or 0.0
+    zone  = ev.get("cal") or "hainaut"
     intervention = Intervention(
-        title=ev.get("original_summary", ""),
+        title=ev.get("title", ""),
         description=ev.get("full_description") or None,
         start_time=start_dt,
         end_time=end_dt,
         client_id=client.id if client else None,
         status="planned",
+        type=ev.get("type", "intervention"),
         is_invoice=ev.get("is_invoice", False),
-        price_estimated=total if total else None,
-        zone=ev.get("_zone") or "hainaut",
-        google_event_id=ev.get("google_event_id") or None,
+        payment_mode=ev.get("payment_mode") or "cash",
+        price_estimated=price if price else None,
+        zone=zone,
+        google_event_id=gid or None,
     )
     db.add(intervention)
     db.flush()
 
-    # Créer les InterventionItems
+    # Créer les InterventionItems, liés au catalogue client_services (find-or-create)
+    # pour que la case à cocher fonctionne dès l'import (voir migrate_client_services.py).
     for svc in ev.get("services_json", []):
+        label = svc.get("description", "")
+        item_price = svc.get("price", 0.0)
+        client_service_id = None
+        if client:
+            client_service = db.query(ClientService).filter(
+                ClientService.client_id == client.id,
+                sqlfunc.lower(sqlfunc.trim(ClientService.label)) == label.strip().lower(),
+            ).first()
+            if not client_service:
+                client_service = ClientService(
+                    client_id=client.id,
+                    label=label,
+                    price=item_price,
+                )
+                db.add(client_service)
+                db.flush()
+            client_service_id = client_service.id
         db.add(InterventionItem(
             intervention_id=intervention.id,
-            label=svc.get("description", ""),
-            price=svc.get("price", 0.0),
+            label=label,
+            price=item_price,
+            client_service_id=client_service_id,
         ))
 
     db.commit()
@@ -290,13 +318,13 @@ def main():
             result = import_event(db, ev)
             if result == "created":
                 created += 1
-                print(f"  ✅ {ev['date']} | {ev['original_summary'][:60]}")
+                print(f"  ✅ {ev['date']} | {ev['title'][:60]}")
             else:
                 skipped += 1
         except Exception as e:
             errors += 1
             db.rollback()
-            print(f"  ❌ {ev.get('date')} | {ev.get('original_summary', '')[:60]} → {e}")
+            print(f"  ❌ {ev.get('date')} | {ev.get('title', '')[:60]} → {e}")
 
     db.close()
 
