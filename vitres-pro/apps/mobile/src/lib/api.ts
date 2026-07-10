@@ -40,13 +40,31 @@ api.interceptors.request.use(async (config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const config = error.config;
+    const isNetworkIssue = error.code === "ECONNABORTED" || !error.response;
+
+    // Retry silencieux, une seule fois, uniquement pour les lectures (GET) : un blip
+    // réseau passager ne doit pas déclencher de popup. On ne retry jamais les
+    // écritures (POST/PATCH/DELETE) pour ne pas risquer un doublon si la requête
+    // avait en fait été traitée côté serveur avant le timeout.
+    if (isNetworkIssue && config?.method?.toLowerCase() === "get" && !config._retried) {
+      config._retried = true;
+      try {
+        return await api(config);
+      } catch (retryError) {
+        error = retryError;
+      }
+    }
+
     if (error.code === "ECONNABORTED") {
+      console.warn(`[timeout] ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
       toast.error("Délai dépassé", "Le serveur ne répond pas. Réessaie.");
     } else if (error.response?.status === 401) {
       _cachedToken = null;
       router.replace("/(auth)/login");
     } else if (!error.response) {
+      console.warn(`[hors ligne] ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
       toast.error("Hors ligne", "Vérifie ta connexion internet.");
     }
     return Promise.reject(error);
