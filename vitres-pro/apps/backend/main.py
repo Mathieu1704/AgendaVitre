@@ -55,8 +55,3 @@ app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "LVM Agenda API V2 (Prod Ready)"}
-
-
-@app.get("/sentry-debug")
-def trigger_error():
-    return 1 / 0
