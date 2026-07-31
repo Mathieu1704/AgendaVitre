@@ -1,3 +1,5 @@
+import os
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -5,6 +7,15 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from app.routers import interventions, clients, planning, employees, absences, raw_events, notifications, logs, settings
+
+sentry_dsn = os.getenv("SENTRY_DSN")
+if sentry_dsn:
+    sentry_sdk.init(
+        dsn=sentry_dsn,
+        environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+    )
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 
