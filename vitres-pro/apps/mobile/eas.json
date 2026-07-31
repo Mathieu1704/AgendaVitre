@@ -15,7 +15,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.lvmagenda.be",
         "EXPO_PUBLIC_SUPABASE_URL": "https://aztcgmfylcfepffdrxdm.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6dGNnbWZ5bGNmZXBmZmRyeGRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1NzYxODksImV4cCI6MjA4NDE1MjE4OX0.bOiJLFuVYgRWFqF_nyVccUmZ_SknicauwEhcsIrWwvc"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6dGNnbWZ5bGNmZXBmZmRyeGRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1NzYxODksImV4cCI6MjA4NDE1MjE4OX0.bOiJLFuVYgRWFqF_nyVccUmZ_SknicauwEhcsIrWwvc",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://452c1aea95a707ae1c2fd020b71ab694@o4511828864270336.ingest.de.sentry.io/4511828907589712"
       }
     },
     "production": {
@@ -30,7 +31,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.lvmagenda.be",
         "EXPO_PUBLIC_SUPABASE_URL": "https://aztcgmfylcfepffdrxdm.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6dGNnbWZ5bGNmZXBmZmRyeGRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1NzYxODksImV4cCI6MjA4NDE1MjE4OX0.bOiJLFuVYgRWFqF_nyVccUmZ_SknicauwEhcsIrWwvc"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6dGNnbWZ5bGNmZXBmZmRyeGRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1NzYxODksImV4cCI6MjA4NDE1MjE4OX0.bOiJLFuVYgRWFqF_nyVccUmZ_SknicauwEhcsIrWwvc",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://452c1aea95a707ae1c2fd020b71ab694@o4511828864270336.ingest.de.sentry.io/4511828907589712"
       }
     }
   }
