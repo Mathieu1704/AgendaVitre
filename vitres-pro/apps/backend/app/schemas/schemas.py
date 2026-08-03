@@ -159,12 +159,14 @@ class HourlyRateCreate(BaseModel):
     rate: float
     label: Optional[str] = None
     time_only: bool = False
+    fixed_hours: Optional[float] = None
 
 class HourlyRateOut(BaseModel):
     id: UUID
     rate: float
     label: Optional[str] = None
     time_only: bool = False
+    fixed_hours: Optional[float] = None
     class Config:
         from_attributes = True
 

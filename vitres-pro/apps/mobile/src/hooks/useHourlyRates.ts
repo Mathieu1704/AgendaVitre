@@ -6,6 +6,7 @@ export type HourlyRate = {
   rate: number;
   label?: string | null;
   time_only: boolean;
+  fixed_hours?: number | null;
 };
 
 export const useHourlyRates = () => {
@@ -18,7 +19,7 @@ export const useHourlyRates = () => {
 export const useCreateHourlyRate = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { rate: number; label?: string; time_only?: boolean }) =>
+    mutationFn: (body: { rate: number; label?: string; time_only?: boolean; fixed_hours?: number }) =>
       api.post("/api/settings/hourly-rates", body).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["hourly-rates"] }),
   });

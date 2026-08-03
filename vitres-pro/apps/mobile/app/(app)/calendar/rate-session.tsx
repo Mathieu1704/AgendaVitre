@@ -144,6 +144,7 @@ export default function RateSessionScreen() {
   const [newRateLabel, setNewRateLabel] = useState("");
   const [newRateValue, setNewRateValue] = useState("");
   const [newRateTimeOnly, setNewRateTimeOnly] = useState(false);
+  const [newRateFixedHours, setNewRateFixedHours] = useState("");
 
   // État pour suppression
   const [rateToDelete, setRateToDelete] = useState<any>(null);
@@ -203,7 +204,7 @@ export default function RateSessionScreen() {
       : null;
   const computedHoursRaw = selectedRate
     ? selectedRate.time_only
-      ? durationFromIntervention
+      ? (selectedRate.fixed_hours ?? durationFromIntervention)
       : price > 0
         ? Math.round((price / selectedRate.rate) * 4) / 4
         : null
@@ -225,6 +226,7 @@ export default function RateSessionScreen() {
       const rate = rates.find((r: any) => r.id === rateId);
       if (!rate) return sum;
       if (rate.time_only) {
+        if (rate.fixed_hours != null) return sum + rate.fixed_hours;
         if (i.start_time && i.end_time) {
           return sum + (new Date(i.end_time).getTime() - new Date(i.start_time).getTime()) / 3600000;
         }
@@ -261,14 +263,17 @@ export default function RateSessionScreen() {
   const handleAddRate = async () => {
     const r = newRateTimeOnly ? 0 : parseFloat(newRateValue.replace(",", "."));
     if (!newRateTimeOnly && (!r || r <= 0)) return;
+    const fh = newRateTimeOnly ? parseFloat(newRateFixedHours.replace(",", ".")) : NaN;
     const created = await createRate.mutateAsync({
       rate: r,
       label: newRateLabel.trim() || undefined,
       time_only: newRateTimeOnly,
+      fixed_hours: newRateTimeOnly && fh > 0 ? fh : undefined,
     });
     setNewRateLabel("");
     setNewRateValue("");
     setNewRateTimeOnly(false);
+    setNewRateFixedHours("");
     setShowAddRate(false);
     // Sélectionner automatiquement le nouveau taux
     if (current && created?.id) {
@@ -719,6 +724,7 @@ export default function RateSessionScreen() {
           setNewRateLabel("");
           setNewRateValue("");
           setNewRateTimeOnly(false);
+          setNewRateFixedHours("");
         }}
         position="center"
       >
@@ -773,18 +779,29 @@ export default function RateSessionScreen() {
             />
           </View>
           {newRateTimeOnly ? (
-            <View
-              style={{
-                backgroundColor: isDark ? "#1E1040" : "#F5F3FF",
-                borderRadius: 12,
-                padding: 10,
-                marginBottom: 16,
-              }}
-            >
-              <Text style={{ fontSize: 12, color: "#8B5CF6" }}>
-                Comptabilise les heures de travail uniquement.
-              </Text>
-            </View>
+            <>
+              <View
+                style={{
+                  backgroundColor: isDark ? "#1E1040" : "#F5F3FF",
+                  borderRadius: 12,
+                  padding: 10,
+                  marginBottom: 10,
+                }}
+              >
+                <Text style={{ fontSize: 12, color: "#8B5CF6" }}>
+                  Comptabilise les heures de travail uniquement.
+                </Text>
+              </View>
+              <TextInput
+                placeholder="Forfait d'heures fixe (ex: 16, optionnel)"
+                placeholderTextColor={isDark ? "#64748B" : "#94A3B8"}
+                value={newRateFixedHours}
+                onChangeText={(v) => setNewRateFixedHours(v.replace(/[^0-9.,]/g, ""))}
+                keyboardType="decimal-pad"
+                inputAccessoryViewID="rate-input-accessory"
+                style={[inputStyle, { marginBottom: 16 }]}
+              />
+            </>
           ) : (
             <TextInput
               placeholder="Taux €/h (ex: 50)"

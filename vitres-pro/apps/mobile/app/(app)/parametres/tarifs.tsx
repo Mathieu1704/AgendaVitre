@@ -44,20 +44,24 @@ export default function TarifsScreen() {
   const [newRate, setNewRate] = useState("");
   const [newLabel, setNewLabel] = useState("");
   const [newTimeOnly, setNewTimeOnly] = useState(false);
+  const [newFixedHours, setNewFixedHours] = useState("");
   const [toDelete, setToDelete] = useState<HourlyRate | null>(null);
 
   const handleAdd = async () => {
     const r = newTimeOnly ? 0 : parseFloat(newRate.replace(",", "."));
     if (!newTimeOnly && (!r || r <= 0))
       return toast.error("Erreur", "Taux invalide.");
+    const fh = newTimeOnly ? parseFloat(newFixedHours.replace(",", ".")) : NaN;
     await createRate.mutateAsync({
       rate: r,
       label: newLabel.trim() || undefined,
       time_only: newTimeOnly,
+      fixed_hours: newTimeOnly && fh > 0 ? fh : undefined,
     });
     setNewRate("");
     setNewLabel("");
     setNewTimeOnly(false);
+    setNewFixedHours("");
     toast.success(
       "Ajouté",
       newTimeOnly ? "Taux temps interne ajouté." : `${r} €/h ajouté.`,
@@ -201,17 +205,27 @@ export default function TarifsScreen() {
               />
             </View>
             {newTimeOnly ? (
-              <View
-                style={{
-                  backgroundColor: isDark ? "#1E1040" : "#F5F3FF",
-                  borderRadius: 12,
-                  padding: 10,
-                }}
-              >
-                <Text style={{ fontSize: 13, color: "#8B5CF6" }}>
-                  Ce taux comptabilise les heures de travail uniquement.
-                </Text>
-              </View>
+              <>
+                <View
+                  style={{
+                    backgroundColor: isDark ? "#1E1040" : "#F5F3FF",
+                    borderRadius: 12,
+                    padding: 10,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, color: "#8B5CF6" }}>
+                    Ce taux comptabilise les heures de travail uniquement.
+                  </Text>
+                </View>
+                <TextInput
+                  placeholder="Forfait d'heures fixe (ex: 16, optionnel)"
+                  placeholderTextColor={isDark ? "#64748B" : "#94A3B8"}
+                  value={newFixedHours}
+                  onChangeText={(v) => setNewFixedHours(v.replace(/[^0-9.,]/g, ""))}
+                  keyboardType="decimal-pad"
+                  style={inputStyle}
+                />
+              </>
             ) : (
               <TextInput
                 placeholder="Taux €/h (ex: 50)"
@@ -335,7 +349,7 @@ export default function TarifsScreen() {
                                 color: "#8B5CF6",
                               }}
                             >
-                              0 €
+                              {r.fixed_hours != null ? `${r.fixed_hours}h forfait` : "0 €"}
                             </Text>
                           </View>
                         </View>

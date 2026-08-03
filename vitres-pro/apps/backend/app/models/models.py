@@ -66,6 +66,7 @@ class HourlyRate(Base):
     label = Column(String, nullable=True)
     rate = Column(Float, nullable=False)
     time_only = Column(Boolean, default=False, nullable=False)
+    fixed_hours = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class Employee(Base):
