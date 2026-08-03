@@ -26,6 +26,7 @@ import {
   EyeOff,
 } from "lucide-react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
+import Constants from "expo-constants";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -522,6 +523,9 @@ export default function ParametresScreen() {
                 style={{ fontSize: 12, color: isDark ? "#475569" : "#94A3B8", paddingVertical: 8 }}
               >
                 Politique de confidentialité
+              </Text>
+              <Text style={{ fontSize: 11, color: isDark ? "#334155" : "#CBD5E1" }}>
+                Version {Constants.expoConfig?.version}
               </Text>
             </View>
           </ScrollView>

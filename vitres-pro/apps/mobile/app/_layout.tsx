@@ -2,18 +2,15 @@ import { Stack } from "expo-router";
 import { PaperProvider, MD3LightTheme, MD3DarkTheme } from "react-native-paper";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import * as Sentry from "@sentry/react-native";
 import { ToastHost } from "../src/ui/toast";
 import { ThemeProvider, useTheme } from "../src/ui/components/ThemeToggle";
 import "../app.css";
 
-if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
-  Sentry.init({
-    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-    tracesSampleRate: 0.1,
-    sendDefaultPii: false,
-  });
-}
+// Sentry désactivé temporairement : le build natif 1.0.2 a été publié sans le
+// plugin Expo "@sentry/react-native/expo" dans app.json, ce qui casse le
+// module natif sur iOS (crash immédiat au lancement). Réactiver une fois
+// qu'un nouveau build natif avec le plugin correctement configuré est en
+// prod (voir app.json).
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -88,4 +85,4 @@ function RootLayout() {
   );
 }
 
-export default Sentry.wrap(RootLayout);
+export default RootLayout;
