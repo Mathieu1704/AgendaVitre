@@ -370,6 +370,12 @@ export default function AddInterventionScreen() {
   const [focusedServiceLabelId, setFocusedServiceLabelId] = useState<
     string | null
   >(null);
+  const [serviceLabelDrafts, setServiceLabelDrafts] = useState<
+    Record<string, string>
+  >({});
+  const serviceLabelTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>(
+    {},
+  );
   const [adHocItems, setAdHocItems] = useState<Item[]>([]);
   const [isAddingService, setIsAddingService] = useState(false);
   const [newServiceLabel, setNewServiceLabel] = useState("");
@@ -444,13 +450,47 @@ export default function AddInterventionScreen() {
   const ncNotesRef = useRef<TextInput>(null);
 
   // Catalogue de services du client sélectionné
+  const clientServicesQueryKey = ["client-services", selectedClient?.id];
   const { data: clientServices = [], refetch: refetchClientServices } =
     useQuery<ClientService[]>({
-      queryKey: ["client-services", selectedClient?.id],
+      queryKey: clientServicesQueryKey,
       queryFn: async () =>
         (await api.get(`/api/clients/${selectedClient!.id}/services`)).data,
       enabled: !!selectedClient?.id,
     });
+
+  const scheduleServiceLabelSave = useCallback(
+    (serviceId: string, label: string) => {
+      const clientId = selectedClient?.id;
+      if (!clientId) return;
+      if (serviceLabelTimers.current[serviceId]) {
+        clearTimeout(serviceLabelTimers.current[serviceId]);
+      }
+      serviceLabelTimers.current[serviceId] = setTimeout(async () => {
+        try {
+          await api.patch(`/api/clients/${clientId}/services/${serviceId}`, {
+            label,
+          });
+          queryClient.setQueryData<ClientService[]>(
+            clientServicesQueryKey,
+            (prev) =>
+              prev?.map((s) =>
+                s.id === serviceId ? { ...s, label } : s,
+              ) ?? prev,
+          );
+        } catch {
+          /* silently ignore */
+        } finally {
+          setServiceLabelDrafts((prev) => {
+            const next = { ...prev };
+            delete next[serviceId];
+            return next;
+          });
+        }
+      }, 500);
+    },
+    [selectedClient?.id, queryClient],
+  );
 
   // Détail du client sélectionné (dont ses autres RDV), pour avertir des doublons
   const { data: selectedClientDetail } = useQuery({
@@ -1756,18 +1796,14 @@ export default function AddInterventionScreen() {
                         </Pressable>
                         <View style={{ flex: 2 }}>
                           <TextInput
-                            value={svc.label}
+                            value={serviceLabelDrafts[svc.id] ?? svc.label}
                             placeholder="Nom du service"
-                            onChangeText={async (t) => {
-                              try {
-                                await api.patch(
-                                  `/api/clients/${selectedClient!.id}/services/${svc.id}`,
-                                  { label: t },
-                                );
-                                await refetchClientServices();
-                              } catch {
-                                /* silently ignore */
-                              }
+                            onChangeText={(t) => {
+                              setServiceLabelDrafts((prev) => ({
+                                ...prev,
+                                [svc.id]: t,
+                              }));
+                              scheduleServiceLabelSave(svc.id, t);
                             }}
                             onFocus={() => setFocusedServiceLabelId(svc.id)}
                             onBlur={() => setFocusedServiceLabelId(null)}
