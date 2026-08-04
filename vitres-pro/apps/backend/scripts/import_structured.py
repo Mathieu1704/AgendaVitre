@@ -242,6 +242,11 @@ def import_event(db, ev: dict) -> str:
         price_estimated=price if price else None,
         zone=zone,
         google_event_id=gid or None,
+        # Heure reprise telle quelle depuis la source (Google Calendar), jamais confirmée
+        # par un humain dans l'app -> toujours time_tbd=True à l'import, comme les autres
+        # scripts d'import (import_unique.py, import_db_matches.py, import_recurring.py).
+        # Le backend repasse automatiquement à False dès qu'un admin fixe une heure via l'UI.
+        time_tbd=True,
     )
     db.add(intervention)
     db.flush()
