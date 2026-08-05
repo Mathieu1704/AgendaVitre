@@ -35,5 +35,8 @@
         "EXPO_PUBLIC_SENTRY_DSN": "https://452c1aea95a707ae1c2fd020b71ab694@o4511828864270336.ingest.de.sentry.io/4511828907589712"
       }
     }
+  },
+  "submit": {
+    "production": {}
   }
 }

@@ -22,7 +22,7 @@ export interface Intervention {
   description?: string;
   start_time: string; // ISO String
   end_time: string; // ISO String
-  status: "planned" | "in_progress" | "done" | string;
+  status: "planned" | "in_progress" | "done" | "cancelled" | string;
   price_estimated?: number;
   zone: "hainaut" | "ardennes";
   recurrence_rule?: {

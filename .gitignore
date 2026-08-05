@@ -71,6 +71,37 @@ dump_*.txt
 .png/
 .jpg/
 
+####################################
+# DONNEES PRIVEES — NE JAMAIS COMMITTER
+# Le depot est public : ces fichiers contiennent des donnees
+# personnelles (employes, clients, testeurs) et des documents
+# d'entreprise. Ils restent en local uniquement.
+####################################
+Apple/
+doc/company/
+doc/factures/
+doc/*.pdf
+testeurs_gplay.csv
+Recap Paiement.docx
+MEMOIRE_PROJET.md
+# Audit de securite : enumere les faiblesses de l'app, ne pas publier
+AUDIT_SECURITE.md
+*.xlsx
+*.docx
+# Scripts backend : outillage local (imports, migrations ponctuelles, exports).
+# Contient des donnees clients et des acces DB — ne doit jamais partir sur le depot public.
+**/apps/backend/scripts/
+
+####################################
+# COPIES / ARTEFACTS LOCAUX
+####################################
+node_modules 2/
+**/node_modules [0-9]/
+logs.*.json
+.claude/
+.agents/
+skills-lock.json
+
 # Ignore les scripts locaux et secrets
 **/apps/backend/scripts/token.json
 **/apps/backend/scripts/credentials.json

@@ -54,6 +54,7 @@ const STATUS_LEFT_COLOR: Record<string, string> = {
   planned:     "#3B82F6",
   in_progress: "#F97316",
   done:        "#22C55E",
+  cancelled:   "#EF4444",
 };
 
 function snapToSlot(minutes: number, slotMin = 15): number {

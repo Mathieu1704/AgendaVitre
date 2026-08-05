@@ -5,3 +5,4 @@ apps/backend/scripts/credentials.json
 
 # Dossier builds Android hors repo
 ../Android/
+backups/

@@ -3,7 +3,7 @@ import { Text, View } from "react-native";
 import { cn } from "../../lib/utils";
 import { Platform } from "react-native";
 
-type Status = "planned" | "in_progress" | "done" | string;
+type Status = "planned" | "in_progress" | "done" | "cancelled" | string;
 
 interface StatusBadgeProps {
   status: Status;
@@ -29,6 +29,11 @@ export const StatusBadge = ({ status, className }: StatusBadgeProps) => {
       label: "Terminée",
       style: "bg-green-50 border-green-200 dark:bg-green-900/40 dark:border-green-700",
       textStyle: "text-green-700 dark:text-green-300",
+    },
+    cancelled: {
+      label: "Annulé",
+      style: "bg-red-50 border-red-200 dark:bg-red-900/40 dark:border-red-700",
+      textStyle: "text-red-700 dark:text-red-300",
     },
   };
 

@@ -1,0 +1,17 @@
+node_modules/
+Apple/
+doc/
+.agents/
+.claude/
+*.pdf
+*.docx
+*.csv
+testeurs_gplay.csv
+skills-lock.json
+MEMOIRE_PROJET.md
+vitres-pro/apps/backend/venv/
+vitres-pro/apps/backend/__pycache__/
+vitres-pro/apps/mobile/dist/
+vitres-pro/apps/mobile/.expo/
+vitres-pro/apps/mobile/android/
+vitres-pro/apps/mobile/ios/

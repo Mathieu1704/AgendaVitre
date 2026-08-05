@@ -20,9 +20,9 @@ export type InterventionGroupsCtx = {
 
 // ─── renderInterventionGroups ─────────────────────────────────────────────────
 
-const STATUS_ORDER: Record<string, number> = { in_progress: 0, planned: 1, done: 2 };
-export const STATUS_LABELS: Record<string, string> = { in_progress: "En cours", planned: "Planifié", done: "Terminé", unscheduled: "À planifier" };
-export const STATUS_COLORS: Record<string, string> = { in_progress: "#F97316", planned: "#3B82F6", done: "#22C55E", unscheduled: "#94A3B8" };
+const STATUS_ORDER: Record<string, number> = { in_progress: 0, planned: 1, done: 2, cancelled: 3 };
+export const STATUS_LABELS: Record<string, string> = { in_progress: "En cours", planned: "Planifié", done: "Terminé", cancelled: "Annulé", unscheduled: "À planifier" };
+export const STATUS_COLORS: Record<string, string> = { in_progress: "#F97316", planned: "#3B82F6", done: "#22C55E", cancelled: "#EF4444", unscheduled: "#94A3B8" };
 const TYPE_ORDER: Record<string, number> = { intervention: 0, devis: 1, tournee: 2, note: 3 };
 export const TYPE_LABELS: Record<string, string> = { intervention: "Intervention", devis: "Devis", tournee: "Tournée", note: "Note" };
 export const TYPE_COLORS: Record<string, string> = { intervention: "#3B82F6", devis: "#8B5CF6", tournee: "#F97316", note: "#64748B" };
