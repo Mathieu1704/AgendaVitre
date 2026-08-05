@@ -9,20 +9,15 @@
  * de l'employé et ferait exploser le quota AsyncStorage (~6 Mo sur Android).
  * On ne garde que la fenêtre glissante et les référentiels utiles hors ligne.
  */
-import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Query } from "@tanstack/react-query";
-
-export const PERSIST_KEY = "lvm_query_cache_v1";
+import { chunkedAsyncStoragePersister } from "./chunkedPersister";
 
 /** Durée de conservation du cache hors ligne. */
 export const PERSIST_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 
-export const queryPersister = createAsyncStoragePersister({
-  storage: AsyncStorage,
-  key: PERSIST_KEY,
-  throttleTime: 2000, // évite d'écrire à chaque frappe / refetch
-});
+// Persister découpé : une seule clé AsyncStorage ne peut pas dépasser 2 Mo sur
+// Android, ce que le cache des interventions franchit largement.
+export const queryPersister = chunkedAsyncStoragePersister;
 
 /**
  * Clés conservées hors ligne.
@@ -35,11 +30,13 @@ function isPersistableKey(key: readonly unknown[]): boolean {
 
   if (root === "interventions") return key.length > 1;
 
+  // Volontairement exclus :
+  //  - ["clients"] : ~3000 clients, inutiles hors ligne puisque chaque
+  //    intervention embarque déjà le sien ;
+  //  - ["intervention", id] : duplique la liste, dont la fiche se sert
+  //    désormais comme donnée initiale.
   return (
-    root === "intervention" ||
-    root === "clients" ||
     root === "client-services" ||
-    root === "client-detail" ||
     root === "employees" ||
     root === "company-settings" ||
     root === "hourly-rates"

@@ -82,6 +82,21 @@ export default function InterventionDetailScreen() {
   const [showItemsChecklist, setShowItemsChecklist] = useState(false);
   const [notDoneIds, setNotDoneIds] = useState<Set<string>>(new Set());
 
+  // Repli sur la liste du planning déjà en cache.
+  // La fiche a sa propre requête ; hors réseau, une intervention jamais ouverte
+  // auparavant n'a rien en cache et l'écran affichait « Intervention
+  // introuvable ». Les listes contiennent pourtant l'objet complet (client,
+  // employés, prestations) : on s'en sert comme donnée initiale.
+  const interventionFromLists = useCallback(() => {
+    const lists = queryClient.getQueriesData<any[]>({ queryKey: ["interventions"] });
+    for (const [, data] of lists) {
+      if (!Array.isArray(data)) continue;
+      const found = data.find((i) => i?.id === id);
+      if (found) return found;
+    }
+    return undefined;
+  }, [queryClient, id]);
+
   // 2. QUERY (Chargement données)
   const { data: intervention, isLoading } = useQuery({
     queryKey: ["intervention", id],
@@ -89,6 +104,10 @@ export default function InterventionDetailScreen() {
       const res = await api.get(`/api/interventions/${id}`);
       return res.data;
     },
+    initialData: interventionFromLists,
+    // Marquée périmée d'emblée : la version de la liste sert d'affichage
+    // immédiat, mais la fiche se rafraîchit dès que le réseau le permet.
+    initialDataUpdatedAt: 0,
     // Suspendu hors réseau, et tant qu'une écriture n'est pas partie : sinon le
     // sondage réécrirait l'état serveur par-dessus la mise à jour optimiste,
     // faisant clignoter la valeur que l'ouvrier vient de saisir.
