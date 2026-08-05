@@ -19,6 +19,16 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../src/lib/api";
+import { enqueue } from "../../../src/lib/offline/outbox";
+import { isOnlineNow } from "../../../src/lib/offline/network";
+import { newTempId } from "../../../src/lib/offline/idMap";
+import {
+  applyCreateReprise,
+  applyMarkDone,
+  applyServiceCreate,
+  applyServiceRename,
+  applyServiceDelete,
+} from "../../../src/lib/offline/optimistic";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
 import {
   PlusCircle,
@@ -469,18 +479,16 @@ export default function AddInterventionScreen() {
       }
       serviceLabelTimers.current[serviceId] = setTimeout(async () => {
         try {
-          await api.patch(`/api/clients/${clientId}/services/${serviceId}`, {
-            label,
+          applyServiceRename(queryClient, clientId, serviceId, label);
+          // Passe par la file : l'ancien `catch {}` avalait l'erreur, donc un
+          // renommage hors réseau était perdu sans que l'ouvrier le sache.
+          await enqueue({
+            kind: "service-rename",
+            method: "PATCH",
+            url: `/api/clients/${clientId}/services/${serviceId}`,
+            body: { label },
+            label: `Prestation « ${label} »`,
           });
-          queryClient.setQueryData<ClientService[]>(
-            clientServicesQueryKey,
-            (prev) =>
-              prev?.map((s) =>
-                s.id === serviceId ? { ...s, label } : s,
-              ) ?? prev,
-          );
-        } catch {
-          /* silently ignore */
         } finally {
           setServiceLabelDrafts((prev) => {
             const next = { ...prev };
@@ -880,8 +888,10 @@ export default function AddInterventionScreen() {
 
       const groupId = occurrences.length > 1 ? crypto.randomUUID() : undefined;
 
+      // Chaque occurrence part comme une entrée distincte, avec sa propre clé
+      // d'idempotence : un rejeu ne peut pas dupliquer une occurrence isolée.
       for (const occ of occurrences) {
-        await api.post("/api/interventions", {
+        const payload = {
           ...basePayload,
           start_time: occ.start.toISOString(),
           end_time: occ.end.toISOString(),
@@ -900,24 +910,33 @@ export default function AddInterventionScreen() {
                 }
               : null,
           recurrence_group_id: groupId ?? null,
+        };
+
+        // Affiché immédiatement dans le planning, marqué en attente de synchro.
+        applyCreateReprise(queryClient, newTempId(), payload);
+
+        await enqueue({
+          kind: "create-reprise",
+          method: "POST",
+          url: "/api/interventions",
+          body: payload,
+          label: isRepriseMode ? "RDV de reprise" : "Nouvelle intervention",
         });
       }
 
-      // Si reprise : marquer l'originale comme done
+      // Si reprise : marquer l'originale comme done.
+      // `real_end_time` a été retiré : la colonne n'existe pas dans le modèle,
+      // le champ était silencieusement ignoré par le serveur.
       if (isRepriseMode && reprise_of) {
-        const now = new Date().toISOString();
-        await api.patch(`/api/interventions/${reprise_of}`, {
-          status: "done",
-          real_end_time: now,
-          reprise_taken: true,
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["intervention", reprise_of],
+        applyMarkDone(queryClient, String(reprise_of), { repriseTaken: true });
+        await enqueue({
+          kind: "mark-done",
+          method: "PATCH",
+          url: `/api/interventions/${reprise_of}`,
+          body: { status: "done", reprise_taken: true },
+          label: "Clôture de l'intervention",
         });
       }
-
-      queryClient.invalidateQueries({ queryKey: ["interventions"] });
-      queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
 
       const msg =
         occurrences.length > 1
@@ -925,7 +944,10 @@ export default function AddInterventionScreen() {
           : isRepriseMode
             ? "RDV de reprise planifié !"
             : "Intervention créée !";
-      toast.success("Succès", msg);
+      toast.success(
+        "Succès",
+        isOnlineNow() ? msg : `${msg} Sera synchronisé au retour du réseau.`,
+      );
 
       if (isRepriseMode && reprise_of) {
         router.push({
@@ -955,13 +977,24 @@ export default function AddInterventionScreen() {
     if (!reprise_of) return;
     setIsSubmittingNoReprise(true);
     try {
-      await api.post(`/api/interventions/${reprise_of}/no-reprise`, {
-        note: noRepriseNote.trim(),
+      const note = noRepriseNote.trim();
+      applyMarkDone(queryClient, String(reprise_of), {
+        repriseTaken: false,
+        note,
       });
-      queryClient.invalidateQueries({ queryKey: ["intervention", reprise_of] });
-      queryClient.invalidateQueries({ queryKey: ["interventions"] });
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      toast.success("Enregistré", "Intervention clôturée sans reprise.");
+      await enqueue({
+        kind: "no-reprise",
+        method: "POST",
+        url: `/api/interventions/${reprise_of}/no-reprise`,
+        body: { note },
+        label: "Clôture sans reprise",
+      });
+      toast.success(
+        "Enregistré",
+        isOnlineNow()
+          ? "Intervention clôturée sans reprise."
+          : "Clôturée sans reprise. Sera synchronisé au retour du réseau.",
+      );
       router.replace({
         pathname: "/(app)/calendar",
         params: from_view ? { view: from_view, date: from_date } : {},
@@ -1695,19 +1728,37 @@ export default function AddInterventionScreen() {
                           }
                           if (selectedClient?.id) {
                             try {
-                              const newSvc: ClientService = (
-                                await api.post(
-                                  `/api/clients/${selectedClient.id}/services`,
-                                  {
-                                    label: newServiceLabel.trim(),
-                                    price: Number(newServicePrice) || 0,
-                                    position: clientServices.length,
-                                  },
-                                )
-                              ).data;
-                              await refetchClientServices();
+                              // Id temporaire : hors réseau, on ne peut pas
+                              // connaître l'id serveur. Il est utilisable tout
+                              // de suite par l'interface et remplacé à la
+                              // synchronisation (voir idMap.ts), y compris dans
+                              // le `client_service_id` de l'intervention.
+                              const tempId = newTempId();
+                              const service = {
+                                id: tempId,
+                                label: newServiceLabel.trim(),
+                                price: Number(newServicePrice) || 0,
+                                position: clientServices.length,
+                              };
+                              applyServiceCreate(
+                                queryClient,
+                                selectedClient.id,
+                                service,
+                              );
+                              await enqueue({
+                                kind: "service-create",
+                                method: "POST",
+                                url: `/api/clients/${selectedClient.id}/services`,
+                                body: {
+                                  label: service.label,
+                                  price: service.price,
+                                  position: service.position,
+                                },
+                                tempId,
+                                label: `Prestation « ${service.label} »`,
+                              });
                               setCheckedServiceIds(
-                                (prev) => new Set([...prev, newSvc.id]),
+                                (prev) => new Set([...prev, tempId]),
                               );
                             } catch {
                               toast.error("Erreur", "Impossible d'ajouter");
@@ -1863,8 +1914,10 @@ export default function AddInterventionScreen() {
                         <Pressable
                           onPress={async () => {
                             try {
-                              await api.delete(
-                                `/api/clients/${selectedClient!.id}/services/${svc.id}`,
+                              applyServiceDelete(
+                                queryClient,
+                                selectedClient!.id,
+                                svc.id,
                               );
                               setCheckedServiceIds((prev) => {
                                 const n = new Set(prev);
@@ -1876,7 +1929,12 @@ export default function AddInterventionScreen() {
                                 delete n[svc.id];
                                 return n;
                               });
-                              await refetchClientServices();
+                              await enqueue({
+                                kind: "service-delete",
+                                method: "DELETE",
+                                url: `/api/clients/${selectedClient!.id}/services/${svc.id}`,
+                                label: `Suppression « ${svc.label} »`,
+                              });
                             } catch {
                               toast.error("Erreur", "Impossible de supprimer");
                             }

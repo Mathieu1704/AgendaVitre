@@ -42,6 +42,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Imports internes
 import { api } from "../../../src/lib/api";
+import { enqueue, hasPendingWrites } from "../../../src/lib/offline/outbox";
+import { isOnlineNow } from "../../../src/lib/offline/network";
+import {
+  applyPaymentMode,
+  applyItemsDone,
+} from "../../../src/lib/offline/optimistic";
 import { toast } from "../../../src/ui/toast";
 import { Button } from "../../../src/ui/components/Button";
 import { Card, CardContent } from "../../../src/ui/components/Card";
@@ -83,9 +89,11 @@ export default function InterventionDetailScreen() {
       const res = await api.get(`/api/interventions/${id}`);
       return res.data;
     },
-    // Suspendu hors réseau : le sondage n'aboutirait pas et écraserait les
-    // mises à jour optimistes en attente de synchronisation.
-    refetchInterval: () => (onlineManager.isOnline() ? 5000 : false),
+    // Suspendu hors réseau, et tant qu'une écriture n'est pas partie : sinon le
+    // sondage réécrirait l'état serveur par-dessus la mise à jour optimiste,
+    // faisant clignoter la valeur que l'ouvrier vient de saisir.
+    refetchInterval: () =>
+      onlineManager.isOnline() && !hasPendingWrites() ? 5000 : false,
     staleTime: 0,
   });
 
@@ -174,29 +182,42 @@ export default function InterventionDetailScreen() {
     }
   };
 
+  // Les écritures passent par la file d'attente, y compris en ligne : c'est ce
+  // qui garantit l'ordre d'envoi et permet de travailler sans réseau. Le retour
+  // visuel vient de la mise à jour optimiste, plus de la réponse du serveur.
   const paymentMutation = useMutation({
-    mutationFn: async (mode: "cash" | "invoice" | "invoice_cash") =>
-      api.patch(`/api/interventions/${id}`, {
-        payment_mode: mode,
-        is_invoice: mode !== "cash",
-      }),
+    mutationFn: async (mode: "cash" | "invoice" | "invoice_cash") => {
+      applyPaymentMode(queryClient, String(id), mode);
+      await enqueue({
+        kind: "payment-mode",
+        method: "PATCH",
+        url: `/api/interventions/${id}`,
+        body: { payment_mode: mode, is_invoice: mode !== "cash" },
+        label: "Mode de paiement",
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
-      queryClient.invalidateQueries({ queryKey: ["interventions"] });
       setEditingPayment(false);
-      toast.success("Paiement mis à jour", "");
+      toast.success(
+        "Paiement mis à jour",
+        isOnlineNow() ? "" : "Sera synchronisé au retour du réseau.",
+      );
     },
     onError: () => toast.error("Erreur", "Impossible de modifier le paiement."),
   });
 
   const itemsDoneMutation = useMutation({
-    mutationFn: async (notDoneItemIds: string[]) =>
-      api.patch(`/api/interventions/${id}/items-done`, {
-        not_done_item_ids: notDoneItemIds,
-      }),
+    mutationFn: async (notDoneItemIds: string[]) => {
+      applyItemsDone(queryClient, String(id), notDoneItemIds);
+      await enqueue({
+        kind: "items-done",
+        method: "PATCH",
+        url: `/api/interventions/${id}/items-done`,
+        body: { not_done_item_ids: notDoneItemIds },
+        label: "Prestations réalisées",
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
-      queryClient.invalidateQueries({ queryKey: ["interventions"] });
       setShowItemsChecklist(false);
       router.push(`/(app)/calendar/add?reprise_of=${id}` as any);
     },

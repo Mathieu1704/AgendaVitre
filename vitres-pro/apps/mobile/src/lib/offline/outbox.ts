@@ -56,12 +56,30 @@ export type OutboxEntry = {
 type Listener = () => void;
 const listeners = new Set<Listener>();
 
+/**
+ * Nombre d'entrées en attente, maintenu en mémoire.
+ *
+ * Nécessaire en lecture synchrone : les écrans doivent pouvoir suspendre leurs
+ * sondages périodiques tant qu'une écriture n'est pas partie, sinon un refetch
+ * écraserait la mise à jour optimiste avec l'état serveur encore inchangé.
+ */
+let pendingCount = 0;
+
+export function hasPendingWrites(): boolean {
+  return pendingCount > 0;
+}
+
+async function syncPendingCount(): Promise<void> {
+  pendingCount = (await readJson<OutboxEntry[]>(QUEUE_KEY, [])).length;
+}
+
 export function subscribeOutbox(fn: Listener): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
 
 function notify() {
+  void syncPendingCount();
   listeners.forEach((fn) => {
     try {
       fn();
@@ -70,6 +88,9 @@ function notify() {
     }
   });
 }
+
+// Au démarrage, la file peut déjà contenir des entrées d'une session précédente.
+void syncPendingCount();
 
 function newOperationId(): string {
   const r = () => Math.random().toString(16).slice(2, 10);
@@ -102,6 +123,9 @@ export async function enqueue(
   const queue = await getQueue();
   queue.push(full);
   await writeJson(QUEUE_KEY, queue);
+  // Mise à jour synchrone : un écran peut interroger `hasPendingWrites()` juste
+  // après l'appel, avant que la resynchronisation asynchrone n'ait eu lieu.
+  pendingCount = queue.length;
   notify();
 
   // Sur web (hors périmètre) le stockage est un no-op : on envoie directement.
