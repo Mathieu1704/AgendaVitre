@@ -48,6 +48,7 @@ import {
   applyPaymentMode,
   applyItemsDone,
 } from "../../../src/lib/offline/optimistic";
+import { formatPrice } from "../../../src/lib/price";
 import { toast } from "../../../src/ui/toast";
 import { Button } from "../../../src/ui/components/Button";
 import { Card, CardContent } from "../../../src/ui/components/Card";
@@ -439,10 +440,10 @@ export default function InterventionDetailScreen() {
             {intervType === "intervention" && (() => {
               const mode = intervention.payment_mode || (intervention.is_invoice ? "invoice" : "cash");
               const cfg = {
-                cash:         { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${intervention.price_estimated} € maintenant.`, subColor: isDark ? "#FCA5A5" : "#DC2626" },
-                invoice_cash: { bg: isDark ? "rgba(154,52,18,0.2)" : "#FFEDD5", border: isDark ? "rgba(154,52,18,0.5)" : "#FED7AA", iconBg: "#F97316", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#FB923C" : "#C2410C", sub: `Le client doit payer ${intervention.price_estimated} € maintenant.`, subColor: isDark ? "#FDBA74" : "#EA580C" },
+                cash:         { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FCA5A5" : "#DC2626" },
+                invoice_cash: { bg: isDark ? "rgba(154,52,18,0.2)" : "#FFEDD5", border: isDark ? "rgba(154,52,18,0.5)" : "#FED7AA", iconBg: "#F97316", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#FB923C" : "#C2410C", sub: `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FDBA74" : "#EA580C" },
                 invoice:      { bg: isDark ? "rgba(21,128,61,0.15)" : "#F0FDF4", border: isDark ? "rgba(21,128,61,0.4)" : "#BBF7D0", iconBg: "#22C55E", title: "PAIEMENT PAR FACTURE", titleColor: isDark ? "#4ADE80" : "#15803D", sub: "Le client sera facturé.", subColor: isDark ? "#86EFAC" : "#16A34A" },
-              }[mode as string] ?? { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${intervention.price_estimated} € maintenant.`, subColor: isDark ? "#FCA5A5" : "#DC2626" };
+              }[mode as string] ?? { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FCA5A5" : "#DC2626" };
 
               return (
                 <View style={{ marginBottom: 12 }}>
@@ -858,7 +859,7 @@ export default function InterventionDetailScreen() {
                                     : "text-foreground dark:text-white"
                                 }`}
                               >
-                                {item.price} €
+                                {formatPrice(item.price, "0 €")}
                               </Text>
                             </View>
                           ))}
@@ -867,7 +868,7 @@ export default function InterventionDetailScreen() {
                               Total
                             </Text>
                             <Text className="text-xl font-extrabold text-primary">
-                              {intervention.price_estimated} €
+                              {formatPrice(intervention.price_estimated)}
                             </Text>
                           </View>
                         </View>
@@ -877,7 +878,7 @@ export default function InterventionDetailScreen() {
                             Prix global estimé
                           </Text>
                           <Text className="text-xl font-extrabold text-primary">
-                            {intervention.price_estimated} €
+                            {formatPrice(intervention.price_estimated)}
                           </Text>
                         </View>
                       )}
@@ -1029,7 +1030,7 @@ export default function InterventionDetailScreen() {
                     {item.label}
                   </Text>
                   <Text style={{ fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B" }}>
-                    {item.price} €
+                    {formatPrice(item.price, "0 €")}
                   </Text>
                 </Pressable>
               );

@@ -34,6 +34,14 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       retry: 1,
     },
+    mutations: {
+      // Indispensable : par défaut React Query met les mutations en pause hors
+      // réseau, donc mutationFn n'est jamais appelée et l'interface reste
+      // bloquée sur un indicateur de chargement. Nos mutations n'écrivent
+      // qu'en local (elles empilent dans la file d'attente, qui se charge
+      // ensuite de l'envoi) : elles doivent toujours s'exécuter.
+      networkMode: "always",
+    },
   },
 });
 
