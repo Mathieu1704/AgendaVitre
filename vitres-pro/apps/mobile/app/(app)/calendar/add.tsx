@@ -24,6 +24,7 @@ import { isOnlineNow } from "../../../src/lib/offline/network";
 import { newTempId } from "../../../src/lib/offline/idMap";
 import {
   applyCreateReprise,
+  applyEditIntervention,
   applyMarkDone,
   applyServiceCreate,
   applyServiceRename,
@@ -858,16 +859,26 @@ export default function AddInterventionScreen() {
           startIso = startParsed.toISOString();
           endIso = endParsed.toISOString();
         }
-        await api.patch(`/api/interventions/${id}`, {
+        const editPayload = {
           ...basePayload,
           start_time: startIso,
           end_time: endIso,
           time_tbd: isAdmin ? timeTbd : true,
+        };
+        applyEditIntervention(queryClient, String(id), editPayload);
+        await enqueue({
+          kind: "edit-intervention",
+          method: "PATCH",
+          url: `/api/interventions/${id}`,
+          body: editPayload,
+          label: "Modification de l'intervention",
         });
-        queryClient.invalidateQueries({ queryKey: ["interventions"] });
-        queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
-        queryClient.invalidateQueries({ queryKey: ["intervention", id] });
-        toast.success("Succès", "Intervention modifiée !");
+        toast.success(
+          "Succès",
+          isOnlineNow()
+            ? "Intervention modifiée !"
+            : "Modifiée. Sera synchronisée au retour du réseau.",
+        );
         router.push(`/(app)/calendar/${id}` as any);
         return;
       }

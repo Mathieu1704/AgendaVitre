@@ -142,6 +142,45 @@ export function applyCreateReprise(
   });
 }
 
+/**
+ * Modification d'une intervention.
+ *
+ * Le payload est au format d'envoi : on ne recopie que les champs directement
+ * affichables, en reconstituant employés et prestations comme à la création.
+ */
+export function applyEditIntervention(
+  qc: QueryClient,
+  interventionId: string,
+  payload: Record<string, any>,
+): void {
+  const allEmployees = qc.getQueryData<any[]>(["employees"]) ?? [];
+  const employees = Array.isArray(payload.employee_ids)
+    ? payload.employee_ids
+        .map((eid: string) => allEmployees.find((e) => e?.id === eid))
+        .filter(Boolean)
+    : undefined;
+
+  patchIntervention(qc, interventionId, (current) => ({
+    ...current,
+    ...payload,
+    // `employee_ids` n'existe pas côté lecture : on le retire pour ne pas
+    // laisser traîner un champ hybride dans le cache.
+    employee_ids: undefined,
+    employees: employees ?? current.employees,
+  }));
+}
+
+/** Retrait immédiat d'une intervention supprimée. */
+export function applyDeleteIntervention(
+  qc: QueryClient,
+  interventionId: string,
+): void {
+  qc.setQueriesData<AnyIntervention[]>({ queryKey: ["interventions"] }, (prev) =>
+    Array.isArray(prev) ? prev.filter((i) => i?.id !== interventionId) : prev,
+  );
+  qc.removeQueries({ queryKey: ["intervention", interventionId] });
+}
+
 // --- Catalogue de prestations du client -------------------------------------
 
 export function applyServiceCreate(

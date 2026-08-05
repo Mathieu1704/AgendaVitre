@@ -31,11 +31,13 @@ const FAILED_KEY = "lvm_outbox_failed_v1";
 const MAX_ATTEMPTS = 8;
 
 export type OutboxKind =
-  | "payment-mode"     // mode de paiement / encaissement
-  | "items-done"       // prestations réalisées à la clôture
-  | "create-reprise"   // création du RDV de reprise
-  | "mark-done"        // marquage terminé + reprise prise
-  | "no-reprise"       // clôture sans reprise
+  | "payment-mode"        // mode de paiement / encaissement
+  | "items-done"          // prestations réalisées à la clôture
+  | "create-reprise"      // création du RDV de reprise
+  | "mark-done"           // marquage terminé + reprise prise
+  | "no-reprise"          // clôture sans reprise
+  | "edit-intervention"   // modification (admin)
+  | "delete-intervention" // suppression (admin)
   | "service-create"
   | "service-rename"
   | "service-delete";
@@ -211,6 +213,15 @@ function isPermanentFailure(error: any): boolean {
   return status >= 400 && status < 500;
 }
 
+/**
+ * Une suppression rejouée sur une ressource déjà supprimée renvoie 404.
+ * L'état visé est pourtant atteint : la traiter comme un échec ferait
+ * apparaître une alerte rouge alors que tout s'est bien passé.
+ */
+function isAlreadyApplied(entry: OutboxEntry, error: any): boolean {
+  return entry.method === "DELETE" && error?.response?.status === 404;
+}
+
 async function moveToFailed(entry: OutboxEntry, message: string): Promise<void> {
   const failed = await getFailed();
   failed.push({ ...entry, lastError: message });
@@ -289,6 +300,13 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
       } catch (error: any) {
         const message =
           error?.response?.data?.detail ?? error?.message ?? "Erreur inconnue";
+
+        if (isAlreadyApplied(entry, error)) {
+          await writeJson(QUEUE_KEY, (await getQueue()).slice(1));
+          sent++;
+          notify();
+          continue;
+        }
 
         if (isPermanentFailure(error)) {
           await moveToFailed(entry, String(message));

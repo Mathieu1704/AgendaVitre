@@ -47,6 +47,7 @@ import { isOnlineNow } from "../../../src/lib/offline/network";
 import {
   applyPaymentMode,
   applyItemsDone,
+  applyDeleteIntervention,
 } from "../../../src/lib/offline/optimistic";
 import { formatPrice } from "../../../src/lib/price";
 import { toast } from "../../../src/ui/toast";
@@ -147,25 +148,27 @@ export default function InterventionDetailScreen() {
   // 3. MUTATIONS (Doivent être déclarées AVANT les returns conditionnels)
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      return await api.delete(`/api/interventions/${id}`);
-    },
-    onMutate: () => {
-      // Suppression optimiste : retire l'item du cache immédiatement
-      queryClient.setQueryData(["interventions"], (old: any[]) =>
-        Array.isArray(old) ? old.filter((i) => i.id !== id) : old,
-      );
+      applyDeleteIntervention(queryClient, String(id));
+      await enqueue({
+        kind: "delete-intervention",
+        method: "DELETE",
+        url: `/api/interventions/${id}`,
+        label: "Suppression de l'intervention",
+      });
     },
     onSuccess: () => {
-      toast.success("Supprimé", "Intervention supprimée.");
-      queryClient.invalidateQueries({ queryKey: ["interventions"] });
-      queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
+      toast.success(
+        "Supprimé",
+        isOnlineNow()
+          ? "Intervention supprimée."
+          : "Supprimée. Sera synchronisée au retour du réseau.",
+      );
       router.push({
         pathname: "/(app)/calendar",
         params: from_view ? { view: from_view, date: from_date } : {},
       });
     },
     onError: () => {
-      // En cas d'erreur, on recharge pour restaurer l'état correct
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
       toast.error("Erreur", "Impossible de supprimer.");
     },
