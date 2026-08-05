@@ -92,9 +92,28 @@ function notify() {
 // Au démarrage, la file peut déjà contenir des entrées d'une session précédente.
 void syncPendingCount();
 
+/**
+ * UUID v4.
+ *
+ * Le serveur valide ce champ comme un UUID (`Optional[UUID]` côté Pydantic) :
+ * un format approximatif est rejeté en 422, donc traité comme une erreur
+ * définitive par la file. Le format 8-4-4-4-12 doit être exact.
+ */
 function newOperationId(): string {
-  const r = () => Math.random().toString(16).slice(2, 10);
-  return `${r()}${r()}-${r().slice(0, 4)}-4${r().slice(0, 3)}-a${r().slice(0, 3)}-${r()}${r().slice(0, 4)}`;
+  const hex = "0123456789abcdef";
+  let out = "";
+  for (let i = 0; i < 36; i++) {
+    if (i === 8 || i === 13 || i === 18 || i === 23) {
+      out += "-";
+    } else if (i === 14) {
+      out += "4"; // version
+    } else if (i === 19) {
+      out += hex[(Math.floor(Math.random() * 16) & 0x3) | 0x8]; // variante
+    } else {
+      out += hex[Math.floor(Math.random() * 16)];
+    }
+  }
+  return out;
 }
 
 export async function getQueue(): Promise<OutboxEntry[]> {
@@ -281,13 +300,25 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
   return { sent, failed, remaining: (await getQueue()).length };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Remet les entrées en échec en fin de file (action « réessayer »). */
 export async function retryFailed(): Promise<void> {
   const failed = await getFailed();
   if (failed.length === 0) return;
 
   const queue = await getQueue();
-  queue.push(...failed.map((e) => ({ ...e, attempts: 0, lastError: undefined })));
+  queue.push(
+    ...failed.map((e) => ({
+      ...e,
+      // Un identifiant mal formé est rejeté en validation par le serveur : le
+      // réessai échouerait à l'identique indéfiniment. L'opération n'ayant
+      // jamais abouti, en regénérer un est sans risque de doublon.
+      id: UUID_RE.test(e.id) ? e.id : newOperationId(),
+      attempts: 0,
+      lastError: undefined,
+    })),
+  );
   await writeJson(QUEUE_KEY, queue);
   await writeJson(FAILED_KEY, []);
   notify();

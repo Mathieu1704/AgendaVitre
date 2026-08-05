@@ -48,14 +48,22 @@ export function OfflineBanner({ topInset = 0 }: Props) {
     );
   }
 
-  // En ligne, des échecs définitifs à traiter
+  // En ligne, des échecs définitifs à traiter.
+  // La raison est affichée : sans elle, l'utilisateur ne peut que réessayer à
+  // l'aveugle, et le développeur n'a aucun élément de diagnostic.
   if (hasFailed) {
+    const reason = failed.find((f) => f.lastError)?.lastError;
+    const what = failed[0]?.label;
     return (
       <Bar
         topInset={topInset}
         background="#7F1D1D"
         icon={<AlertTriangle size={14} color="#FECACA" />}
-        text={`${failed.length} modification${plural(failed.length)} non enregistrée${plural(failed.length)}`}
+        text={
+          `${failed.length} modification${plural(failed.length)} non enregistrée${plural(failed.length)}` +
+          (what ? ` — ${what}` : "") +
+          (reason ? ` (${reason})` : "")
+        }
         action={{
           label: "Réessayer",
           onPress: async () => {
