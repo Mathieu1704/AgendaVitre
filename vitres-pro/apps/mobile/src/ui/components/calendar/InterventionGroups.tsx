@@ -67,8 +67,11 @@ export function buildFlatRows(
     statusGroups.push({ status: "unscheduled", items: sortItems(unscheduled) });
   }
 
-  for (const sg of statusGroups) {
-    rows.push({ kind: "status-header", status: sg.status, count: sg.items.length, key: `sh-${sg.status}` });
+  // Comme pour renderInterventionGroups : les blocs sont des suites
+  // consécutives, un même couple (statut, type) peut donc revenir plus loin.
+  // La position est intégrée aux clés pour qu'elles restent uniques.
+  for (const [sgIdx, sg] of statusGroups.entries()) {
+    rows.push({ kind: "status-header", status: sg.status, count: sg.items.length, key: `sh-${sg.status}-${sgIdx}` });
 
     const typeGroups: { type: string; items: any[] }[] = [];
     for (const item of sg.items) {
@@ -79,9 +82,9 @@ export function buildFlatRows(
     }
     const multipleTypes = typeGroups.length > 1;
 
-    for (const tg of typeGroups) {
+    for (const [tgIdx, tg] of typeGroups.entries()) {
       if (multipleTypes || tg.type !== "intervention") {
-        rows.push({ kind: "type-header", type: tg.type, key: `th-${sg.status}-${tg.type}` });
+        rows.push({ kind: "type-header", type: tg.type, key: `th-${sg.status}-${sgIdx}-${tg.type}-${tgIdx}` });
       }
 
       const szGroups: { code: string | null; items: any[] }[] = [];
@@ -93,7 +96,7 @@ export function buildFlatRows(
       }
       const hasMultipleSubZones = szGroups.length > 1 || (szGroups.length === 1 && szGroups[0].code !== null);
 
-      for (const zg of szGroups) {
+      for (const [zgIdx, zg] of szGroups.entries()) {
         const sz = zg.code ? subZoneMap.get(zg.code) : null;
         const barColor = sz?.color ?? "#CBD5E1";
 
@@ -105,7 +108,7 @@ export function buildFlatRows(
             color: barColor,
             items: zg.items,
             dateStr,
-            key: `zh-${sg.status}-${tg.type}-${zg.code}`,
+            key: `zh-${sg.status}-${sgIdx}-${tg.type}-${tgIdx}-${zg.code}-${zgIdx}`,
           });
         }
 
@@ -151,7 +154,10 @@ export function renderInterventionGroups(
     groups.push({ status: "unscheduled", items: sortItems(unscheduled) });
   }
 
-  return groups.map((group) => {
+  // Les blocs sont construits par suites consécutives, pas par valeur unique :
+  // dans le groupe « À planifier », qui mélange tous les statuts, un même type
+  // peut réapparaître dans un bloc ultérieur. La position rend la clé unique.
+  return groups.map((group, groupIdx) => {
     const typeGroups: { type: string; items: typeof sorted }[] = [];
     for (const item of group.items) {
       const t = item.type ?? "intervention";
@@ -162,7 +168,7 @@ export function renderInterventionGroups(
     const multipleTypes = typeGroups.length > 1;
 
     return (
-      <View key={group.status} style={compact ? {} : { marginBottom: 8 }}>
+      <View key={`${group.status}-${groupIdx}`} style={compact ? {} : { marginBottom: 8 }}>
         {!compact && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6, marginTop: 4 }}>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: STATUS_COLORS[group.status] ?? "#94A3B8" }} />
@@ -172,7 +178,7 @@ export function renderInterventionGroups(
             <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "#1E293B" : "#F1F5F9", marginLeft: 4 }} />
           </View>
         )}
-        {typeGroups.map((tg) => {
+        {typeGroups.map((tg, tgIdx) => {
           const szGroups: { code: string | null; items: typeof sorted }[] = [];
           for (const item of tg.items) {
             const code = item.sub_zone ?? null;
@@ -183,7 +189,7 @@ export function renderInterventionGroups(
           const hasMultipleSubZones = szGroups.length > 1 || (szGroups.length === 1 && szGroups[0].code !== null);
 
           return (
-            <View key={tg.type}>
+            <View key={`${tg.type}-${tgIdx}`}>
               {!compact && (multipleTypes || tg.type !== "intervention") && (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 5, marginTop: 2, marginLeft: 8 }}>
                   <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: TYPE_COLORS[tg.type] ?? "#94A3B8" }} />
