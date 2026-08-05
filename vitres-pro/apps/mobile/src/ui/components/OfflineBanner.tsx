@@ -10,7 +10,7 @@
  *  - en ligne mais des modifications restent à envoyer ;
  *  - en ligne et des modifications ont définitivement échoué.
  */
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { CloudOff, RefreshCw, AlertTriangle } from "lucide-react-native";
 import { useIsOnline } from "../../lib/offline/network";
@@ -20,14 +20,35 @@ import { isOfflineSupported } from "../../lib/offline/storage";
 
 type Props = { topInset?: number };
 
+/**
+ * Délai avant d'annoncer une synchronisation en cours.
+ *
+ * En ligne, l'envoi aboutit en une fraction de seconde : afficher le bandeau
+ * immédiatement le ferait clignoter à chaque action, pour rien. On ne le montre
+ * donc que si l'attente se prolonge — cas d'un retour de réseau avec une file
+ * conséquente, où un envoi silencieux serait au contraire inquiétant.
+ */
+const SYNC_NOTICE_DELAY = 2000;
+
 export function OfflineBanner({ topInset = 0 }: Props) {
   const online = useIsOnline();
   const { pending, failed, refresh } = useOutboxSync();
+  const [syncTakingLong, setSyncTakingLong] = useState(false);
+
+  useEffect(() => {
+    if (!online || pending === 0) {
+      setSyncTakingLong(false);
+      return;
+    }
+    const timer = setTimeout(() => setSyncTakingLong(true), SYNC_NOTICE_DELAY);
+    return () => clearTimeout(timer);
+  }, [online, pending]);
 
   if (!isOfflineSupported) return null;
 
   const hasFailed = failed.length > 0;
-  const nothingToShow = online && pending === 0 && !hasFailed;
+  const nothingToShow =
+    online && !hasFailed && (pending === 0 || !syncTakingLong);
   if (nothingToShow) return null;
 
   const plural = (n: number) => (n > 1 ? "s" : "");
