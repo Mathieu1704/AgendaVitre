@@ -57,6 +57,31 @@ type Listener = () => void;
 const listeners = new Set<Listener>();
 
 /**
+ * Abonnés notifiés après un envoi effectif.
+ *
+ * `enqueue` déclenche le vidage de la file directement quand le réseau est là.
+ * Sans ce signal, rien ne rafraîchissait les données après coup : l'entrée
+ * provisoire insérée en optimiste restait affichée telle quelle, sans les
+ * champs que seul le serveur calcule.
+ */
+const flushedListeners = new Set<Listener>();
+
+export function subscribeFlushed(fn: Listener): () => void {
+  flushedListeners.add(fn);
+  return () => flushedListeners.delete(fn);
+}
+
+function notifyFlushed() {
+  flushedListeners.forEach((fn) => {
+    try {
+      fn();
+    } catch {
+      /* un abonné défaillant ne doit pas interrompre les autres */
+    }
+  });
+}
+
+/**
  * Nombre d'entrées en attente, maintenu en mémoire.
  *
  * Nécessaire en lecture synchrone : les écrans doivent pouvoir suspendre leurs
@@ -296,6 +321,8 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
   } finally {
     flushing = false;
   }
+
+  if (sent > 0) notifyFlushed();
 
   return { sent, failed, remaining: (await getQueue()).length };
 }

@@ -105,11 +105,32 @@ export function applyCreateReprise(
   tempId: string,
   payload: Record<string, any>,
 ): void {
+  // Le payload est au format d'envoi (`employee_ids`, `client_id`), pas au
+  // format de lecture attendu par les cartes du planning (`employees`,
+  // `client`). Sans cette reconstitution, la carte s'affiche nue — sans nom
+  // d'ouvrier, sans couleur ni adresse — jusqu'au prochain rechargement.
+  const allEmployees = qc.getQueryData<any[]>(["employees"]) ?? [];
+  const employees = Array.isArray(payload.employee_ids)
+    ? payload.employee_ids
+        .map((eid: string) => allEmployees.find((e) => e?.id === eid))
+        .filter(Boolean)
+    : (payload.employees ?? []);
+
+  let client = payload.client;
+  if (!client && payload.client_id) {
+    const allClients = qc.getQueryData<any[]>(["clients"]) ?? [];
+    client =
+      allClients.find((c) => c?.id === payload.client_id) ??
+      qc.getQueryData<any>(["client-detail", payload.client_id]) ??
+      undefined;
+  }
+
   const provisional: AnyIntervention = {
     ...payload,
     id: tempId,
     status: payload.status ?? "planned",
-    employees: payload.employees ?? [],
+    employees,
+    client,
     items: payload.items ?? [],
     pending_sync: true,
   };

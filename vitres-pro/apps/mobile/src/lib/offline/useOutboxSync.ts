@@ -15,6 +15,7 @@ import {
   getPendingCount,
   getFailed,
   subscribeOutbox,
+  subscribeFlushed,
   type OutboxEntry,
 } from "./outbox";
 import { isOfflineSupported } from "./storage";
@@ -29,17 +30,20 @@ export function useOutboxSync() {
     setFailed(await getFailed());
   }, []);
 
+  // Remplace les données optimistes par l'état réel du serveur : lui seul
+  // calcule la sous-zone, les identifiants définitifs et les totaux.
+  const resync = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["interventions"] });
+    queryClient.invalidateQueries({ queryKey: ["intervention"] });
+    queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["notifications"] });
+  }, [queryClient]);
+
   const run = useCallback(async () => {
     const result = await flush();
-    // Après une synchronisation effective, on resynchronise depuis le serveur :
-    // les mises à jour optimistes locales sont remplacées par l'état réel.
-    if (result.sent > 0) {
-      queryClient.invalidateQueries({ queryKey: ["interventions"] });
-      queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-    }
+    if (result.sent > 0) resync();
     await refresh();
-  }, [queryClient, refresh]);
+  }, [resync, refresh]);
 
   useEffect(() => {
     if (!isOfflineSupported) return;
@@ -55,6 +59,13 @@ export function useOutboxSync() {
       void refresh();
     });
 
+    // `enqueue` vide la file de lui-même quand le réseau est disponible :
+    // sans cet abonnement, cet envoi-là ne déclencherait aucun rafraîchissement.
+    const unsubFlushed = subscribeFlushed(() => {
+      resync();
+      void refresh();
+    });
+
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active" && onlineManager.isOnline()) void run();
     });
@@ -62,9 +73,10 @@ export function useOutboxSync() {
     return () => {
       unsubOnline();
       unsubQueue();
+      unsubFlushed();
       sub.remove();
     };
-  }, [run, refresh]);
+  }, [run, refresh, resync]);
 
   return { pending, failed, sync: run, refresh };
 }
