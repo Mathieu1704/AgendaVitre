@@ -84,8 +84,8 @@ doc/*.pdf
 testeurs_gplay.csv
 Recap Paiement.docx
 MEMOIRE_PROJET.md
-# Audit de securite : enumere les faiblesses de l'app, ne pas publier
-AUDIT_SECURITE.md
+# Toute la doc interne reste locale (audits, checklists, guides, notes)
+*.md
 *.xlsx
 *.docx
 # Scripts backend : outillage local (imports, migrations ponctuelles, exports).
