@@ -40,6 +40,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 // Imports internes
 import { api } from "../../../src/lib/api";
 import {
+  monthRangeStart,
+  monthRangeEnd,
+  yearRangeStart,
+  yearRangeEnd,
+} from "../../../src/lib/calendarRange";
+import {
   toISODate,
   addMonths,
   addDays,
@@ -322,32 +328,22 @@ export default function CalendarScreen() {
   }, [params.date]);
 
   // --- PLAGE DE DATES selon la vue active ---
-  const rangeStart = useMemo(() => {
-    if (viewMode === "year")
-      return new Date(cursorDate.getFullYear(), 0, 1).toISOString();
-    const d = new Date(cursorDate);
-    d.setMonth(d.getMonth() - 1);
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString();
-  }, [viewMode, cursorDate.getFullYear(), cursorDate.getMonth()]);
+  // Calcul partagé avec le prefetch de démarrage (src/lib/calendarRange.ts) :
+  // les clés de cache doivent être identiques pour que le planning s'affiche
+  // hors réseau.
+  const rangeStart = useMemo(
+    () =>
+      viewMode === "year"
+        ? yearRangeStart(cursorDate)
+        : monthRangeStart(cursorDate),
+    [viewMode, cursorDate.getFullYear(), cursorDate.getMonth()],
+  );
 
-  const rangeEnd = useMemo(() => {
-    if (viewMode === "year")
-      return new Date(
-        cursorDate.getFullYear(),
-        11,
-        31,
-        23,
-        59,
-        59,
-      ).toISOString();
-    const d = new Date(cursorDate);
-    d.setMonth(d.getMonth() + 2);
-    d.setDate(0);
-    d.setHours(23, 59, 59, 999);
-    return d.toISOString();
-  }, [viewMode, cursorDate.getFullYear(), cursorDate.getMonth()]);
+  const rangeEnd = useMemo(
+    () =>
+      viewMode === "year" ? yearRangeEnd(cursorDate) : monthRangeEnd(cursorDate),
+    [viewMode, cursorDate.getFullYear(), cursorDate.getMonth()],
+  );
 
   // --- DATA ---
   const [isRefreshing, setIsRefreshing] = useState(false);

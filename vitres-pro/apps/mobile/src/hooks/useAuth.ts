@@ -1,54 +1,89 @@
 import { useState, useEffect } from "react";
-import { Platform } from "react-native";
 import { supabase } from "../lib/supabase";
 import { Session } from "@supabase/supabase-js";
 import { api } from "../lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, onlineManager } from "@tanstack/react-query";
 import { router } from "expo-router";
-
-const ROLE_KEY = "lvm_cached_role";
-
-function getCachedRole(): boolean {
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    return localStorage.getItem(ROLE_KEY) === "admin";
-  }
-  return false;
-}
-
-function setCachedRole(role: string) {
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    localStorage.setItem(ROLE_KEY, role);
-  }
-}
-
-function clearCachedRole() {
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    localStorage.removeItem(ROLE_KEY);
-  }
-}
+import {
+  loadProfile,
+  saveProfile,
+  clearProfile,
+  readProfileSync,
+} from "../lib/offline/profileCache";
+import { clearOutbox } from "../lib/offline/outbox";
+import { clearIdMap } from "../lib/offline/idMap";
+import { queryPersister } from "../lib/offline/persist";
 
 export const useAuth = () => {
+  const initial = readProfileSync(); // synchrone sur web uniquement
   const [session, setSession] = useState<Session | null>(null);
-  const [isAdmin, setIsAdmin] = useState(() => getCachedRole());
-  const [userZone, setUserZone] = useState<"hainaut" | "ardennes">("hainaut");
-  const [userName, setUserName] = useState<string>("");
+  const [isAdmin, setIsAdmin] = useState(initial?.role === "admin");
+  const [userZone, setUserZone] = useState<"hainaut" | "ardennes">(
+    initial?.zone ?? "hainaut",
+  );
+  const [userName, setUserName] = useState<string>(initial?.fullName ?? "");
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();
 
   useEffect(() => {
+    let cancelled = false;
+
+    const applyProfile = (p: {
+      role: string;
+      zone: "hainaut" | "ardennes";
+      fullName: string;
+    }) => {
+      if (cancelled) return;
+      setIsAdmin(p.role === "admin");
+      setUserZone(p.zone);
+      setUserName(p.fullName);
+    };
+
+    // Réhydratation depuis le cache : sur natif la lecture est asynchrone, donc
+    // on l'applique dès que possible pour ne pas afficher un état dégradé le
+    // temps de la requête réseau (ou indéfiniment, si elle échoue).
+    const hydrate = async () => {
+      const cached = await loadProfile();
+      if (cached) applyProfile(cached);
+      return cached;
+    };
+
     const checkRole = async () => {
+      const cached = await hydrate();
       try {
         const me = (await api.get("/api/employees/me")).data;
-        const role = me?.role ?? "employee";
-        setIsAdmin(role === "admin");
-        setCachedRole(role);
-        setUserZone(me?.zone === "ardennes" ? "ardennes" : "hainaut");
-        setUserName(me?.full_name ?? "");
+        const profile = {
+          role: me?.role ?? "employee",
+          zone: (me?.zone === "ardennes" ? "ardennes" : "hainaut") as
+            | "hainaut"
+            | "ardennes",
+          fullName: me?.full_name ?? "",
+        };
+        applyProfile(profile);
+        await saveProfile(profile);
       } catch {
-        setIsAdmin(false);
+        // Hors réseau, on conserve le profil en cache : le remettre à zéro
+        // ferait perdre à l'ouvrier son rôle et sa zone alors qu'ils sont
+        // connus. On ne retombe sur "employee" que sans cache du tout.
+        if (!cached && !cancelled) setIsAdmin(false);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
+    };
+
+    const signOutLocal = async () => {
+      setSession(null);
+      setIsAdmin(false);
+      setLoading(false);
+      await clearProfile();
+      await clearOutbox();
+      await clearIdMap();
+      queryClient.clear();
+      // `queryClient.clear()` ne touche pas au cache persisté : sans cette
+      // ligne, les données du compte précédent seraient restaurées au
+      // prochain démarrage.
+      await queryPersister.removeClient();
+      router.replace("/(auth)/login");
     };
 
     // 1. Session initiale — si le refresh token est invalide, on déconnecte proprement
@@ -67,16 +102,20 @@ export const useAuth = () => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED" && !session) {
-        // Token expiré ou révoqué : nettoyer et rediriger silencieusement
-        setSession(null);
-        setIsAdmin(false);
-        setLoading(false);
-        clearCachedRole();
-        queryClient.clear();
-        router.replace("/(auth)/login");
+      const lostSession =
+        event === "SIGNED_OUT" || (event === "TOKEN_REFRESHED" && !session);
+
+      if (lostSession) {
+        // Hors réseau, le rafraîchissement de token échoue forcément : le
+        // traiter comme une déconnexion viderait le cache et renverrait
+        // l'ouvrier sur l'écran de connexion en plein chantier. Le JWT en
+        // cache reste valable, on ignore l'événement.
+        if (event === "TOKEN_REFRESHED" && !onlineManager.isOnline()) return;
+
+        void signOutLocal();
         return;
       }
+
       setSession(session);
       if (session?.user) checkRole();
       else {
@@ -85,7 +124,10 @@ export const useAuth = () => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return { session, isAdmin, userZone, userName, loading };

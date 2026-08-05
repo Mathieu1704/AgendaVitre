@@ -12,7 +12,12 @@ import {
   Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  onlineManager,
+} from "@tanstack/react-query";
 import {
   Phone,
   Mail,
@@ -78,16 +83,19 @@ export default function InterventionDetailScreen() {
       const res = await api.get(`/api/interventions/${id}`);
       return res.data;
     },
-    refetchInterval: 5000,
+    // Suspendu hors réseau : le sondage n'aboutirait pas et écraserait les
+    // mises à jour optimistes en attente de synchronisation.
+    refetchInterval: () => (onlineManager.isOnline() ? 5000 : false),
     staleTime: 0,
   });
 
   const { data: companySettings } = useQuery({
     queryKey: ["company-settings"],
     queryFn: async () => { const res = await api.get("/api/settings/company"); return res.data; },
-    staleTime: 0,
+    // Un simple drapeau d'affichage : 2 requetes/seconde etaient inutiles et
+    // generaient une rafale d'erreurs hors reseau. Un refetch au montage suffit.
+    staleTime: 30 * 1000,
     refetchOnMount: true,
-    refetchInterval: 500,
   });
   const hideCash = companySettings?.hide_cash ?? false;
 

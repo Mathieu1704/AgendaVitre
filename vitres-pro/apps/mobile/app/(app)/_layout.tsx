@@ -11,6 +11,10 @@ import { CustomTabBar } from "../../src/ui/layout/CustomTabBar";
 import { useNotifications } from "../../src/hooks/useNotifications";
 import { useAuth } from "../../src/hooks/useAuth";
 import { useTheme } from "../../src/ui/components/ThemeToggle";
+import { monthRangeStart, monthRangeEnd } from "../../src/lib/calendarRange";
+// OfflineBanner monte useOutboxSync : c'est lui qui déclenche la reprise de la
+// file au retour du réseau et au retour au premier plan.
+import { OfflineBanner } from "../../src/ui/components/OfflineBanner";
 
 import {
   LayoutDashboard,
@@ -40,10 +44,19 @@ export default function AppLayout() {
     const today = new Date().toISOString().split("T")[0];
     const STALE = 2 * 60 * 1000; // 2 min
 
-    // T+0 : interventions — données les plus utilisées (Dashboard + Planning)
+    // T+0 : interventions du planning. On charge la plage bornée plutôt que
+    // /api/interventions sans filtre : c'est la clé que l'écran Planning lit
+    // réellement, et c'est elle qui est conservée hors ligne (la requête non
+    // bornée ramène tout l'historique et n'est pas persistable).
+    const now = new Date();
+    const rangeStart = monthRangeStart(now);
+    const rangeEnd = monthRangeEnd(now);
     queryClient.prefetchQuery({
-      queryKey: ["interventions"],
-      queryFn: () => api.get("/api/interventions").then((r) => r.data),
+      queryKey: ["interventions", rangeStart, rangeEnd],
+      queryFn: () =>
+        api
+          .get("/api/interventions", { params: { start: rangeStart, end: rangeEnd } })
+          .then((r) => (Array.isArray(r.data) ? r.data : [])),
       staleTime: STALE,
     });
 
@@ -147,6 +160,8 @@ export default function AppLayout() {
   // --- RENDU MOBILE ---
   return (
     <View style={{ flex: 1, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
+      {/* Sous l'encoche : la bannière remplace les toasts par requête. */}
+      <OfflineBanner topInset={insets.top} />
       <Tabs
         screenOptions={{ headerShown: false }}
         tabBar={(props) => <CustomTabBar {...props} />}

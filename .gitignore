@@ -95,8 +95,14 @@ MEMOIRE_PROJET.md
 ####################################
 # COPIES / ARTEFACTS LOCAUX
 ####################################
+# Doublons crees par la synchronisation du dossier (schema "fichier 2.ext").
+# Dans app/, expo-router les prendrait pour des routes.
 node_modules 2/
 **/node_modules [0-9]/
+* [0-9].ts
+* [0-9].tsx
+* [0-9].py
+* [0-9].json
 logs.*.json
 .claude/
 .agents/

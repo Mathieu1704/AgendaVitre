@@ -258,9 +258,10 @@ export default function AddInterventionScreen() {
   const { data: companySettings } = useQuery({
     queryKey: ["company-settings"],
     queryFn: async () => (await api.get("/api/settings/company")).data,
-    staleTime: 0,
+    // Un simple drapeau d'affichage : 2 requetes/seconde etaient inutiles et
+    // generaient une rafale d'erreurs hors reseau. Un refetch au montage suffit.
+    staleTime: 30 * 1000,
     refetchOnMount: true,
-    refetchInterval: 500,
   });
   const hideCash = companySettings?.hide_cash ?? false;
 

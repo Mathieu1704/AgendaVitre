@@ -1,7 +1,7 @@
 import axios from "axios";
 import { router } from "expo-router";
+import { onlineManager } from "@tanstack/react-query";
 import { supabase } from "./supabase";
-import { toast } from "../ui/toast";
 
 // Pour le WEB, localhost marche.
 // Pour ANDROID Emulator, il faudra peut-être utiliser 'http://10.0.2.2:8000' plus tard.
@@ -48,7 +48,14 @@ api.interceptors.response.use(
     // réseau passager ne doit pas déclencher de popup. On ne retry jamais les
     // écritures (POST/PATCH/DELETE) pour ne pas risquer un doublon si la requête
     // avait en fait été traitée côté serveur avant le timeout.
-    if (isNetworkIssue && config?.method?.toLowerCase() === "get" && !config._retried) {
+    // Inutile de réessayer si l'appareil se sait hors ligne : la file d'attente
+    // et React Query reprendront d'eux-mêmes au retour du réseau.
+    if (
+      isNetworkIssue &&
+      config?.method?.toLowerCase() === "get" &&
+      !config._retried &&
+      onlineManager.isOnline()
+    ) {
       config._retried = true;
       try {
         return await api(config);
@@ -57,15 +64,16 @@ api.interceptors.response.use(
       }
     }
 
-    if (error.code === "ECONNABORTED") {
-      console.warn(`[timeout] ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
-      toast.error("Délai dépassé", "Le serveur ne répond pas. Réessaie.");
-    } else if (error.response?.status === 401) {
+    if (error.response?.status === 401) {
       _cachedToken = null;
       router.replace("/(auth)/login");
-    } else if (!error.response) {
-      console.warn(`[hors ligne] ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
-      toast.error("Hors ligne", "Vérifie ta connexion internet.");
+    } else if (isNetworkIssue) {
+      // Pas de toast par requête : hors réseau, le planning et les sondages
+      // périodiques en déclenchaient une rafale. L'état est signalé une seule
+      // fois par la bannière hors-ligne globale (OfflineBanner).
+      console.warn(
+        `[hors ligne] ${error.config?.method?.toUpperCase()} ${error.config?.url}`,
+      );
     }
     return Promise.reject(error);
   },
