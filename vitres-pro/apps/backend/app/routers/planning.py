@@ -34,6 +34,43 @@ def _get_employee_hours_for_day(emp: Employee, target_date: date, progressive: l
     return emp.daily_capacity
 
 
+def intervention_hours(interv) -> float:
+    """
+    Heures comptabilisées pour une intervention.
+
+    Règle métier :
+      - taux « temps de travail uniquement » avec forfait → le forfait ;
+      - taux « temps de travail uniquement » sans forfait → durée planifiée ;
+      - taux horaire en €/h → prix estimé / taux ;
+      - tout le reste → 0 (exclu du total planifié).
+
+    Doit rester alignée sur le calcul de l'écran « Session taux » côté mobile
+    (apps/mobile/app/(app)/calendar/rate-session.tsx) : les deux affichent le
+    même total à l'utilisateur.
+    """
+    if not (interv.hourly_rate_id and interv.hourly_rate):
+        return 0.0
+
+    rate = interv.hourly_rate
+
+    if rate.time_only:
+        # Le forfait prime sur la durée planifiée : c'est tout l'intérêt d'un
+        # taux forfaitaire (ex. un chantier compté 12 h quelle que soit la
+        # plage horaire posée au calendrier).
+        if rate.fixed_hours is not None:
+            return float(rate.fixed_hours)
+        if interv.start_time and interv.end_time:
+            return (interv.end_time - interv.start_time).total_seconds() / 3600
+        return 0.0
+
+    if (interv.price_estimated
+            and float(interv.price_estimated) > 0
+            and rate.rate > 0):
+        return float(interv.price_estimated) / rate.rate
+
+    return 0.0
+
+
 def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = None, sub_zone: Optional[str] = None):
     settings = db.query(CompanySettings).first()
     tolerance = settings.overtime_tolerance_hours if settings else 3.0
@@ -92,27 +129,9 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
         int_query = int_query.filter(Intervention.zone == zone)
     interventions = int_query.all()
 
-    def _intervention_hours(interv) -> float:
-        """
-        Règle métier :
-        - hourly_rate_id set + price_estimated > 0 → prix / taux
-        - time_tbd = True (reprise non-admin) → durée stockée (end - start)
-        - Tout le reste → 0 (exclu du total planifié)
-        """
-        if interv.hourly_rate_id and interv.hourly_rate:
-            if interv.hourly_rate.time_only:
-                if interv.start_time and interv.end_time:
-                    return (interv.end_time - interv.start_time).total_seconds() / 3600
-                return 0.0
-            if (interv.price_estimated
-                    and float(interv.price_estimated) > 0
-                    and interv.hourly_rate.rate > 0):
-                return float(interv.price_estimated) / interv.hourly_rate.rate
-        return 0.0
-
     total_planned = 0
     for inter in interventions:
-        hours = _intervention_hours(inter)
+        hours = intervention_hours(inter)
         if hours <= 0:
             continue
         nb_assigned = len(inter.employees)
@@ -219,16 +238,6 @@ def get_range_stats_endpoint(
             if ab.employee_id == emp_id and ab.start_date.date() <= d <= ab.end_date.date():
                 return True
         return False
-
-    def intervention_hours(iv) -> float:
-        if iv.hourly_rate_id and iv.hourly_rate:
-            if iv.hourly_rate.time_only:
-                if iv.start_time and iv.end_time:
-                    return (iv.end_time - iv.start_time).total_seconds() / 3600
-                return 0.0
-            if iv.price_estimated and float(iv.price_estimated) > 0 and iv.hourly_rate.rate > 0:
-                return float(iv.price_estimated) / iv.hourly_rate.rate
-        return 0.0
 
     results = {}
     current = start
