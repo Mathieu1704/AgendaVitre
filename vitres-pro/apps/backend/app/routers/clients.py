@@ -5,6 +5,7 @@ from uuid import UUID
 from app.models.models import get_db, Client, Intervention, ClientService
 from app.schemas.schemas import ClientCreate, ClientOut, ClientOutLite, ClientServiceCreate, ClientServiceOut, ClientServiceUpdate
 from app.core.deps import get_current_user
+from app.core.idempotency import already_processed, record_operation
 from pydantic import BaseModel
 
 class ClientUpdate(BaseModel):
@@ -107,13 +108,30 @@ def create_client_service(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    # Ouvriers autorises : ils ajustent le catalogue depuis le formulaire de reprise.
+    # Rejeu d'une operation hors-connexion : on renvoie la prestation deja creee.
+    seen = already_processed(db, payload.client_operation_id)
+    if seen is not None and seen.result_id:
+        existing = db.query(ClientService).filter(ClientService.id == seen.result_id).first()
+        if existing:
+            return existing
+
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client introuvable")
-    service = ClientService(client_id=client_id, **payload.model_dump())
+
+    service = ClientService(
+        client_id=client_id,
+        **payload.model_dump(exclude={"client_operation_id"}),
+    )
     db.add(service)
+    db.flush()  # pour disposer de l'id avant de journaliser
+
+    record_operation(
+        db, payload.client_operation_id, current_user.id,
+        f"POST /api/clients/{client_id}/services", service.id,
+    )
+
     db.commit()
     db.refresh(service)
     return service
@@ -127,8 +145,7 @@ def update_client_service(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    # Ouvriers autorises (renommage depuis le formulaire de reprise).
     service = db.query(ClientService).filter(
         ClientService.id == service_id, ClientService.client_id == client_id
     ).first()
@@ -148,12 +165,12 @@ def delete_client_service(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    # Ouvriers autorises (suppression depuis le formulaire de reprise).
     service = db.query(ClientService).filter(
         ClientService.id == service_id, ClientService.client_id == client_id
     ).first()
     if not service:
-        raise HTTPException(status_code=404, detail="Service introuvable")
+        # Deja supprime (rejeu hors-connexion) : on considere l'operation aboutie.
+        return
     db.delete(service)
     db.commit()

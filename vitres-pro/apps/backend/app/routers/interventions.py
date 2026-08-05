@@ -13,6 +13,7 @@ from app.models.models import (
 )
 from app.schemas.schemas import InterventionCreate, InterventionOut
 from app.core.deps import get_current_user
+from app.core.idempotency import already_processed, record_operation
 
 router = APIRouter()
 
@@ -123,12 +124,22 @@ def create_intervention(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
+    # Rejeu d'une operation hors-connexion deja traitee : on renvoie l'existante
+    # au lieu d'en creer une seconde.
+    seen = already_processed(db, intervention.client_operation_id)
+    if seen is not None:
+        existing = _load_intervention(seen.result_id, db) if seen.result_id else None
+        if existing:
+            return existing
+
     if intervention.client_id:
         client = db.query(Client).filter(Client.id == intervention.client_id).first()
         if not client:
             raise HTTPException(status_code=404, detail="Client introuvable")
 
-    data = intervention.model_dump(exclude={"employee_ids", "items", "reprise_of_id"})
+    data = intervention.model_dump(
+        exclude={"employee_ids", "items", "reprise_of_id", "client_operation_id"}
+    )
     if current_user.role != 'admin':
         data["zone"] = current_user.zone
         data["type"] = "intervention"
@@ -168,6 +179,13 @@ def create_intervention(
         db, "created", current_user.id, new_intervention.id,
         f"Créée: {new_intervention.title}",
         {"title": new_intervention.title},
+    )
+
+    # Journalise dans la MEME transaction que la creation : un crash entre les
+    # deux laisserait une intervention sans trace, que le rejeu dupliquerait.
+    record_operation(
+        db, intervention.client_operation_id, current_user.id,
+        "POST /api/interventions", new_intervention.id,
     )
 
     db.commit()
@@ -347,6 +365,13 @@ def no_reprise(
     """Marque l'intervention comme terminée sans reprise de RDV + notifie les admins."""
     from datetime import datetime, timezone
 
+    # Rejeu d'une operation hors-connexion : sans cette garde, chaque nouvelle
+    # tentative renverrait une notification a tous les admins.
+    op_id = payload.get("client_operation_id")
+    op_uuid = UUID(op_id) if isinstance(op_id, str) else op_id
+    if already_processed(db, op_uuid) is not None:
+        return {"message": "ok", "replayed": True}
+
     intervention = db.query(Intervention).filter(Intervention.id == intervention_id).first()
     if not intervention:
         raise HTTPException(status_code=404, detail="Introuvable")
@@ -384,6 +409,11 @@ def no_reprise(
             },
         )
         db.add(notif)
+
+    record_operation(
+        db, op_uuid, current_user.id,
+        f"POST /api/interventions/{intervention_id}/no-reprise", intervention_id,
+    )
 
     db.commit()
     return {"message": "ok"}

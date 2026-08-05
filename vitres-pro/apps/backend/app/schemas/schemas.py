@@ -125,6 +125,9 @@ class ClientServiceCreate(BaseModel):
     label: str
     price: float
     position: float = 0
+    # Id genere par la file d'attente hors-connexion du mobile : evite de creer
+    # la prestation en double si l'operation est rejouee.
+    client_operation_id: Optional[UUID] = None
 
 class ClientServiceOut(BaseModel):
     id: UUID
@@ -192,6 +195,9 @@ class InterventionBase(BaseModel):
 
 class InterventionCreate(InterventionBase):
     reprise_of_id: Optional[UUID] = None
+    # Id genere par la file d'attente hors-connexion du mobile : permet de
+    # detecter un rejeu et d'eviter de creer l'intervention en double.
+    client_operation_id: Optional[UUID] = None
 
 class InterventionOutLite(BaseModel):
     id: UUID

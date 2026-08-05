@@ -208,6 +208,14 @@ class Intervention(Base):
     recurrence_rule = Column(JSONB, nullable=True)   # {"freq":"weekly","interval":1,"count":12}
     recurrence_group_id = Column(UUID(as_uuid=True), nullable=True, index=True)
 
+    # Horodatage de modification : delta-sync et diagnostic de conflit (mode hors-connexion)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=True,
+    )
+
     # Relations
     client = relationship("Client", back_populates="interventions")
     employees = relationship("Employee", secondary=intervention_employees, back_populates="interventions")
@@ -277,3 +285,21 @@ class RawCalendarEvent(Base):
     employee = relationship("Employee", foreign_keys=[employee_id])
     linked_intervention = relationship("Intervention")
     assigned_employees = relationship("Employee", secondary="raw_event_employees")
+
+class ClientOperation(Base):
+    """
+    Journal des ecritures emises par la file d'attente hors-connexion du mobile.
+
+    Le client genere un UUID par operation et le renvoie a chaque tentative.
+    Les endpoints POST consultent cette table avant d'agir : si l'id est deja
+    present, l'operation a deja abouti (meme si le client n'a pas recu la
+    reponse) et on renvoie la ressource existante au lieu d'en creer une
+    seconde. Les PATCH n'en ont pas besoin : ils sont deja idempotents.
+    """
+    __tablename__ = "client_operations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True)  # id genere par le client
+    employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    endpoint = Column(Text, nullable=False)
+    result_id = Column(UUID(as_uuid=True), nullable=True)  # ressource creee, si applicable
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
