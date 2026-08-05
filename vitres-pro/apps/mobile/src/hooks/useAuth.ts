@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { Session } from "@supabase/supabase-js";
 import { api } from "../lib/api";
@@ -24,6 +24,9 @@ export const useAuth = () => {
   const [userName, setUserName] = useState<string>(initial?.fullName ?? "");
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();
+  // Le serveur a-t-il confirmé le profil ? Tant que non, on retente au retour
+  // du réseau : un profil issu du seul cache peut être périmé.
+  const confirmedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +64,7 @@ export const useAuth = () => {
         };
         applyProfile(profile);
         await saveProfile(profile);
+        confirmedRef.current = true;
       } catch {
         // Hors réseau, on conserve le profil en cache : le remettre à zéro
         // ferait perdre à l'ouvrier son rôle et sa zone alors qu'ils sont
@@ -124,8 +128,20 @@ export const useAuth = () => {
       }
     });
 
+    // Le rôle n'était demandé qu'au montage. Démarrée sans réseau, l'app
+    // restait donc indéfiniment sur un rôle par défaut, même une fois la
+    // connexion revenue. On retente dès le retour en ligne, tant que le
+    // serveur n'a pas confirmé le profil.
+    const unsubOnline = onlineManager.subscribe(() => {
+      if (!onlineManager.isOnline() || confirmedRef.current || cancelled) return;
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session?.user && !cancelled) void checkRole();
+      });
+    });
+
     return () => {
       cancelled = true;
+      unsubOnline();
       subscription.unsubscribe();
     };
   }, []);

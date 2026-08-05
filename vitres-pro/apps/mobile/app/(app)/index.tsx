@@ -35,6 +35,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect, Redirect, useRouter } from "expo-router";
 import { useInterventions } from "../../src/hooks/useInterventions";
 import { useClients } from "../../src/hooks/useClients";
+import { useAuth } from "../../src/hooks/useAuth";
 import { supabase } from "../../src/lib/supabase";
 import { api } from "../../src/lib/api";
 
@@ -75,25 +76,17 @@ export default function Dashboard() {
   const isDesktop = Platform.OS === "web" && width >= 1024;
 
   // ✅ État pour le rôle utilisateur
-  const [userRole, setUserRole] = useState<"admin" | "employee" | null>(null);
-  const [loadingRole, setLoadingRole] = useState(true);
-
-  // Charger le rôle de l'utilisateur
-  useEffect(() => {
-    const loadUserRole = async () => {
-      try {
-        const res = await api.get("/api/employees/me");
-        setUserRole(res.data?.role || "employee");
-      } catch (e) {
-        setUserRole("employee");
-      } finally {
-        setLoadingRole(false);
-      }
-    };
-    loadUserRole();
-  }, []);
-
-  const isAdmin = userRole === "admin";
+  // Rôle issu de useAuth, qui le met en cache localement.
+  // Cet écran refaisait sa propre requête /api/employees/me et basculait en
+  // "employee" au moindre échec, ce qui redirigeait un admin vers le Planning
+  // dès que le réseau manquait — sans jamais se rétablir ensuite, la requête
+  // n'étant lancée qu'au montage.
+  const { isAdmin, loading: loadingRole } = useAuth();
+  const userRole: "admin" | "employee" | null = loadingRole
+    ? null
+    : isAdmin
+      ? "admin"
+      : "employee";
 
   const [chartWidth, setChartWidth] = useState(300);
 
@@ -110,8 +103,8 @@ export default function Dashboard() {
   const { data: companySettings } = useQuery({
     queryKey: ["company-settings"],
     queryFn: async () => (await api.get("/api/settings/company")).data,
-    staleTime: 0,
-    refetchInterval: 500,
+    // Simple drapeau d'affichage : 2 requêtes/seconde étaient inutiles.
+    staleTime: 30 * 1000,
     refetchOnMount: true,
   });
   const hideCash = companySettings?.hide_cash ?? false;
