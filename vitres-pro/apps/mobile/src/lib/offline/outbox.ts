@@ -234,6 +234,34 @@ async function moveToFailed(entry: OutboxEntry, message: string): Promise<void> 
 }
 
 let flushing = false;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Relance automatique après un envoi resté incomplet.
+ *
+ * Le système annonce le réseau disponible avant que la route de données ne le
+ * soit réellement (sortie de tunnel, bascule wifi/mobile) : la première
+ * tentative échoue alors presque toujours. Sans cette relance, la file restait
+ * bloquée jusqu'au prochain événement réseau ou retour au premier plan — donc
+ * potentiellement très longtemps.
+ *
+ * Le délai croît avec le nombre de tentatives pour ne pas marteler le réseau.
+ */
+function scheduleRetry(attempts: number): void {
+  if (retryTimer) clearTimeout(retryTimer);
+  const delay = Math.min(30_000, 2_000 * 2 ** Math.min(attempts, 4));
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void flush();
+  }, delay);
+}
+
+function cancelRetry(): void {
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+}
 
 /**
  * Vide la file, dans l'ordre, en s'arrêtant au premier échec rejouable.
@@ -342,7 +370,19 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
 
   if (sent > 0) notifyFlushed();
 
-  return { sent, failed, remaining: (await getQueue()).length };
+  const queue = await getQueue();
+  const remaining = queue.length;
+
+  // Il reste des écritures et le réseau est censé être là : on retentera.
+  // Hors ligne, inutile de programmer quoi que ce soit — le retour de la
+  // connexion déclenchera un nouvel envoi.
+  if (remaining > 0 && isOnlineNow()) {
+    scheduleRetry(queue[0]?.attempts ?? 0);
+  } else {
+    cancelRetry();
+  }
+
+  return { sent, failed, remaining };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
