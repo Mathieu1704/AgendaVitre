@@ -12,7 +12,7 @@ import { AppState } from "react-native";
 import { onlineManager, useQueryClient } from "@tanstack/react-query";
 import {
   flush,
-  getPendingCount,
+  getQueue,
   getFailed,
   subscribeOutbox,
   subscribeFlushed,
@@ -24,9 +24,15 @@ export function useOutboxSync() {
   const queryClient = useQueryClient();
   const [pending, setPending] = useState(0);
   const [failed, setFailed] = useState<OutboxEntry[]>([]);
+  // Nombre de tentatives infructueuses sur l'entrée en tête de file. Permet de
+  // distinguer une synchronisation en cours d'un réseau qui répond mal :
+  // l'appareil peut se croire connecté alors qu'aucune requête n'aboutit.
+  const [stalledAttempts, setStalledAttempts] = useState(0);
 
   const refresh = useCallback(async () => {
-    setPending(await getPendingCount());
+    const queue = await getQueue();
+    setPending(queue.length);
+    setStalledAttempts(queue[0]?.attempts ?? 0);
     setFailed(await getFailed());
   }, []);
 
@@ -78,5 +84,5 @@ export function useOutboxSync() {
     };
   }, [run, refresh, resync]);
 
-  return { pending, failed, sync: run, refresh };
+  return { pending, failed, stalledAttempts, sync: run, refresh };
 }
