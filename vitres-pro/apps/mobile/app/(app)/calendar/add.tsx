@@ -293,6 +293,25 @@ export default function AddInterventionScreen() {
     },
   );
 
+  // Repli hors ligne : la fiche de détail vient d'être consultée pour arriver
+  // ici ("Intervention terminée"), donc l'intervention source est déjà dans le
+  // cache — soit sous ["intervention", id] (la fiche), soit dans une des
+  // listes du planning. Sans ce repli, cette requête échouait silencieusement
+  // hors réseau et le formulaire de reprise s'affichait entièrement vide
+  // (client, titre, prestations non pré-remplis).
+  const repriseSourceFromCache = useCallback(() => {
+    if (!reprise_of) return undefined;
+    const fromDetail = queryClient.getQueryData<any>(["intervention", reprise_of]);
+    if (fromDetail) return fromDetail;
+    const lists = queryClient.getQueriesData<any[]>({ queryKey: ["interventions"] });
+    for (const [, data] of lists) {
+      if (!Array.isArray(data)) continue;
+      const found = data.find((i) => i?.id === reprise_of);
+      if (found) return found;
+    }
+    return undefined;
+  }, [queryClient, reprise_of]);
+
   // Données pour reprise (source originale)
   const { data: repriseSource, isLoading: isLoadingReprise } = useQuery({
     queryKey: ["intervention-reprise", reprise_of],
@@ -300,6 +319,8 @@ export default function AddInterventionScreen() {
       if (!reprise_of) return null;
       return (await api.get(`/api/interventions/${reprise_of}`)).data;
     },
+    initialData: repriseSourceFromCache,
+    initialDataUpdatedAt: 0,
     enabled: isRepriseMode,
   });
 
@@ -632,7 +653,11 @@ export default function AddInterventionScreen() {
 
   // Pré-remplir depuis la source reprise (= semaine suivante)
   useEffect(() => {
-    if (isRepriseMode && repriseSource && clients) {
+    // `clients` n'est volontairement pas mis en cache hors ligne (~3000
+    // entrées, inutiles offline : chaque intervention embarque déjà son
+    // client). Attendre `clients` bloquait donc tout le pré-remplissage hors
+    // réseau, alors que `repriseSource.client` suffit (repli plus bas).
+    if (isRepriseMode && repriseSource) {
       setTitle(repriseSource.title);
       setDescription(repriseSource.description || "");
       setPaymentMode(
@@ -652,7 +677,7 @@ export default function AddInterventionScreen() {
       setEndDateStr(toBrusselsDateTimeString(nextEnd));
       setTimeTbd(isAdmin ? (repriseSource.time_tbd ?? true) : true);
 
-      const foundClient = clients.find((c) => c.id === repriseSource.client_id);
+      const foundClient = clients?.find((c) => c.id === repriseSource.client_id);
       if (foundClient) setSelectedClient(foundClient);
       else if (repriseSource.client) setSelectedClient(repriseSource.client);
 
@@ -683,7 +708,7 @@ export default function AddInterventionScreen() {
         );
       }
     }
-  }, [isRepriseMode, repriseSource, clients]);
+  }, [isRepriseMode, repriseSource, clients]); // clients optionnel, cf. commentaire ci-dessus
 
   // Reset form quand on navigue vers "nouveau" (pas edit, pas reprise)
   useFocusEffect(
