@@ -39,7 +39,12 @@ function isPersistableKey(key: readonly unknown[]): boolean {
     root === "client-services" ||
     root === "employees" ||
     root === "company-settings" ||
-    root === "hourly-rates"
+    root === "hourly-rates" ||
+    // Statistiques de charge par jour (coloration vert/orange/rouge du
+    // calendrier de reprise). Légères — de simples agrégats par date, pas des
+    // interventions complètes — donc peu coûteuses à conserver.
+    root === "horizon-stats" ||
+    root === "initial-stats-reprise"
   );
 }
 
