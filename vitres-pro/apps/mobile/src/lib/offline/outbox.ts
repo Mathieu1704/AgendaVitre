@@ -92,6 +92,10 @@ function notifyFlushed() {
  * écraserait la mise à jour optimiste avec l'état serveur encore inchangé.
  */
 let pendingCount = 0;
+// Incrémente dès qu'une mutation de file commence. Sur Android, la lecture
+// AsyncStorage initiale peut être beaucoup plus lente qu'un premier flush :
+// elle ne doit pas réinjecter ensuite le compteur de l'ancien état.
+let queueRevision = 0;
 
 export function hasPendingWrites(): boolean {
   return pendingCount > 0;
@@ -103,7 +107,9 @@ export function getPendingCountSnapshot(): number {
 }
 
 async function syncPendingCount(): Promise<void> {
-  pendingCount = (await readJson<OutboxEntry[]>(QUEUE_KEY, [])).length;
+  const revisionAtStart = queueRevision;
+  const count = (await readJson<OutboxEntry[]>(QUEUE_KEY, [])).length;
+  if (revisionAtStart === queueRevision) pendingCount = count;
 }
 
 export function subscribeOutbox(fn: QueueListener): () => void {
@@ -176,6 +182,7 @@ async function mutateQueue(
 ): Promise<OutboxEntry[]> {
   let result: OutboxEntry[] = [];
   const operation = queueMutation.then(async () => {
+    queueRevision++;
     result = mutation(await getQueue());
     await writeJson(QUEUE_KEY, result);
     pendingCount = result.length;
