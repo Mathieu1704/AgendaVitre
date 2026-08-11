@@ -77,6 +77,31 @@ type ClientService = {
   price: number;
   position: number;
 };
+
+function servicesAttachedToIntervention(source: any): ClientService[] {
+  return (source?.items ?? [])
+    .filter((item: any) => item.client_service_id)
+    .map((item: any, position: number) => ({
+      id: String(item.client_service_id),
+      label: item.label,
+      price: Number(item.price) || 0,
+      position,
+    }));
+}
+
+function mergeClientServices(
+  catalogue: ClientService[],
+  attached: ClientService[],
+): ClientService[] {
+  const merged = [...catalogue];
+  const knownIds = new Set(catalogue.map((service) => String(service.id)));
+  for (const service of attached) {
+    if (knownIds.has(service.id)) continue;
+    merged.push({ ...service, position: merged.length });
+    knownIds.add(service.id);
+  }
+  return merged;
+}
 type IntervType = "intervention" | "devis" | "tournee" | "note";
 
 const TYPE_CONFIG: Record<
@@ -501,7 +526,27 @@ export default function AddInterventionScreen() {
       queryFn: async () =>
         (await api.get(`/api/clients/${selectedClient!.id}/services`)).data,
       enabled: !!selectedClient?.id,
+      // Toujours réconcilier le catalogue lorsque l'écran est ouvert en ligne,
+      // mais ne jamais tenter cet appel hors connexion.
+      staleTime: 0,
+      refetchOnMount: "always",
+      networkMode: "online",
     });
+
+  const attachedClientServices = useMemo(
+    () => servicesAttachedToIntervention(
+      isEditMode ? interventionData : isRepriseMode ? repriseSource : null,
+    ),
+    [isEditMode, isRepriseMode, interventionData, repriseSource],
+  );
+
+  // La source de vérité de l'édition est l'intervention elle-même. Même si le
+  // catalogue Android est ancien, ses prestations liées restent donc visibles
+  // et cochées par leur véritable client_service_id.
+  const availableClientServices = useMemo(
+    () => mergeClientServices(clientServices, attachedClientServices),
+    [clientServices, attachedClientServices],
+  );
 
   const scheduleServiceLabelSave = useCallback(
     (serviceId: string, label: string) => {
@@ -634,20 +679,13 @@ export default function AddInterventionScreen() {
       // Hors ligne, le catalogue complet du client n'a peut-être jamais été
       // ouvert. Les prestations déjà attachées à l'intervention suffisent
       // néanmoins pour afficher les lignes cochées et conserver leur total.
-      // On ne remplace jamais un catalogue plus complet déjà en cache.
+      // Elles sont fusionnées par id avec tout catalogue déjà en cache.
       if (interventionClientId) {
-        const attachedServices: ClientService[] = (interventionData.items ?? [])
-          .filter((i: any) => i.client_service_id)
-          .map((i: any, position: number) => ({
-            id: String(i.client_service_id),
-            label: i.label,
-            price: Number(i.price) || 0,
-            position,
-          }));
+        const attachedServices = servicesAttachedToIntervention(interventionData);
         if (attachedServices.length > 0) {
           queryClient.setQueryData<ClientService[]>(
             ["client-services", interventionClientId],
-            (current) => current && current.length > 0 ? current : attachedServices,
+            (current) => mergeClientServices(current ?? [], attachedServices),
           );
         }
       }
@@ -665,11 +703,11 @@ export default function AddInterventionScreen() {
           (i: any) => !i.client_service_id,
         );
         setCheckedServiceIds(
-          new Set(withId.map((i: any) => i.client_service_id as string)),
+          new Set(withId.map((i: any) => String(i.client_service_id))),
         );
         const overrides: Record<string, string> = {};
         withId.forEach((i: any) => {
-          overrides[i.client_service_id] = i.price.toString();
+          overrides[String(i.client_service_id)] = i.price.toString();
         });
         setServicePriceOverrides(overrides);
         setAdHocItems(
@@ -714,18 +752,11 @@ export default function AddInterventionScreen() {
       else if (repriseSource.client) setSelectedClient(repriseSource.client);
 
       if (repriseClientId) {
-        const attachedServices: ClientService[] = (repriseSource.items ?? [])
-          .filter((i: any) => i.client_service_id)
-          .map((i: any, position: number) => ({
-            id: String(i.client_service_id),
-            label: i.label,
-            price: Number(i.price) || 0,
-            position,
-          }));
+        const attachedServices = servicesAttachedToIntervention(repriseSource);
         if (attachedServices.length > 0) {
           queryClient.setQueryData<ClientService[]>(
             ["client-services", repriseClientId],
-            (current) => current && current.length > 0 ? current : attachedServices,
+            (current) => mergeClientServices(current ?? [], attachedServices),
           );
         }
       }
@@ -742,11 +773,11 @@ export default function AddInterventionScreen() {
           (i: any) => !i.client_service_id,
         );
         setCheckedServiceIds(
-          new Set(withId.map((i: any) => i.client_service_id as string)),
+          new Set(withId.map((i: any) => String(i.client_service_id))),
         );
         const overrides: Record<string, string> = {};
         withId.forEach((i: any) => {
-          overrides[i.client_service_id] = i.price.toString();
+          overrides[String(i.client_service_id)] = i.price.toString();
         });
         setServicePriceOverrides(overrides);
         setAdHocItems(
@@ -787,7 +818,7 @@ export default function AddInterventionScreen() {
 
   // Items finaux = services cochés + items ad-hoc
   const allItems = useMemo(() => {
-    const serviceItems = clientServices
+    const serviceItems = availableClientServices
       .filter((s) => checkedServiceIds.has(s.id))
       .map((s) => ({
         label: s.label,
@@ -795,7 +826,7 @@ export default function AddInterventionScreen() {
         client_service_id: s.id,
       }));
     return [...serviceItems, ...adHocItems];
-  }, [clientServices, checkedServiceIds, servicePriceOverrides, adHocItems]);
+  }, [availableClientServices, checkedServiceIds, servicePriceOverrides, adHocItems]);
 
   const totalPrice = useMemo(
     () =>
@@ -1839,7 +1870,7 @@ export default function AddInterventionScreen() {
                                 id: tempId,
                                 label: newServiceLabel.trim(),
                                 price: Number(newServicePrice) || 0,
-                                position: clientServices.length,
+                                position: availableClientServices.length,
                               };
                               applyServiceCreate(
                                 queryClient,
@@ -1915,7 +1946,7 @@ export default function AddInterventionScreen() {
                   )}
 
                   {/* Services du client = cases à cocher */}
-                  {clientServices.map((svc) => {
+                  {availableClientServices.map((svc) => {
                     const checked = checkedServiceIds.has(svc.id);
                     const priceVal =
                       servicePriceOverrides[svc.id] ?? svc.price.toString();
