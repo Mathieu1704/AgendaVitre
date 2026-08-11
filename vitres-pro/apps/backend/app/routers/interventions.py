@@ -40,6 +40,30 @@ def _load_intervention(intervention_id: UUID, db: Session) -> Intervention:
         selectinload(Intervention.hourly_rate),
     ).filter(Intervention.id == intervention_id).first()
 
+
+def _migrate_orphan_items_to_chain(db: Session, intervention: Intervention, chain_id) -> dict:
+    """Convertit les items ad-hoc existants d'une intervention (label+prix
+    seuls, sans catalogue) en entrées intervention_services au moment où sa
+    chaîne de reprises est créée — sinon les prestations d'avant la migration
+    restent pour toujours de simples items, jamais cochables.
+    Retourne {label: InterventionService} pour relier aussi les items
+    entrants qui portent le même libellé (voir appels ci-dessous)."""
+    label_map = {}
+    for idx, old_item in enumerate(list(intervention.items)):
+        if old_item.client_service_id or old_item.intervention_service_id:
+            continue
+        svc = InterventionService(
+            reprise_chain_id=chain_id,
+            label=old_item.label,
+            price=old_item.price,
+            position=idx,
+        )
+        db.add(svc)
+        db.flush()
+        old_item.intervention_service_id = svc.id
+        label_map[old_item.label] = svc
+    return label_map
+
 STATUS_LABELS = {
     "planned": "Planifiée",
     "in_progress": "En cours",
@@ -281,12 +305,18 @@ def create_intervention(
     # Chaîne de reprises : identité stable reliant une intervention sans
     # client à ses reprises suivantes (sert de catalogue "intervention_services").
     # Non pertinent quand il y a un client : client_id joue déjà ce rôle.
+    chain_label_map = {}
     if not new_intervention.client_id:
         if intervention.reprise_of_id:
             source = db.query(Intervention).filter(Intervention.id == intervention.reprise_of_id).first()
             if source and not source.client_id:
                 if not source.reprise_chain_id:
                     source.reprise_chain_id = source.id
+                    # Première reprise de cette source : ses prestations
+                    # ad-hoc d'origine deviennent un vrai catalogue.
+                    chain_label_map = _migrate_orphan_items_to_chain(
+                        db, source, source.reprise_chain_id,
+                    )
                 new_intervention.reprise_chain_id = source.reprise_chain_id
         if not new_intervention.reprise_chain_id:
             new_intervention.reprise_chain_id = new_intervention.id
@@ -301,11 +331,21 @@ def create_intervention(
     total_price = 0
     if intervention.items:
         for item_data in intervention.items:
+            intervention_service_id = item_data.intervention_service_id
+            if (
+                not item_data.client_service_id
+                and not intervention_service_id
+                and item_data.label in chain_label_map
+            ):
+                # Item ad-hoc de reprise dont le libellé correspond à un
+                # service tout juste migré depuis la source : on le relie
+                # directement plutôt que de recréer un doublon "orphelin".
+                intervention_service_id = chain_label_map[item_data.label].id
             new_item = InterventionItem(
                 label=item_data.label,
                 price=item_data.price,
                 client_service_id=item_data.client_service_id,
-                intervention_service_id=item_data.intervention_service_id,
+                intervention_service_id=intervention_service_id,
             )
             new_intervention.items.append(new_item)
             total_price += item_data.price
@@ -375,9 +415,14 @@ def update_intervention(
 
     # Backfill paresseux : une intervention sans client créée avant ce champ
     # n'a pas de reprise_chain_id. On lui en attribue un dès la première
-    # modification pour qu'elle puisse avoir un catalogue de services persistant.
+    # modification pour qu'elle puisse avoir un catalogue de services persistant,
+    # et on migre ses prestations ad-hoc existantes en entrées de catalogue.
+    update_label_map = {}
     if not db_intervention.client_id and not db_intervention.reprise_chain_id:
         db_intervention.reprise_chain_id = db_intervention.id
+        update_label_map = _migrate_orphan_items_to_chain(
+            db, db_intervention, db_intervention.reprise_chain_id,
+        )
 
     # Filtrage des champs autorisés pour les non-admins
     if current_user.role != 'admin':
@@ -398,12 +443,19 @@ def update_intervention(
         elif key == "items":
             db.query(InterventionItem).filter(InterventionItem.intervention_id == intervention_id).delete()
             for item_data in value:
+                intervention_service_id = item_data.get("intervention_service_id")
+                if (
+                    not item_data.get("client_service_id")
+                    and not intervention_service_id
+                    and item_data["label"] in update_label_map
+                ):
+                    intervention_service_id = update_label_map[item_data["label"]].id
                 db.add(InterventionItem(
                     intervention_id=intervention_id,
                     label=item_data["label"],
                     price=item_data["price"],
                     client_service_id=item_data.get("client_service_id"),
-                    intervention_service_id=item_data.get("intervention_service_id"),
+                    intervention_service_id=intervention_service_id,
                 ))
         elif hasattr(db_intervention, key):
             setattr(db_intervention, key, value)
