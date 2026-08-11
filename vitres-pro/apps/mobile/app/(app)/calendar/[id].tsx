@@ -16,7 +16,6 @@ import {
   useQuery,
   useMutation,
   useQueryClient,
-  onlineManager,
 } from "@tanstack/react-query";
 import {
   Phone,
@@ -37,12 +36,11 @@ import {
   X,
   Check,
 } from "lucide-react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Imports internes
 import { api } from "../../../src/lib/api";
-import { enqueue, hasPendingWrites } from "../../../src/lib/offline/outbox";
+import { enqueue } from "../../../src/lib/offline/outbox";
 import { isOnlineNow } from "../../../src/lib/offline/network";
 import {
   applyPaymentMode,
@@ -109,13 +107,11 @@ export default function InterventionDetailScreen() {
     initialData: interventionFromLists,
     // Marquée périmée d'emblée : la version de la liste sert d'affichage
     // immédiat, mais la fiche se rafraîchit dès que le réseau le permet.
-    initialDataUpdatedAt: 0,
-    // Suspendu hors réseau, et tant qu'une écriture n'est pas partie : sinon le
-    // sondage réécrirait l'état serveur par-dessus la mise à jour optimiste,
-    // faisant clignoter la valeur que l'ouvrier vient de saisir.
-    refetchInterval: () =>
-      onlineManager.isOnline() && !hasPendingWrites() ? 5000 : false,
-    staleTime: 0,
+    // Une carte du planning vient normalement d'alimenter cette clé. Elle est
+    // assez fraîche pour ouvrir la fiche sans requête concurrente immédiate ;
+    // un retour ultérieur au focus la réconciliera si nécessaire.
+    staleTime: 30 * 1000,
+    refetchOnMount: true,
   });
 
   const { data: companySettings } = useQuery({
@@ -176,6 +172,10 @@ export default function InterventionDetailScreen() {
 
   // 4. HELPER FUNCTIONS
   const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
     router.replace({
       pathname: "/(app)/calendar",
       params: {
@@ -434,7 +434,7 @@ export default function InterventionDetailScreen() {
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* --- TITRE --- */}
         <View className="px-6 pt-4 pb-2">
-          <Animated.View entering={FadeInDown.delay(100).springify()}>
+          <View>
             <Text className="text-2xl font-extrabold text-foreground dark:text-white mb-3 leading-tight">
               {intervention.title.replace(/[\r\n\u2028\u2029]+/g, " ").trim()}
             </Text>
@@ -500,9 +500,9 @@ export default function InterventionDetailScreen() {
                     }}>
                       <SlidingPillSelector
                         options={[
-                          !hideCash && { id: "cash",         label: "Espèces",  pillColor: "#EF4444", activeTextColor: "#fff", icon: (c) => <Banknote size={13} color={c} /> },
-                          { id: "invoice",      label: "Facture",  pillColor: "#22C55E", activeTextColor: "#fff", icon: (c) => <FileText size={13} color={c} /> },
-                          { id: "invoice_cash", label: "FAC+Esp.", pillColor: "#F97316", activeTextColor: "#fff", icon: (c) => <Wallet  size={13} color={c} /> },
+                          !hideCash && { id: "cash",         label: "Espèces",  pillColor: "#EF4444", activeTextColor: "#fff", icon: (c: string) => <Banknote size={13} color={c} /> },
+                          { id: "invoice",      label: "Facture",  pillColor: "#22C55E", activeTextColor: "#fff", icon: (c: string) => <FileText size={13} color={c} /> },
+                          { id: "invoice_cash", label: "FAC+Esp.", pillColor: "#F97316", activeTextColor: "#fff", icon: (c: string) => <Wallet  size={13} color={c} /> },
                         ].filter(Boolean) as any}
                         selected={pendingPaymentMode}
                         onSelect={(id) => setPendingPaymentMode(id as any)}
@@ -605,7 +605,7 @@ export default function InterventionDetailScreen() {
                 )}
               </Pressable>
             </View>
-          </Animated.View>
+          </View>
         </View>
 
         {/* --- BLOCS D'INFORMATIONS --- */}
@@ -620,10 +620,7 @@ export default function InterventionDetailScreen() {
           >
             {/* 2. CLIENT (seulement pour intervention/devis avec un client lié) */}
             {hasClient && intervention.client && (
-              <Animated.View
-                entering={FadeInDown.delay(300)}
-                className={isDesktop ? "flex-1" : "w-full"}
-              >
+              <View className={isDesktop ? "flex-1" : "w-full"}>
                 <Card className="min-h-[110px] justify-center rounded-3xl">
                   <CardContent className="p-5">
                     <View className="flex-row items-center">
@@ -655,14 +652,13 @@ export default function InterventionDetailScreen() {
                     </View>
                   </CardContent>
                 </Card>
-              </Animated.View>
+              </View>
             )}
           </View>
 
           {/* LIGNE 2 : ACTIONS RAPIDES (seulement si client lié) */}
           {hasClient && intervention.client && (
-            <Animated.View
-              entering={FadeInDown.delay(350)}
+            <View
               className={`flex-row w-full ${isDesktop ? "gap-4" : "gap-2"}`}
               style={{
                 marginBottom: isDesktop ? 0 : 0,
@@ -756,13 +752,12 @@ export default function InterventionDetailScreen() {
                   Email
                 </Text>
               </Pressable>
-            </Animated.View>
+            </View>
           )}
 
           {/* 3. SUIVI TEMPS RÉEL (Si dispo) */}
           {(intervention.real_start_time || intervention.real_end_time) && (
-            <Animated.View
-              entering={FadeInDown.delay(400)}
+            <View
               className="w-full"
               // ✅ MODIF : Marge en bas UNIQUEMENT sur mobile
               style={{ marginBottom: isDesktop ? 0 : 20 }}
@@ -823,14 +818,11 @@ export default function InterventionDetailScreen() {
                   </View>
                 </CardContent>
               </Card>
-            </Animated.View>
+            </View>
           )}
 
           {(intervType === "intervention" || !!intervention.description) && (
-            <Animated.View
-              entering={FadeInDown.delay(450)}
-              className="w-full mt-4"
-            >
+            <View className="w-full mt-4">
               <Card className="rounded-3xl">
                 <CardContent className="p-5">
                   {/* Prix — uniquement pour les interventions */}
@@ -901,7 +893,7 @@ export default function InterventionDetailScreen() {
                   )}
                 </CardContent>
               </Card>
-            </Animated.View>
+            </View>
           )}
         </View>
       </ScrollView>

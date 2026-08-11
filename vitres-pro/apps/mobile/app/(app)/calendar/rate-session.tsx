@@ -46,11 +46,16 @@ import {
   useDeleteHourlyRate,
 } from "../../../src/hooks/useHourlyRates";
 import { api } from "../../../src/lib/api";
+import {
+  applyEditIntervention,
+  restoreInterventionSnapshots,
+} from "../../../src/lib/offline/optimistic";
 import { toBrusselsDateTimeString } from "../../../src/lib/date";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { Card, CardContent } from "../../../src/ui/components/Card";
 import { Dialog } from "../../../src/ui/components/Dialog";
 import { Button } from "../../../src/ui/components/Button";
+import { toast } from "../../../src/ui/toast";
 
 function RatePill({
   r,
@@ -133,7 +138,26 @@ export default function RateSessionScreen() {
     zone?: string;
   }>();
 
-  const { interventions, isLoading } = useInterventions();
+  const returnToPlanning = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(app)/calendar" as any);
+    }
+  }, [router]);
+
+  const sessionRange = useMemo(() => {
+    const center = new Date(`${date}T12:00:00`);
+    const start = new Date(center);
+    start.setDate(start.getDate() - 1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(center);
+    end.setDate(end.getDate() + 1);
+    end.setHours(23, 59, 59, 999);
+    return { start: start.toISOString(), end: end.toISOString() };
+  }, [date]);
+
+  const { interventions, isLoading } = useInterventions(sessionRange);
   const { data: hourlyRates } = useHourlyRates();
   const createRate = useCreateHourlyRate();
   const deleteRate = useDeleteHourlyRate();
@@ -245,13 +269,18 @@ export default function RateSessionScreen() {
 
   const handleValidate = () => {
     if (current) {
+      const rateId = assignments[current.id] ?? null;
+      const snapshots = applyEditIntervention(qc, current.id, { hourly_rate_id: rateId });
       api
         .patch(`/api/interventions/${current.id}`, {
-          hourly_rate_id: assignments[current.id] ?? null,
+          hourly_rate_id: rateId,
         })
         .then(() => {
-          qc.invalidateQueries({ queryKey: ["interventions"] });
           qc.invalidateQueries({ queryKey: ["planning-stats"] });
+        })
+        .catch(() => {
+          restoreInterventionSnapshots(qc, snapshots);
+          toast.error("Erreur", "Le taux n'a pas pu être enregistré.");
         });
     }
     setCurrentIndex((i) => i + 1);
@@ -333,7 +362,7 @@ export default function RateSessionScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View className="flex-row items-center px-4 py-3 gap-3">
           <Pressable
-            onPress={() => router.push("/(app)/calendar" as any)}
+            onPress={returnToPlanning}
             className="w-10 h-10 rounded-full items-center justify-center"
             style={{ backgroundColor: isDark ? "#1E293B" : "#F1F5F9" }}
           >
@@ -390,7 +419,7 @@ export default function RateSessionScreen() {
             </Text>
           </View>
           <Pressable
-            onPress={() => router.push("/(app)/calendar" as any)}
+            onPress={returnToPlanning}
             className="bg-blue-500 px-6 py-4 items-center w-full" style={{ borderRadius: 999 }}
           >
             <Text className="text-white font-bold text-base">
@@ -425,7 +454,7 @@ export default function RateSessionScreen() {
       {/* Header */}
       <View className="flex-row items-center px-4 py-3 gap-3">
         <Pressable
-          onPress={() => router.push("/(app)/calendar" as any)}
+          onPress={returnToPlanning}
           className="w-10 h-10 rounded-full items-center justify-center"
           style={{ backgroundColor: isDark ? "#1E293B" : "#F1F5F9" }}
         >

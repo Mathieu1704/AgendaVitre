@@ -12,31 +12,74 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 type AnyIntervention = Record<string, any>;
+export type InterventionCacheSnapshot = [readonly unknown[], unknown];
 
 /**
  * Applique `patch` à une intervention, partout où elle apparaît dans le cache.
  * `patch` reçoit l'objet courant pour permettre des mises à jour dérivées.
  */
-function patchIntervention(
+export function patchIntervention(
   qc: QueryClient,
   interventionId: string,
   patch: (current: AnyIntervention) => AnyIntervention,
-): void {
-  qc.setQueryData<AnyIntervention>(["intervention", interventionId], (prev) =>
-    prev ? patch(prev) : prev,
-  );
+): InterventionCacheSnapshot[] {
+  const snapshots: InterventionCacheSnapshot[] = [];
+  const detailKey = ["intervention", interventionId] as const;
+  const detail = qc.getQueryData<AnyIntervention>(detailKey);
+  let source = detail;
+  if (detail) {
+    snapshots.push([detailKey, detail]);
+    qc.setQueryData(detailKey, patch(detail));
+  }
 
-  // Les listes : `["interventions"]` et `["interventions", start, end]`.
-  qc.setQueriesData<AnyIntervention[]>({ queryKey: ["interventions"] }, (prev) => {
-    if (!Array.isArray(prev)) return prev;
-    let touched = false;
-    const next = prev.map((item) => {
-      if (item?.id !== interventionId) return item;
-      touched = true;
-      return patch(item);
+  if (!source) {
+    const activeLists = qc.getQueriesData<AnyIntervention[]>({
+      queryKey: ["interventions"],
+      type: "active",
     });
-    return touched ? next : prev;
-  });
+    for (const [, data] of activeLists) {
+      source = data?.find((item) => item?.id === interventionId);
+      if (source) break;
+    }
+  }
+
+  // Les listes datées qui couvrent l'intervention sont peu nombreuses, même
+  // après plusieurs mois visités. On les garde cohérentes pour le hors-ligne,
+  // sans jamais parcourir la liste historique non bornée de facturation ou du
+  // dashboard.
+  const lists = qc.getQueriesData<AnyIntervention[]>({ queryKey: ["interventions"] });
+  const sourceTime = source?.start_time ? new Date(source.start_time).getTime() : NaN;
+  for (const [key, data] of lists) {
+    if (
+      key.length !== 3 ||
+      typeof key[1] !== "string" ||
+      typeof key[2] !== "string"
+    ) continue;
+    const rangeStart = Date.parse(key[1]);
+    const rangeEnd = Date.parse(key[2]);
+    if (
+      Number.isFinite(sourceTime) &&
+      Number.isFinite(rangeStart) &&
+      Number.isFinite(rangeEnd) &&
+      (sourceTime < rangeStart || sourceTime > rangeEnd)
+    ) continue;
+    if (!Array.isArray(data)) continue;
+    const index = data.findIndex((item) => item?.id === interventionId);
+    if (index < 0) continue;
+    snapshots.push([key, data]);
+    const next = data.slice();
+    next[index] = patch(data[index]);
+    qc.setQueryData(key, next);
+  }
+
+  return snapshots;
+}
+
+export function restoreInterventionSnapshots(
+  qc: QueryClient,
+  snapshots: InterventionCacheSnapshot[],
+): void {
+  for (const [key, data] of snapshots) qc.setQueryData(key, data);
 }
 
 /** Mode de paiement / encaissement sur place. */
@@ -135,11 +178,20 @@ export function applyCreateReprise(
     pending_sync: true,
   };
 
-  qc.setQueriesData<AnyIntervention[]>({ queryKey: ["interventions"] }, (prev) => {
-    if (!Array.isArray(prev)) return prev;
-    if (prev.some((i) => i?.id === tempId)) return prev;
-    return [...prev, provisional];
-  });
+  const startTime = new Date(provisional.start_time).getTime();
+  const lists = qc.getQueriesData<AnyIntervention[]>({ queryKey: ["interventions"] });
+  for (const [key, data] of lists) {
+    if (
+      key.length !== 3 ||
+      typeof key[1] !== "string" ||
+      typeof key[2] !== "string" ||
+      startTime < Date.parse(key[1]) ||
+      startTime > Date.parse(key[2]) ||
+      !Array.isArray(data) ||
+      data.some((item) => item?.id === tempId)
+    ) continue;
+    qc.setQueryData(key, [...data, provisional]);
+  }
 }
 
 /**
@@ -152,7 +204,7 @@ export function applyEditIntervention(
   qc: QueryClient,
   interventionId: string,
   payload: Record<string, any>,
-): void {
+): InterventionCacheSnapshot[] {
   const allEmployees = qc.getQueryData<any[]>(["employees"]) ?? [];
   const employees = Array.isArray(payload.employee_ids)
     ? payload.employee_ids
@@ -160,7 +212,7 @@ export function applyEditIntervention(
         .filter(Boolean)
     : undefined;
 
-  patchIntervention(qc, interventionId, (current) => ({
+  return patchIntervention(qc, interventionId, (current) => ({
     ...current,
     ...payload,
     // `employee_ids` n'existe pas côté lecture : on le retire pour ne pas
@@ -175,9 +227,21 @@ export function applyDeleteIntervention(
   qc: QueryClient,
   interventionId: string,
 ): void {
-  qc.setQueriesData<AnyIntervention[]>({ queryKey: ["interventions"] }, (prev) =>
-    Array.isArray(prev) ? prev.filter((i) => i?.id !== interventionId) : prev,
-  );
+  const detail = qc.getQueryData<AnyIntervention>(["intervention", interventionId]);
+  const startTime = detail?.start_time ? new Date(detail.start_time).getTime() : NaN;
+  const lists = qc.getQueriesData<AnyIntervention[]>({ queryKey: ["interventions"] });
+  for (const [key, data] of lists) {
+    if (key.length !== 3 || !Array.isArray(data)) continue;
+    if (
+      Number.isFinite(startTime) &&
+      typeof key[1] === "string" &&
+      typeof key[2] === "string" &&
+      (startTime < Date.parse(key[1]) || startTime > Date.parse(key[2]))
+    ) continue;
+    const index = data.findIndex((item) => item?.id === interventionId);
+    if (index < 0) continue;
+    qc.setQueryData(key, data.filter((_, i) => i !== index));
+  }
   qc.removeQueries({ queryKey: ["intervention", interventionId] });
 }
 

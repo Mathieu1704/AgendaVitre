@@ -15,6 +15,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Switch,
+  InteractionManager,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -257,6 +258,15 @@ export default function AddInterventionScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const { isDark } = useTheme();
+  const [isFormRenderReady, setIsFormRenderReady] = useState(isWeb);
+
+  useEffect(() => {
+    if (isWeb) return;
+    const task = InteractionManager.runAfterInteractions(() => {
+      setIsFormRenderReady(true);
+    });
+    return () => task.cancel();
+  }, [isWeb]);
 
   const { employees } = useEmployees();
 
@@ -904,7 +914,8 @@ export default function AddInterventionScreen() {
             ? "Intervention modifiée !"
             : "Modifiée. Sera synchronisée au retour du réseau.",
         );
-        router.push(`/(app)/calendar/${id}` as any);
+        if (router.canGoBack()) router.back();
+        else router.replace(`/(app)/calendar/${id}` as any);
         return;
       }
 
@@ -986,12 +997,12 @@ export default function AddInterventionScreen() {
       );
 
       if (isRepriseMode && reprise_of) {
-        router.push({
+        router.dismissTo({
           pathname: "/(app)/calendar",
           params: { date: new Date().toISOString().split("T")[0], view: "day" },
         });
       } else {
-        router.push({
+        router.dismissTo({
           pathname: "/(app)/calendar",
           params: {
             date: startDateStr,
@@ -1048,6 +1059,7 @@ export default function AddInterventionScreen() {
   );
 
   if (
+    !isFormRenderReady ||
     (isEditMode && isLoadingIntervention) ||
     (isRepriseMode && isLoadingReprise)
   ) {
@@ -1077,11 +1089,12 @@ export default function AddInterventionScreen() {
       <View className="px-4 py-2 flex-row items-center">
         <Pressable
           onPress={() => {
-            if (isEditMode) router.push(`/(app)/calendar/${id}`);
+            if (router.canGoBack()) router.back();
+            else if (isEditMode) router.replace(`/(app)/calendar/${id}`);
             else if (isRepriseMode)
-              router.push(`/(app)/calendar/${reprise_of}` as any);
+              router.replace(`/(app)/calendar/${reprise_of}` as any);
             else
-              router.push({
+              router.replace({
                 pathname: "/(app)/calendar",
                 params: from_view ? { view: from_view, date: from_date } : {},
               });
@@ -2136,21 +2149,21 @@ export default function AddInterventionScreen() {
                         label: "Espèces",
                         pillColor: "#EF4444",
                         activeTextColor: "#fff",
-                        icon: (c) => <Banknote size={14} color={c} />,
+                        icon: (c: string) => <Banknote size={14} color={c} />,
                       },
                       {
                         id: "invoice",
                         label: "FAC",
                         pillColor: "#22C55E",
                         activeTextColor: "#fff",
-                        icon: (c) => <FileText size={14} color={c} />,
+                        icon: (c: string) => <FileText size={14} color={c} />,
                       },
                       {
                         id: "invoice_cash",
                         label: "FAC+Esp.",
                         pillColor: "#F97316",
                         activeTextColor: "#fff",
-                        icon: (c) => <Wallet size={14} color={c} />,
+                        icon: (c: string) => <Wallet size={14} color={c} />,
                       },
                     ].filter(Boolean) as any}
                     selected={paymentMode}
@@ -2200,10 +2213,11 @@ export default function AddInterventionScreen() {
                   <Button
                     variant="outline"
                     onPress={() => {
-                      if (isRepriseMode)
-                        router.push(`/(app)/calendar/${reprise_of}` as any);
+                      if (router.canGoBack()) router.back();
+                      else if (isRepriseMode)
+                        router.replace(`/(app)/calendar/${reprise_of}` as any);
                       else
-                        router.push({
+                        router.replace({
                           pathname: "/(app)/calendar",
                           params: from_view
                             ? { view: from_view, date: from_date }

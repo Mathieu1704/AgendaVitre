@@ -32,7 +32,7 @@ import {
 import { StatusBadge } from "../../src/ui/components/StatusBadge";
 import { Avatar } from "../../src/ui/components/Avatar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFocusEffect, Redirect, useRouter } from "expo-router";
+import { Redirect, useFocusEffect, useRouter } from "expo-router";
 import { useInterventions } from "../../src/hooks/useInterventions";
 import { useClients } from "../../src/hooks/useClients";
 import { useAuth } from "../../src/hooks/useAuth";
@@ -60,16 +60,34 @@ export default function Dashboard() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
 
-  useFocusEffect(
-    useCallback(() => {
-      queryClient.invalidateQueries({ queryKey: ["interventions"] });
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-    }, [queryClient]),
-  );
-
-  const { interventions, isLoading: interventionsLoading } = useInterventions();
+  const {
+    interventions,
+    isLoading: interventionsLoading,
+    refetch: refetchInterventions,
+  } = useInterventions();
   const { clients } = useClients();
   const { width } = useWindowDimensions();
+
+  useFocusEffect(
+    useCallback(() => {
+      const state = queryClient.getQueryState(["interventions"]);
+      if (state?.isInvalidated) void refetchInterventions();
+    }, [queryClient, refetchInterventions]),
+  );
+
+  const openIntervention = useCallback((item: any) => {
+    if (!queryClient.getQueryData(["intervention", item.id])) {
+      queryClient.setQueryData(["intervention", item.id], item);
+    }
+    router.push({
+      pathname: "/(app)/calendar/[id]",
+      params: {
+        id: item.id,
+        from_view: "day",
+        from_date: formatISO(new Date(), { representation: "date" }),
+      },
+    });
+  }, [queryClient, router]);
 
   // ✅ Détection Mobile/Desktop
   const isMobile = Platform.OS !== "web" || width < 768;
@@ -542,21 +560,10 @@ export default function Dashboard() {
                   nestedScrollEnabled={true}
                 >
                   <View style={{ gap: 8 }}>
-                    {todayInterventions.map((item: any, i: number) => (
+                    {todayInterventions.map((item: any) => (
                       <Pressable
-                        key={i}
-                        onPress={() =>
-                          router.push({
-                            pathname: "/(app)/calendar/[id]",
-                            params: {
-                              id: item.id,
-                              from_view: "day",
-                              from_date: formatISO(new Date(), {
-                                representation: "date",
-                              }),
-                            },
-                          })
-                        }
+                        key={item.id}
+                        onPress={() => openIntervention(item)}
                         style={({ pressed }) => ({
                           flexDirection: "row",
                           alignItems: "center",
@@ -888,21 +895,10 @@ export default function Dashboard() {
                   nestedScrollEnabled={true}
                 >
                   <View className="gap-3">
-                    {todayInterventions.map((item: any, i: number) => (
+                    {todayInterventions.map((item: any) => (
                       <Pressable
-                        key={i}
-                        onPress={() =>
-                          router.push({
-                            pathname: "/(app)/calendar/[id]",
-                            params: {
-                              id: item.id,
-                              from_view: "day",
-                              from_date: formatISO(new Date(), {
-                                representation: "date",
-                              }),
-                            },
-                          })
-                        }
+                        key={item.id}
+                        onPress={() => openIntervention(item)}
                         style={({ pressed }) => ({
                           opacity: pressed ? 0.7 : 1,
                         })}

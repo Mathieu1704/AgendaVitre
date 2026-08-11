@@ -90,6 +90,7 @@ export const MonthView = React.memo(function MonthView({
 
   const monthStart = toISODate(startOfMonth(cursorDate));
   const monthEnd = toISODate(endOfMonth(cursorDate));
+  const calendarMonthKey = `${cursorDate.getFullYear()}-${String(cursorDate.getMonth() + 1).padStart(2, "0")}`;
   const { rawEvents: monthRawEvents } = useRawEventsByRange(monthStart, monthEnd);
 
   const markedDates = useMemo(() => {
@@ -120,11 +121,16 @@ export const MonthView = React.memo(function MonthView({
     <View>
       <View className="mx-4 shadow-sm bg-card dark:bg-slate-900 border border-border dark:border-slate-800" style={{ borderRadius: 25, overflow: "hidden" }}>
         <RNCalendar
-          key={`${isDark ? "d" : "l"}-${toISODate(cursorDate)}`}
+          // La sélection d'un jour ne doit pas remonter tout le calendrier.
+          // Une nouvelle instance n'est nécessaire que si le thème ou le mois
+          // réellement affiché change.
+          key={`${isDark ? "d" : "l"}-${calendarMonthKey}`}
           current={toISODate(cursorDate)}
           onDayPress={(day: DateData) => {
             setSelectedDate(day.dateString);
-            setCursorDate(new Date(day.dateString));
+            if (!day.dateString.startsWith(calendarMonthKey)) {
+              setCursorDate(new Date(`${day.dateString}T12:00:00`));
+            }
           }}
           markedDates={markedDates}
           firstDay={1}

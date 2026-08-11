@@ -265,7 +265,7 @@ export default function CalendarScreen() {
 
   // --- ÉTATS ---
   const [viewMode, setViewMode] = useState<ViewMode>("month");
-  const displayMode: DisplayMode = "list";
+  const displayMode = "list" as DisplayMode;
   const [calView, setCalView] = useState<CalView>("week");
   const [cursorDate, setCursorDate] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState(toISODate(new Date()));
@@ -326,6 +326,16 @@ export default function CalendarScreen() {
       setCursorDate(new Date(isoDate));
     }
   }, [params.date]);
+
+  // Les flèches mensuelles changent le mois affiché. Le jour sélectionné ne
+  // doit être réaligné que lorsqu'il appartient encore à l'ancien mois.
+  useEffect(() => {
+    if (viewMode !== "month") return;
+    const cursorMonth = `${cursorDate.getFullYear()}-${String(cursorDate.getMonth() + 1).padStart(2, "0")}`;
+    if (!selectedDate.startsWith(cursorMonth)) {
+      setSelectedDate(toISODate(cursorDate));
+    }
+  }, [viewMode, cursorDate.getFullYear(), cursorDate.getMonth(), selectedDate]);
 
   // --- PLAGE DE DATES selon la vue active ---
   // Calcul partagé avec le prefetch de démarrage (src/lib/calendarRange.ts) :
@@ -390,7 +400,7 @@ export default function CalendarScreen() {
   }, []);
 
   // Zone effective : admin peut choisir, employé est verrouillé sur sa zone
-  const effectiveZone = isAdmin ? selectedZone : userZone;
+  const effectiveZone = isAdmin ? selectedZone : (userZone ?? "all");
 
   const filterableEmployees = useMemo(() =>
     (allEmployees ?? []).filter((e: any) =>
@@ -400,28 +410,40 @@ export default function CalendarScreen() {
     [allEmployees, effectiveZone],
   );
 
-  const itemsByDate = useMemo(() => {
-    const map: Record<string, any[]> = {};
-    if (!interventions) return map;
+  const itemsByZoneAndDate = useMemo(() => {
+    const maps: Record<string, Record<string, any[]>> = {
+      all: {},
+      hainaut: {},
+      ardennes: {},
+    };
+    if (!interventions) return maps;
 
     for (const it of interventions) {
       if (!it?.start_time) continue;
-      if (effectiveZone !== "all" && it.zone !== effectiveZone) continue;
       if (hideCash && (it.payment_mode === "cash" || !it.payment_mode)) continue;
       const k = dayKeyFromDateTime(it.start_time);
-      (map[k] ||= []).push(it);
+      (maps.all[k] ||= []).push(it);
+      if (it.zone && maps[it.zone]) {
+        (maps[it.zone][k] ||= []).push(it);
+      }
     }
-    for (const k of Object.keys(map)) {
-      map[k].sort((a, b) => {
-        if (a.time_tbd !== b.time_tbd) return a.time_tbd ? 1 : -1;
-        const za = a.sub_zone ?? a.zone ?? "";
-        const zb = b.sub_zone ?? b.zone ?? "";
-        if (za !== zb) return za.localeCompare(zb);
-        return a.start_time.localeCompare(b.start_time);
-      });
+    for (const map of Object.values(maps)) {
+      for (const k of Object.keys(map)) {
+        map[k].sort((a, b) => {
+          if (a.time_tbd !== b.time_tbd) return a.time_tbd ? 1 : -1;
+          const za = a.sub_zone ?? a.zone ?? "";
+          const zb = b.sub_zone ?? b.zone ?? "";
+          if (za !== zb) return za.localeCompare(zb);
+          return a.start_time.localeCompare(b.start_time);
+        });
+      }
     }
-    return map;
-  }, [interventions, dayKeyFromDateTime, effectiveZone, hideCash]);
+    return maps;
+  }, [interventions, dayKeyFromDateTime, hideCash]);
+
+  // Le changement Toutes/Hainaut/Ardennes devient une simple sélection de
+  // tableau : aucune reconversion de dates ni nouveau tri n'est nécessaire.
+  const itemsByDate = itemsByZoneAndDate[effectiveZone] ?? itemsByZoneAndDate.all;
 
   // --- FILTRES ---
   const filterItem = useCallback(

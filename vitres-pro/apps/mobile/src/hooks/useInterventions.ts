@@ -1,12 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { toBrusselsDateTimeString } from "../lib/date";
+import {
+  patchIntervention,
+  restoreInterventionSnapshots,
+} from "../lib/offline/optimistic";
 
-export const useInterventions = () => {
+export const useInterventions = (range?: { start: string; end: string }) => {
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["interventions"],
+    queryKey: range
+      ? ["interventions", range.start, range.end]
+      : ["interventions"],
     queryFn: async () => {
-      // On appelle ton API Python existante
-      const res = await api.get("/api/interventions");
+      const res = await api.get("/api/interventions", {
+        params: range ? { start: range.start, end: range.end } : undefined,
+      });
       return res.data || [];
     },
     staleTime: 30 * 1000,
@@ -28,19 +36,17 @@ export const useAssignEmployees = () => {
     mutationFn: ({ interventionId, employeeIds }: { interventionId: string; employeeIds: string[] }) =>
       api.patch(`/api/interventions/${interventionId}`, { employee_ids: employeeIds }),
     onMutate: async ({ interventionId, employeeIds }) => {
-      await qc.cancelQueries({ queryKey: ["interventions"] });
-      const prev = qc.getQueryData(["interventions"]);
+      await qc.cancelQueries({ queryKey: ["interventions"], type: "active" });
       const allEmployees = qc.getQueryData<any[]>(["employees"]) ?? [];
       const selectedEmps = allEmployees.filter((e) => employeeIds.includes(e.id));
-      qc.setQueryData<any[]>(["interventions"], (old) =>
-        old ? old.map((i) => i.id === interventionId ? { ...i, employees: selectedEmps } : i) : old
+      const snapshots = patchIntervention(qc, interventionId, (current) =>
+        ({ ...current, employees: selectedEmps })
       );
-      return { prev };
+      return { snapshots };
     },
     onError: (_err, _vars, ctx: any) => {
-      if (ctx?.prev) qc.setQueryData(["interventions"], ctx.prev);
+      if (ctx?.snapshots) restoreInterventionSnapshots(qc, ctx.snapshots);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["interventions"] }),
   });
 };
 
@@ -52,6 +58,37 @@ export const useBulkAssignEmployees = () => {
     }) => api.patch("/api/interventions/bulk-assign", {
       date, sub_zone: subZone, employee_ids: employeeIds, skip_assigned: skipAssigned,
     }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["interventions"] }),
+    onSuccess: (_data, { date, subZone, employeeIds, skipAssigned = true }) => {
+      const allEmployees = qc.getQueryData<any[]>(["employees"]) ?? [];
+      const selectedEmps = allEmployees.filter((e) => employeeIds.includes(e.id));
+      const targetTime = new Date(`${date}T12:00:00`).getTime();
+      const lists = qc.getQueriesData<any[]>({ queryKey: ["interventions"] });
+      for (const [key, data] of lists) {
+        if (
+          key.length !== 3 ||
+          typeof key[1] !== "string" ||
+          typeof key[2] !== "string" ||
+          targetTime < Date.parse(key[1]) ||
+          targetTime > Date.parse(key[2])
+        ) continue;
+        if (!Array.isArray(data)) continue;
+        let touched = false;
+        const next = data.map((item) => {
+          const itemDate = item?.start_time
+            ? toBrusselsDateTimeString(new Date(item.start_time)).split("T")[0]
+            : "";
+          if (
+            item?.sub_zone !== subZone ||
+            itemDate !== date ||
+            (skipAssigned && (item.employees?.length ?? 0) > 0)
+          ) {
+            return item;
+          }
+          touched = true;
+          return { ...item, employees: selectedEmps };
+        });
+        if (touched) qc.setQueryData(key, next);
+      }
+    },
   });
 };

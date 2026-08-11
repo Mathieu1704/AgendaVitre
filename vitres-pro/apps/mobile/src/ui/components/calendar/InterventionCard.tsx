@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 
 export type AssignModalState =
   | { mode: "single"; interventionId: string; currentIds: string[] }
@@ -45,6 +46,7 @@ export const InterventionCard = React.memo(function InterventionCard({
   setInitialAssignIds,
 }: InterventionCardProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const cardPadding = compact ? "p-2" : "p-3";
   const cardRadius = compact ? 12 : 20;
@@ -89,11 +91,17 @@ export const InterventionCard = React.memo(function InterventionCard({
 
   const card = (
     <Pressable
-      onPress={() =>
+      onPress={() => {
+        // La carte possède déjà toutes les données nécessaires à la fiche.
+        // Alimenter sa clé directe évite de scanner les listes du planning au
+        // montage de l'écran suivant, notamment après plusieurs mois visités.
+        if (!queryClient.getQueryData(["intervention", item.id])) {
+          queryClient.setQueryData(["intervention", item.id], item);
+        }
         router.push(
           `/(app)/calendar/${item.id}?from_view=${viewMode}&from_date=${selectedDate}` as any,
-        )
-      }
+        );
+      }}
       onLongPress={() => {
         const currentIds = employees.map((e: any) => e.id);
         setAssignModal({ mode: "single", interventionId: item.id, currentIds });
