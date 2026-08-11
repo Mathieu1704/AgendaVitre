@@ -16,14 +16,12 @@ import NetInfo, { NetInfoState } from "@react-native-community/netinfo";
 import { isOfflineSupported } from "./storage";
 
 function isReachable(state: NetInfoState): boolean {
-  // Android annonce souvent la liaison wifi/5G avant d'avoir vérifié la route
-  // internet. Considérer `null` comme en ligne déclenchait alors toute la série
-  // de requêtes, chacune suivie d'un retry, au démarrage hors connexion.
-  if (state.isInternetReachable === null) return false;
+  // `isInternetReachable` vaut null tant que la sonde n'a pas abouti : dans ce
+  // cas on se fie à `isConnected` pour ne pas afficher un faux hors-ligne au
+  // démarrage.
+  if (state.isInternetReachable === null) return !!state.isConnected;
   return !!state.isConnected && state.isInternetReachable;
 }
-
-let networkWatchStarted = false;
 
 /**
  * Branche NetInfo sur React Query. À appeler une seule fois au démarrage.
@@ -31,12 +29,6 @@ let networkWatchStarted = false;
  */
 export function startNetworkWatch(): () => void {
   if (!isOfflineSupported) return () => {};
-  if (networkWatchStarted) return () => {};
-  networkWatchStarted = true;
-
-  // React Query suppose `online` par défaut. Sur natif, on attend la première
-  // mesure NetInfo avant d'autoriser le moindre appel réseau.
-  onlineManager.setOnline(false);
 
   onlineManager.setEventListener((setOnline) => {
     const unsubscribe = NetInfo.addEventListener((state) => {
@@ -49,10 +41,7 @@ export function startNetworkWatch(): () => void {
   // jusqu'au premier changement d'état réseau.
   NetInfo.fetch().then((state) => onlineManager.setOnline(isReachable(state)));
 
-  return () => {
-    networkWatchStarted = false;
-    onlineManager.setEventListener(() => () => {});
-  };
+  return () => onlineManager.setEventListener(() => () => {});
 }
 
 /** État de connexion, pour l'affichage (bannière hors-ligne). */
