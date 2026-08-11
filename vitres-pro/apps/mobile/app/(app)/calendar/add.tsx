@@ -100,6 +100,28 @@ function servicesAttachedToIntervention(
     }));
 }
 
+// Préfixe des ids "en attente" : une prestation d'une intervention source
+// (sans client) qui n'a encore ni client_service_id ni intervention_service_id
+// — typiquement celles de sa toute première création, avant qu'une chaîne
+// n'existe. Le backend les relie par libellé au catalogue dès la sauvegarde
+// (voir _migrate_orphan_items_to_chain côté API) ; ce préfixe permet de les
+// afficher dès maintenant comme des cases à cocher plutôt que des champs
+// ad-hoc, sans attendre cet aller-retour.
+const PENDING_CHAIN_PREFIX = "__pending__:";
+const pendingChainId = (label: string) => `${PENDING_CHAIN_PREFIX}${label}`;
+const isPendingChainId = (id: string) => id.startsWith(PENDING_CHAIN_PREFIX);
+
+function pendingChainServices(source: any, startAt: number): ClientService[] {
+  return (source?.items ?? [])
+    .filter((item: any) => !item.client_service_id && !item.intervention_service_id)
+    .map((item: any, i: number) => ({
+      id: pendingChainId(item.label),
+      label: item.label,
+      price: Number(item.price) || 0,
+      position: startAt + i,
+    }));
+}
+
 function mergeClientServices(
   catalogue: ClientService[],
   attached: ClientService[],
@@ -585,13 +607,15 @@ export default function AddInterventionScreen() {
     networkMode: "online",
   });
 
-  const attachedChainServices = useMemo(
-    () => servicesAttachedToIntervention(
-      isEditMode ? interventionData : isRepriseMode ? repriseSource : null,
-      "intervention_service_id",
-    ),
-    [isEditMode, isRepriseMode, interventionData, repriseSource],
-  );
+  const attachedChainServices = useMemo(() => {
+    const source = isEditMode ? interventionData : isRepriseMode ? repriseSource : null;
+    if (!source || source.client_id) return [];
+    const real = servicesAttachedToIntervention(source, "intervention_service_id");
+    // Encore ad-hoc côté serveur, mais affichées dès maintenant comme des
+    // cases cochées : le backend les rattachera par libellé à la sauvegarde.
+    const pending = pendingChainServices(source, real.length);
+    return [...real, ...pending];
+  }, [isEditMode, isRepriseMode, interventionData, repriseSource]);
 
   const availableChainServices = useMemo(
     () => mergeClientServices(chainServices, attachedChainServices),
@@ -607,6 +631,9 @@ export default function AddInterventionScreen() {
 
   const scheduleServiceLabelSave = useCallback(
     (serviceId: string, label: string) => {
+      // "En attente" : rien à sauvegarder côté serveur pour l'instant — la
+      // saisie reste dans serviceLabelDrafts et part avec la validation.
+      if (isPendingChainId(serviceId)) return;
       const clientId = selectedClient?.id;
       if (!clientId && !activeChainId) return;
       if (serviceLabelTimers.current[serviceId]) {
@@ -774,23 +801,18 @@ export default function AddInterventionScreen() {
       if (interventionData.hourly_rate_id)
         setSelectedRateId(interventionData.hourly_rate_id);
       if (interventionData.items && interventionData.items.length > 0) {
-        const withId = interventionData.items.filter(
-          (i: any) => i.client_service_id || i.intervention_service_id,
-        );
-        const withoutId = interventionData.items.filter(
-          (i: any) => !i.client_service_id && !i.intervention_service_id,
-        );
-        setCheckedServiceIds(
-          new Set(
-            withId.map((i: any) =>
-              String(i.client_service_id || i.intervention_service_id),
-            ),
-          ),
-        );
+        // Sans client, toute prestation (même sans id encore) devient une
+        // case cochée : la chaîne existe toujours pour une intervention déjà
+        // sauvegardée, donc rien ne reste durablement en ad-hoc ici.
+        const resolveId = (i: any) =>
+          i.client_service_id || i.intervention_service_id ||
+          (!interventionClientId ? pendingChainId(i.label) : null);
+        const withId = interventionData.items.filter((i: any) => resolveId(i));
+        const withoutId = interventionData.items.filter((i: any) => !resolveId(i));
+        setCheckedServiceIds(new Set(withId.map((i: any) => String(resolveId(i)))));
         const overrides: Record<string, string> = {};
         withId.forEach((i: any) => {
-          overrides[String(i.client_service_id || i.intervention_service_id)] =
-            i.price.toString();
+          overrides[String(resolveId(i))] = i.price.toString();
         });
         setServicePriceOverrides(overrides);
         setAdHocItems(
@@ -858,23 +880,18 @@ export default function AddInterventionScreen() {
       if (repriseSource.employees)
         setSelectedEmployeeIds(repriseSource.employees.map((e: any) => e.id));
       if (repriseSource.items && repriseSource.items.length > 0) {
-        const withId = repriseSource.items.filter(
-          (i: any) => i.client_service_id || i.intervention_service_id,
-        );
-        const withoutId = repriseSource.items.filter(
-          (i: any) => !i.client_service_id && !i.intervention_service_id,
-        );
-        setCheckedServiceIds(
-          new Set(
-            withId.map((i: any) =>
-              String(i.client_service_id || i.intervention_service_id),
-            ),
-          ),
-        );
+        // Sans client, la chaîne existera dès la sauvegarde de cette reprise
+        // (source déjà existante = déjà un id à utiliser comme chaîne) : une
+        // prestation encore sans id s'affiche donc déjà cochée, en attente.
+        const resolveId = (i: any) =>
+          i.client_service_id || i.intervention_service_id ||
+          (!repriseClientId ? pendingChainId(i.label) : null);
+        const withId = repriseSource.items.filter((i: any) => resolveId(i));
+        const withoutId = repriseSource.items.filter((i: any) => !resolveId(i));
+        setCheckedServiceIds(new Set(withId.map((i: any) => String(resolveId(i)))));
         const overrides: Record<string, string> = {};
         withId.forEach((i: any) => {
-          overrides[String(i.client_service_id || i.intervention_service_id)] =
-            i.price.toString();
+          overrides[String(resolveId(i))] = i.price.toString();
         });
         setServicePriceOverrides(overrides);
         setAdHocItems(
@@ -918,14 +935,20 @@ export default function AddInterventionScreen() {
     const usingChain = !selectedClient?.id;
     const serviceItems = availableServices
       .filter((s) => checkedServiceIds.has(s.id))
-      .map((s) => ({
-        label: s.label,
-        price: servicePriceOverrides[s.id] ?? s.price.toString(),
-        client_service_id: usingChain ? undefined : s.id,
-        intervention_service_id: usingChain ? s.id : undefined,
-      }));
+      .map((s) => {
+        const pending = usingChain && isPendingChainId(s.id);
+        return {
+          label: serviceLabelDrafts[s.id] ?? s.label,
+          price: servicePriceOverrides[s.id] ?? s.price.toString(),
+          // "En attente" : pas encore de vraie entrée catalogue côté serveur —
+          // envoyé en simple label+prix, le backend la relie par libellé au
+          // moment de la sauvegarde (voir _migrate_orphan_items_to_chain).
+          client_service_id: usingChain || pending ? undefined : s.id,
+          intervention_service_id: usingChain && !pending ? s.id : undefined,
+        };
+      });
     return [...serviceItems, ...adHocItems];
-  }, [availableServices, selectedClient?.id, checkedServiceIds, servicePriceOverrides, adHocItems]);
+  }, [availableServices, selectedClient?.id, checkedServiceIds, servicePriceOverrides, serviceLabelDrafts, adHocItems]);
 
   const totalPrice = useMemo(
     () =>
@@ -2189,6 +2212,17 @@ export default function AddInterventionScreen() {
                         <Pressable
                           onPress={async () => {
                             try {
+                              // "En attente" : rien n'existe encore côté
+                              // catalogue, décocher suffit (revient à ne pas
+                              // inclure cette prestation cette fois-ci).
+                              if (isPendingChainId(svc.id)) {
+                                setCheckedServiceIds((prev) => {
+                                  const n = new Set(prev);
+                                  n.delete(svc.id);
+                                  return n;
+                                });
+                                return;
+                              }
                               if (selectedClient?.id) {
                                 applyServiceDelete(
                                   queryClient,
