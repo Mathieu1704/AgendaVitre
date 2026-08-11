@@ -39,17 +39,37 @@ export function useOutboxSync() {
   // Remplace les données optimistes par l'état réel du serveur : lui seul
   // calcule la sous-zone, les identifiants définitifs et les totaux.
   const resync = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["interventions"] });
+    // Marque toutes les variantes comme périmées, mais ne recharge ici que les
+    // petites plages de planning visibles. Le dashboard historique sera
+    // réconcilié lorsqu'il reprendra le focus, sans bloquer l'interaction en
+    // cours dans le calendrier.
+    queryClient.invalidateQueries({
+      queryKey: ["interventions"],
+      refetchType: "none",
+    });
+    queryClient.refetchQueries({
+      type: "active",
+      predicate: (query) => {
+        const key = query.queryKey;
+        if (
+          key[0] !== "interventions" ||
+          key.length !== 3 ||
+          typeof key[1] !== "string" ||
+          typeof key[2] !== "string"
+        ) return false;
+        const spanDays = (Date.parse(key[2]) - Date.parse(key[1])) / 86_400_000;
+        return spanDays >= 20 && spanDays <= 100;
+      },
+    });
     queryClient.invalidateQueries({ queryKey: ["intervention"] });
     queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
     queryClient.invalidateQueries({ queryKey: ["notifications"] });
   }, [queryClient]);
 
   const run = useCallback(async () => {
-    const result = await flush();
-    if (result.sent > 0) resync();
+    await flush();
     await refresh();
-  }, [resync, refresh]);
+  }, [refresh]);
 
   useEffect(() => {
     if (!isOfflineSupported) return;

@@ -15,17 +15,30 @@ import type { PersistedClient, Persister } from "@tanstack/react-query-persist-c
 
 const PREFIX = "lvm_query_cache_v2";
 const META_KEY = `${PREFIX}:meta`;
-const chunkKey = (i: number) => `${PREFIX}:${i}`;
+const chunkKey = (i: number, generation?: string) =>
+  generation ? `${PREFIX}:${generation}:${i}` : `${PREFIX}:${i}`;
 
 // 512 Ko : large sous la limite de 2 Mo, en gardant à l'esprit que les
 // caractères non-ASCII (accents) pèsent plusieurs octets en UTF-8.
 const CHUNK_SIZE = 512 * 1024;
+const PERSIST_DELAY_MS = 1500;
 
-type Meta = { count: number };
+type Meta = { count: number; generation?: string };
 
-async function clearChunks(count: number): Promise<void> {
-  const keys = [META_KEY];
-  for (let i = 0; i < count; i++) keys.push(chunkKey(i));
+let pendingClient: PersistedClient | null = null;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let drainPromise: Promise<void> | null = null;
+let generationCounter = 0;
+
+function keysForMeta(meta: Meta): string[] {
+  return Array.from(
+    { length: meta.count },
+    (_, i) => chunkKey(i, meta.generation),
+  );
+}
+
+async function clearChunks(meta: Meta | null): Promise<void> {
+  const keys = [META_KEY, ...(meta ? keysForMeta(meta) : [])];
   await AsyncStorage.multiRemove(keys);
 }
 
@@ -38,32 +51,83 @@ async function readMeta(): Promise<Meta | null> {
   }
 }
 
-export const chunkedAsyncStoragePersister: Persister = {
-  async persistClient(client: PersistedClient) {
-    try {
-      const serialized = JSON.stringify(client);
-      const chunks: [string, string][] = [];
-      for (let i = 0; i * CHUNK_SIZE < serialized.length; i++) {
-        chunks.push([chunkKey(i), serialized.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE)]);
-      }
-
-      // Les morceaux d'abord, l'enregistrement de tête ensuite : si l'écriture
-      // est interrompue, la tête pointe encore sur l'ancienne version complète
-      // plutôt que sur un cache tronqué.
-      const previous = await readMeta();
-      await AsyncStorage.multiSet(chunks);
-      await AsyncStorage.setItem(META_KEY, JSON.stringify({ count: chunks.length }));
-
-      // Purge les morceaux devenus inutiles si le cache a rétréci.
-      if (previous && previous.count > chunks.length) {
-        const stale: string[] = [];
-        for (let i = chunks.length; i < previous.count; i++) stale.push(chunkKey(i));
-        await AsyncStorage.multiRemove(stale);
-      }
-    } catch {
-      // Un cache non écrit dégrade le hors-ligne mais ne doit jamais faire
-      // échouer l'application.
+async function writeClient(client: PersistedClient): Promise<void> {
+  try {
+    const serialized = JSON.stringify(client);
+    const generation = `${Date.now()}-${++generationCounter}`;
+    const chunks: [string, string][] = [];
+    for (let i = 0; i * CHUNK_SIZE < serialized.length; i++) {
+      chunks.push([chunkKey(i, generation), serialized.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE)]);
     }
+
+    // Les morceaux d'abord, l'enregistrement de tête ensuite : si l'écriture
+    // est interrompue, la tête pointe encore sur l'ancienne version complète
+    // plutôt que sur un cache tronqué.
+    const previous = await readMeta();
+    await AsyncStorage.multiSet(chunks);
+    await AsyncStorage.setItem(
+      META_KEY,
+      JSON.stringify({ count: chunks.length, generation }),
+    );
+
+    // La tête pointe maintenant intégralement sur la nouvelle génération :
+    // l'ancienne peut être supprimée sans fenêtre de cache partiellement écrit.
+    if (previous) {
+      await AsyncStorage.multiRemove(keysForMeta(previous));
+    }
+  } catch {
+    // Un cache non écrit dégrade le hors-ligne mais ne doit jamais faire
+    // échouer l'application.
+  }
+}
+
+/**
+ * Écrit au plus une version du cache à la fois. Si React Query change pendant
+ * l'écriture, seule la version la plus récente est conservée pour le passage
+ * suivant. Cela évite les écritures concurrentes et les sérialisations en
+ * rafale sur le thread JavaScript.
+ */
+async function drainPendingClient(): Promise<void> {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+
+  if (!drainPromise) {
+    drainPromise = (async () => {
+      while (pendingClient) {
+        const client = pendingClient;
+        pendingClient = null;
+        await writeClient(client);
+      }
+    })().finally(() => {
+      drainPromise = null;
+    });
+  }
+
+  await drainPromise;
+
+  // Une demande peut arriver entre le dernier test de la boucle et le finally.
+  if (pendingClient) await drainPendingClient();
+}
+
+function schedulePersist(client: PersistedClient): void {
+  pendingClient = client;
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    void drainPendingClient();
+  }, PERSIST_DELAY_MS);
+}
+
+/** Force la dernière sauvegarde de lecture avant la mise en arrière-plan. */
+export async function flushPersistedQueryCache(): Promise<void> {
+  await drainPendingClient();
+}
+
+export const chunkedAsyncStoragePersister: Persister = {
+  persistClient(client: PersistedClient) {
+    schedulePersist(client);
   },
 
   async restoreClient() {
@@ -75,7 +139,7 @@ export const chunkedAsyncStoragePersister: Persister = {
       const meta = await readMeta();
       if (!meta || meta.count <= 0) return undefined;
 
-      const keys = Array.from({ length: meta.count }, (_, i) => chunkKey(i));
+      const keys = keysForMeta(meta);
       const entries = await AsyncStorage.multiGet(keys);
 
       // Un morceau manquant rend l'ensemble inexploitable : on repart de zéro
@@ -83,7 +147,7 @@ export const chunkedAsyncStoragePersister: Persister = {
       const parts: string[] = [];
       for (const [, value] of entries) {
         if (value == null) {
-          await clearChunks(meta.count);
+          await clearChunks(meta);
           return undefined;
         }
         parts.push(value);
@@ -96,7 +160,13 @@ export const chunkedAsyncStoragePersister: Persister = {
   },
 
   async removeClient() {
+    pendingClient = null;
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    if (drainPromise) await drainPromise;
     const meta = await readMeta();
-    await clearChunks(meta?.count ?? 0);
+    await clearChunks(meta);
   },
 };

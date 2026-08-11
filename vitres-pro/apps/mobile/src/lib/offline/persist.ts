@@ -28,7 +28,20 @@ export const queryPersister = chunkedAsyncStoragePersister;
 function isPersistableKey(key: readonly unknown[]): boolean {
   const [root] = key;
 
-  if (root === "interventions") return key.length > 1;
+  if (root === "interventions") {
+    // Le planning courant charge environ trois mois. Les grandes plages du
+    // dashboard (plusieurs milliers de lignes) et la liste historique de
+    // facturation ne sont pas nécessaires au travail hors ligne et rendaient
+    // chaque sauvegarde beaucoup trop lourde sur Android.
+    if (key.length !== 3 || typeof key[1] !== "string" || typeof key[2] !== "string") {
+      return false;
+    }
+    const start = Date.parse(key[1]);
+    const end = Date.parse(key[2]);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return false;
+    const spanDays = (end - start) / (24 * 60 * 60 * 1000);
+    return spanDays >= 20 && spanDays <= 100;
+  }
 
   // Volontairement exclus :
   //  - ["clients"] : ~3000 clients, inutiles hors ligne puisque chaque

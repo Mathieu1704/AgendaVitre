@@ -1,8 +1,10 @@
 import { Stack } from "expo-router";
+import { useEffect } from "react";
 import { PaperProvider, MD3LightTheme, MD3DarkTheme } from "react-native-paper";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { AppState } from "react-native";
 import { ToastHost } from "../src/ui/toast";
 import { ThemeProvider, useTheme } from "../src/ui/components/ThemeToggle";
 import { isOfflineSupported } from "../src/lib/offline/storage";
@@ -13,6 +15,7 @@ import {
   PERSIST_MAX_AGE,
 } from "../src/lib/offline/persist";
 import { flush as flushOutbox } from "../src/lib/offline/outbox";
+import { flushPersistedQueryCache } from "../src/lib/offline/chunkedPersister";
 import "../app.css";
 
 // Sentry désactivé temporairement : le build natif 1.0.2 a été publié sans le
@@ -133,6 +136,15 @@ function ThemedApp() {
 }
 
 function RootLayout() {
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "inactive" || state === "background") {
+        void flushPersistedQueryCache();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>
