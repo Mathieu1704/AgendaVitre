@@ -1,11 +1,21 @@
 import axios from "axios";
 import { router } from "expo-router";
+import { Platform } from "react-native";
 import { onlineManager } from "@tanstack/react-query";
 import { supabase } from "./supabase";
 
-// Pour le WEB, localhost marche.
-// Pour ANDROID Emulator, il faudra peut-être utiliser 'http://10.0.2.2:8000' plus tard.
-const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000";
+const configuredApiUrl =
+  process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000";
+
+// Dans l'émulateur Android, `localhost` pointe vers Android lui-même. L'hôte
+// macOS est exposé par l'adresse spéciale 10.0.2.2. iOS et le web conservent
+// localhost, tandis que les URL de production (Railway) restent inchangées.
+const API_URL =
+  Platform.OS === "android"
+    ? configuredApiUrl
+        .replace("://localhost", "://10.0.2.2")
+        .replace("://127.0.0.1", "://10.0.2.2")
+    : configuredApiUrl;
 
 export const api = axios.create({
   baseURL: API_URL,
