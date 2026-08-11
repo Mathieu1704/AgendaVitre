@@ -113,7 +113,7 @@ export const MonthView = React.memo(function MonthView({
   const dayRawEvents = monthRawEvents.filter((e) => e.start_time.split("T")[0] === selectedDate);
 
   const ctx: InterventionGroupsCtx = {
-    isDark, isAdmin, subZoneMap, viewMode, selectedDate,
+    isDark, isAdmin, subZoneMap, viewMode, selectedDate, effectiveZone,
     setAssignModal, setSelectedAssignIds, setInitialAssignIds,
   };
 

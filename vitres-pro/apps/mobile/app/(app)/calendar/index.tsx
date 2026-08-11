@@ -328,6 +328,14 @@ export default function CalendarScreen() {
     }
   }, [params.date]);
 
+  useEffect(() => {
+    if (!isAdmin || !params.zone) return;
+    const zone = typeof params.zone === "string" ? params.zone : params.zone[0];
+    if (zone === "all" || zone === "hainaut" || zone === "ardennes") {
+      setSelectedZone(zone);
+    }
+  }, [isAdmin, params.zone]);
+
   // Les flèches mensuelles changent le mois affiché. Le jour sélectionné ne
   // doit être réaligné que lorsqu'il appartient encore à l'ancien mois.
   useEffect(() => {
@@ -858,7 +866,7 @@ export default function CalendarScreen() {
         <Pressable
           onPress={() =>
             router.push(
-              `/(app)/calendar/add?from_view=${viewMode}&from_date=${selectedDate}` as any,
+              `/(app)/calendar/add?from_view=${viewMode}&from_date=${selectedDate}&from_zone=${effectiveZone}` as any,
             )
           }
           className="absolute bottom-6 right-6 h-14 w-14 bg-primary items-center justify-center shadow-lg shadow-primary/30 active:scale-90 transition-transform rounded-full"

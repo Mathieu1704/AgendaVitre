@@ -29,6 +29,7 @@ interface InterventionCardProps {
   compact?: boolean;
   viewMode: string;
   selectedDate: string;
+  effectiveZone: string;
   leftBarColor?: string;
   setAssignModal: React.Dispatch<React.SetStateAction<AssignModalState>>;
   setSelectedAssignIds: React.Dispatch<React.SetStateAction<string[]>>;
@@ -40,6 +41,7 @@ export const InterventionCard = React.memo(function InterventionCard({
   compact = false,
   viewMode,
   selectedDate,
+  effectiveZone,
   leftBarColor,
   setAssignModal,
   setSelectedAssignIds,
@@ -98,9 +100,15 @@ export const InterventionCard = React.memo(function InterventionCard({
         if (!queryClient.getQueryData(["intervention", item.id])) {
           queryClient.setQueryData(["intervention", item.id], item);
         }
-        router.push(
-          `/(app)/calendar/${item.id}?from_view=${viewMode}&from_date=${selectedDate}` as any,
-        );
+        router.push({
+          pathname: "/(app)/calendar/[id]",
+          params: {
+            id: item.id,
+            from_view: viewMode,
+            from_date: selectedDate,
+            from_zone: effectiveZone,
+          },
+        });
       }}
       onLongPress={() => {
         const currentIds = employees.map((e: any) => e.id);

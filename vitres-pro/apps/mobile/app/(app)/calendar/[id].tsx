@@ -63,7 +63,12 @@ import { Dialog } from "../../../src/ui/components/Dialog";
 import { toBrusselsDateTimeString, parseBrusselsDateTimeString } from "../../../src/lib/date";
 
 export default function InterventionDetailScreen() {
-  const { id, from_view, from_date } = useLocalSearchParams();
+  const { id, from_view, from_date, from_zone } = useLocalSearchParams<{
+    id: string;
+    from_view?: string;
+    from_date?: string;
+    from_zone?: string;
+  }>();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isDark } = useTheme();
@@ -136,7 +141,11 @@ export default function InterventionDetailScreen() {
     if (hideCash && isCash) {
       router.replace({
         pathname: "/(app)/calendar",
-        params: from_view ? { view: from_view, date: from_date } : {},
+        params: {
+          ...(from_view ? { view: from_view } : {}),
+          ...(from_date ? { date: from_date } : {}),
+          ...(from_zone ? { zone: from_zone } : {}),
+        },
       });
     }
   }, [hideCash, intervention]);
@@ -161,7 +170,11 @@ export default function InterventionDetailScreen() {
       );
       router.push({
         pathname: "/(app)/calendar",
-        params: from_view ? { view: from_view, date: from_date } : {},
+        params: {
+          ...(from_view ? { view: from_view } : {}),
+          ...(from_date ? { date: from_date } : {}),
+          ...(from_zone ? { zone: from_zone } : {}),
+        },
       });
     },
     onError: () => {
@@ -185,6 +198,7 @@ export default function InterventionDetailScreen() {
           : intervention?.start_time
             ? { date: intervention.start_time }
             : {}),
+        ...(from_zone ? { zone: from_zone } : {}),
       },
     });
   };
@@ -242,7 +256,10 @@ export default function InterventionDetailScreen() {
     },
     onSuccess: () => {
       setShowItemsChecklist(false);
-      router.push(`/(app)/calendar/add?reprise_of=${id}` as any);
+      router.push({
+        pathname: "/(app)/calendar/add",
+        params: { reprise_of: id, from_view, from_date, from_zone },
+      });
     },
     onError: () => toast.error("Erreur", "Impossible d'enregistrer les prestations."),
   });
@@ -907,7 +924,10 @@ export default function InterventionDetailScreen() {
           <Button
             onPress={() => {
               if (!intervention.items || intervention.items.length === 0) {
-                router.push(`/(app)/calendar/add?reprise_of=${id}` as any);
+                router.push({
+                  pathname: "/(app)/calendar/add",
+                  params: { reprise_of: id, from_view, from_date, from_zone },
+                });
                 return;
               }
               setNotDoneIds(new Set());
@@ -940,7 +960,10 @@ export default function InterventionDetailScreen() {
         onClose={() => setMenuVisible(false)}
         onEdit={() => {
           setMenuVisible(false);
-          router.push(`/(app)/calendar/add?id=${id}`);
+          router.push({
+            pathname: "/(app)/calendar/add",
+            params: { id, from_view, from_date, from_zone },
+          });
         }}
         onDelete={handleDeleteRequest}
       />
@@ -969,7 +992,10 @@ export default function InterventionDetailScreen() {
         cancelText="Non"
         onConfirm={() => {
           setShowAllDoneConfirm(false);
-          router.push(`/(app)/calendar/add?reprise_of=${id}` as any);
+          router.push({
+            pathname: "/(app)/calendar/add",
+            params: { reprise_of: id, from_view, from_date, from_zone },
+          });
         }}
         onCancel={() => {
           setShowAllDoneConfirm(false);

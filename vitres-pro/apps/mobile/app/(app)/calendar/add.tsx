@@ -244,11 +244,12 @@ function generateDates(
 
 export default function AddInterventionScreen() {
   const router = useRouter();
-  const { id, reprise_of, from_view, from_date } = useLocalSearchParams<{
+  const { id, reprise_of, from_view, from_date, from_zone } = useLocalSearchParams<{
     id?: string;
     reprise_of?: string;
     from_view?: string;
     from_date?: string;
+    from_zone?: string;
   }>();
   const isEditMode = !!id && !reprise_of;
   const isRepriseMode = !!reprise_of;
@@ -952,8 +953,14 @@ export default function AddInterventionScreen() {
             ? "Intervention modifiée !"
             : "Modifiée. Sera synchronisée au retour du réseau.",
         );
-        if (router.canGoBack()) router.back();
-        else router.replace(`/(app)/calendar/${id}` as any);
+        router.dismissTo({
+          pathname: "/(app)/calendar",
+          params: {
+            date: from_date ?? startDateStr.split("T")[0],
+            ...(from_view ? { view: from_view } : {}),
+            ...(from_zone ? { zone: from_zone } : {}),
+          },
+        });
         return;
       }
 
@@ -1045,6 +1052,7 @@ export default function AddInterventionScreen() {
           params: {
             date: startDateStr,
             ...(from_view ? { view: from_view } : {}),
+            ...(from_zone ? { zone: from_zone } : {}),
           },
         });
       }
@@ -1082,7 +1090,11 @@ export default function AddInterventionScreen() {
       );
       router.replace({
         pathname: "/(app)/calendar",
-        params: from_view ? { view: from_view, date: from_date } : {},
+        params: {
+          ...(from_view ? { view: from_view } : {}),
+          ...(from_date ? { date: from_date } : {}),
+          ...(from_zone ? { zone: from_zone } : {}),
+        },
       });
     } catch (err: any) {
       toast.error("Erreur", err.response?.data?.detail || "Erreur inconnue");
@@ -1134,7 +1146,11 @@ export default function AddInterventionScreen() {
             else
               router.replace({
                 pathname: "/(app)/calendar",
-                params: from_view ? { view: from_view, date: from_date } : {},
+                params: {
+                  ...(from_view ? { view: from_view } : {}),
+                  ...(from_date ? { date: from_date } : {}),
+                  ...(from_zone ? { zone: from_zone } : {}),
+                },
               });
           }}
           className="p-2 rounded-full hover:bg-muted active:bg-muted"
@@ -2257,9 +2273,11 @@ export default function AddInterventionScreen() {
                       else
                         router.replace({
                           pathname: "/(app)/calendar",
-                          params: from_view
-                            ? { view: from_view, date: from_date }
-                            : {},
+                          params: {
+                            ...(from_view ? { view: from_view } : {}),
+                            ...(from_date ? { date: from_date } : {}),
+                            ...(from_zone ? { zone: from_zone } : {}),
+                          },
                         });
                     }}
                     className="w-full"

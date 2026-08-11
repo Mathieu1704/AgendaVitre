@@ -63,7 +63,7 @@ export const WeekView = React.memo(function WeekView({
   }, [weekRawEvents]);
 
   const ctx: InterventionGroupsCtx = {
-    isDark, isAdmin, subZoneMap, viewMode, selectedDate,
+    isDark, isAdmin, subZoneMap, viewMode, selectedDate, effectiveZone,
     setAssignModal, setSelectedAssignIds, setInitialAssignIds,
   };
 

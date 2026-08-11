@@ -13,6 +13,7 @@ export type InterventionGroupsCtx = {
   subZoneMap: Map<string, { label: string; color: string }>;
   viewMode: string;
   selectedDate: string;
+  effectiveZone: string;
   setAssignModal: React.Dispatch<React.SetStateAction<AssignModalState>>;
   setSelectedAssignIds: React.Dispatch<React.SetStateAction<string[]>>;
   setInitialAssignIds: React.Dispatch<React.SetStateAction<string[]>>;
@@ -130,7 +131,7 @@ export function renderInterventionGroups(
 ): React.ReactNode {
   if (list.length === 0) return null;
 
-  const { isDark, isAdmin, subZoneMap, viewMode, selectedDate, setAssignModal, setSelectedAssignIds, setInitialAssignIds } = ctx;
+  const { isDark, isAdmin, subZoneMap, viewMode, selectedDate, effectiveZone, setAssignModal, setSelectedAssignIds, setInitialAssignIds } = ctx;
 
   const sortItems = (items: any[]) => [...items].sort((a, b) => {
     const sd = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
@@ -241,6 +242,7 @@ export function renderInterventionGroups(
                             compact={compact}
                             viewMode={viewMode}
                             selectedDate={selectedDate}
+                            effectiveZone={effectiveZone}
                             setAssignModal={setAssignModal}
                             setSelectedAssignIds={setSelectedAssignIds}
                             setInitialAssignIds={setInitialAssignIds}

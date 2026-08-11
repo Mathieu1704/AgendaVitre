@@ -140,6 +140,7 @@ export const DayView = React.memo(function DayView({
           item={row.item}
           viewMode={viewMode}
           selectedDate={selectedDate}
+          effectiveZone={effectiveZone}
           leftBarColor={row.barColor}
           setAssignModal={setAssignModal}
           setSelectedAssignIds={setSelectedAssignIds}
@@ -147,7 +148,7 @@ export const DayView = React.memo(function DayView({
         />
       );
     },
-    [isDark, isAdmin, iso, viewMode, selectedDate, setAssignModal, setSelectedAssignIds, setInitialAssignIds],
+    [isDark, isAdmin, iso, viewMode, selectedDate, effectiveZone, setAssignModal, setSelectedAssignIds, setInitialAssignIds],
   );
 
   const listHeader = useMemo(
