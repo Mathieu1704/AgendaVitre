@@ -312,11 +312,13 @@ def create_intervention(
             if source and not source.client_id:
                 if not source.reprise_chain_id:
                     source.reprise_chain_id = source.id
-                    # Première reprise de cette source : ses prestations
-                    # ad-hoc d'origine deviennent un vrai catalogue.
-                    chain_label_map = _migrate_orphan_items_to_chain(
-                        db, source, source.reprise_chain_id,
-                    )
+                # Migre les prestations ad-hoc encore orphelines de la source
+                # (typiquement celles de sa toute première création, avant que
+                # sa propre chaîne n'existe) — indépendant du fait que la
+                # chaîne existait déjà ou vient d'être assignée ci-dessus.
+                chain_label_map = _migrate_orphan_items_to_chain(
+                    db, source, source.reprise_chain_id,
+                )
                 new_intervention.reprise_chain_id = source.reprise_chain_id
         if not new_intervention.reprise_chain_id:
             new_intervention.reprise_chain_id = new_intervention.id
@@ -415,11 +417,14 @@ def update_intervention(
 
     # Backfill paresseux : une intervention sans client créée avant ce champ
     # n'a pas de reprise_chain_id. On lui en attribue un dès la première
-    # modification pour qu'elle puisse avoir un catalogue de services persistant,
-    # et on migre ses prestations ad-hoc existantes en entrées de catalogue.
+    # modification pour qu'elle puisse avoir un catalogue de services persistant.
+    # On migre aussi ses prestations ad-hoc encore orphelines (typiquement
+    # celles de sa toute première création) — indépendamment du fait que la
+    # chaîne existait déjà ou vient d'être assignée ci-dessus.
     update_label_map = {}
-    if not db_intervention.client_id and not db_intervention.reprise_chain_id:
-        db_intervention.reprise_chain_id = db_intervention.id
+    if not db_intervention.client_id:
+        if not db_intervention.reprise_chain_id:
+            db_intervention.reprise_chain_id = db_intervention.id
         update_label_map = _migrate_orphan_items_to_chain(
             db, db_intervention, db_intervention.reprise_chain_id,
         )
