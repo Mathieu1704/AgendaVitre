@@ -7,7 +7,6 @@ export default function CalendarLayout() {
       <Stack.Screen name="[id]" />
       <Stack.Screen name="add" />
       <Stack.Screen name="rate-session" />
-      <Stack.Screen name="raw-event/[id]" />
     </Stack>
   );
 }

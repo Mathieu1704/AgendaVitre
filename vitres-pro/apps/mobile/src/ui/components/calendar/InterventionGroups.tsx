@@ -202,7 +202,7 @@ export function renderInterventionGroups(
               {szGroups.map((sg, idx) => {
                 const sz = sg.code ? subZoneMap.get(sg.code) : null;
                 return (
-                  <View key={sg.code ?? `null-${idx}`} style={{ marginTop: idx === 0 ? 0 : compact ? 4 : 10 }}>
+                  <View key={`${sg.code ?? "null"}-${idx}`} style={{ marginTop: idx === 0 ? 0 : compact ? 4 : 10 }}>
                     {!compact && hasMultipleSubZones && (
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6, marginLeft: 8 }}>
                         <Text style={{ fontSize: 11, fontWeight: "800", color: sz?.color ?? "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6 }}>
