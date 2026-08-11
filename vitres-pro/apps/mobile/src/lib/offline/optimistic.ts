@@ -281,3 +281,41 @@ export function applyServiceDelete(
     Array.isArray(prev) ? prev.filter((s) => s?.id !== serviceId) : prev,
   );
 }
+
+// --- Catalogue de prestations d'une intervention sans client (chaîne de
+// reprises) — mêmes opérations que ci-dessus, sur ["chain-services", chainId].
+
+export function applyChainServiceCreate(
+  qc: QueryClient,
+  chainId: string,
+  service: { id: string; label: string; price: number; position: number },
+): void {
+  qc.setQueryData<any[]>(["chain-services", chainId], (prev) => {
+    const list = Array.isArray(prev) ? prev : [];
+    if (list.some((s) => s?.id === service.id)) return list;
+    return [...list, { ...service, pending_sync: true }];
+  });
+}
+
+export function applyChainServiceRename(
+  qc: QueryClient,
+  chainId: string,
+  serviceId: string,
+  label: string,
+): void {
+  qc.setQueryData<any[]>(["chain-services", chainId], (prev) =>
+    Array.isArray(prev)
+      ? prev.map((s) => (s?.id === serviceId ? { ...s, label } : s))
+      : prev,
+  );
+}
+
+export function applyChainServiceDelete(
+  qc: QueryClient,
+  chainId: string,
+  serviceId: string,
+): void {
+  qc.setQueryData<any[]>(["chain-services", chainId], (prev) =>
+    Array.isArray(prev) ? prev.filter((s) => s?.id !== serviceId) : prev,
+  );
+}

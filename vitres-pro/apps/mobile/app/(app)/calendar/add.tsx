@@ -30,6 +30,9 @@ import {
   applyServiceCreate,
   applyServiceRename,
   applyServiceDelete,
+  applyChainServiceCreate,
+  applyChainServiceRename,
+  applyChainServiceDelete,
 } from "../../../src/lib/offline/optimistic";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
 import {
@@ -70,7 +73,12 @@ type Client = {
   address: string | null;
   phone?: string | null;
 };
-type Item = { label: string; price: string; client_service_id?: string | null };
+type Item = {
+  label: string;
+  price: string;
+  client_service_id?: string | null;
+  intervention_service_id?: string | null;
+};
 type ClientService = {
   id: string;
   label: string;
@@ -78,11 +86,14 @@ type ClientService = {
   position: number;
 };
 
-function servicesAttachedToIntervention(source: any): ClientService[] {
+function servicesAttachedToIntervention(
+  source: any,
+  idField: "client_service_id" | "intervention_service_id" = "client_service_id",
+): ClientService[] {
   return (source?.items ?? [])
-    .filter((item: any) => item.client_service_id)
+    .filter((item: any) => item[idField])
     .map((item: any, position: number) => ({
-      id: String(item.client_service_id),
+      id: String(item[idField]),
       label: item.label,
       price: Number(item.price) || 0,
       position,
@@ -548,25 +559,82 @@ export default function AddInterventionScreen() {
     [clientServices, attachedClientServices],
   );
 
+  // Catalogue de services pour une intervention SANS client : persiste par
+  // reprise_chain_id (identité stable entre une intervention et ses reprises)
+  // au lieu de client_id. Même logique de secours que ci-dessus, en miroir.
+  // Prédit ici la même valeur que le backend assignera à la création : la
+  // chaîne d'une source sans client_id ni reprise_chain_id, c'est elle-même.
+  const activeChainId = useMemo(() => {
+    const source = isEditMode ? interventionData : isRepriseMode ? repriseSource : null;
+    if (!source || source.client_id) return null;
+    return source.reprise_chain_id || source.id || null;
+  }, [isEditMode, isRepriseMode, interventionData, repriseSource]);
+
+  const chainServicesQueryKey = ["chain-services", activeChainId];
+  const { data: chainServices = [] } = useQuery<ClientService[]>({
+    queryKey: chainServicesQueryKey,
+    queryFn: async () =>
+      (
+        await api.get("/api/interventions/chain-services", {
+          params: { reprise_chain_id: activeChainId },
+        })
+      ).data,
+    enabled: !selectedClient?.id && !!activeChainId,
+    staleTime: 0,
+    refetchOnMount: "always",
+    networkMode: "online",
+  });
+
+  const attachedChainServices = useMemo(
+    () => servicesAttachedToIntervention(
+      isEditMode ? interventionData : isRepriseMode ? repriseSource : null,
+      "intervention_service_id",
+    ),
+    [isEditMode, isRepriseMode, interventionData, repriseSource],
+  );
+
+  const availableChainServices = useMemo(
+    () => mergeClientServices(chainServices, attachedChainServices),
+    [chainServices, attachedChainServices],
+  );
+
+  // Catalogue actif : celui du client si sélectionné, sinon celui de la
+  // chaîne de reprises (sans client). Sur une intervention toute neuve, sans
+  // client ni chaîne connue, on retombe sur les items ad-hoc (allItems ci-dessous).
+  const availableServices = selectedClient?.id
+    ? availableClientServices
+    : availableChainServices;
+
   const scheduleServiceLabelSave = useCallback(
     (serviceId: string, label: string) => {
       const clientId = selectedClient?.id;
-      if (!clientId) return;
+      if (!clientId && !activeChainId) return;
       if (serviceLabelTimers.current[serviceId]) {
         clearTimeout(serviceLabelTimers.current[serviceId]);
       }
       serviceLabelTimers.current[serviceId] = setTimeout(async () => {
         try {
-          applyServiceRename(queryClient, clientId, serviceId, label);
-          // Passe par la file : l'ancien `catch {}` avalait l'erreur, donc un
-          // renommage hors réseau était perdu sans que l'ouvrier le sache.
-          await enqueue({
-            kind: "service-rename",
-            method: "PATCH",
-            url: `/api/clients/${clientId}/services/${serviceId}`,
-            body: { label },
-            label: `Prestation « ${label} »`,
-          });
+          if (clientId) {
+            applyServiceRename(queryClient, clientId, serviceId, label);
+            // Passe par la file : l'ancien `catch {}` avalait l'erreur, donc un
+            // renommage hors réseau était perdu sans que l'ouvrier le sache.
+            await enqueue({
+              kind: "service-rename",
+              method: "PATCH",
+              url: `/api/clients/${clientId}/services/${serviceId}`,
+              body: { label },
+              label: `Prestation « ${label} »`,
+            });
+          } else if (activeChainId) {
+            applyChainServiceRename(queryClient, activeChainId, serviceId, label);
+            await enqueue({
+              kind: "service-rename",
+              method: "PATCH",
+              url: `/api/interventions/chain-services/${serviceId}`,
+              body: { label },
+              label: `Prestation « ${label} »`,
+            });
+          }
         } finally {
           setServiceLabelDrafts((prev) => {
             const next = { ...prev };
@@ -576,7 +644,7 @@ export default function AddInterventionScreen() {
         }
       }, 500);
     },
-    [selectedClient?.id, queryClient],
+    [selectedClient?.id, activeChainId, queryClient],
   );
 
   // Détail du client sélectionné (dont ses autres RDV), pour avertir des doublons
@@ -688,6 +756,16 @@ export default function AddInterventionScreen() {
             (current) => mergeClientServices(current ?? [], attachedServices),
           );
         }
+      } else if (!interventionData.client_id) {
+        // Même repli hors ligne, côté catalogue de chaîne (intervention sans client).
+        const chainId = interventionData.reprise_chain_id || interventionData.id;
+        const attachedChain = servicesAttachedToIntervention(interventionData, "intervention_service_id");
+        if (chainId && attachedChain.length > 0) {
+          queryClient.setQueryData<ClientService[]>(
+            ["chain-services", chainId],
+            (current) => mergeClientServices(current ?? [], attachedChain),
+          );
+        }
       }
       if (interventionData.employees)
         setSelectedEmployeeIds(
@@ -697,17 +775,22 @@ export default function AddInterventionScreen() {
         setSelectedRateId(interventionData.hourly_rate_id);
       if (interventionData.items && interventionData.items.length > 0) {
         const withId = interventionData.items.filter(
-          (i: any) => i.client_service_id,
+          (i: any) => i.client_service_id || i.intervention_service_id,
         );
         const withoutId = interventionData.items.filter(
-          (i: any) => !i.client_service_id,
+          (i: any) => !i.client_service_id && !i.intervention_service_id,
         );
         setCheckedServiceIds(
-          new Set(withId.map((i: any) => String(i.client_service_id))),
+          new Set(
+            withId.map((i: any) =>
+              String(i.client_service_id || i.intervention_service_id),
+            ),
+          ),
         );
         const overrides: Record<string, string> = {};
         withId.forEach((i: any) => {
-          overrides[String(i.client_service_id)] = i.price.toString();
+          overrides[String(i.client_service_id || i.intervention_service_id)] =
+            i.price.toString();
         });
         setServicePriceOverrides(overrides);
         setAdHocItems(
@@ -759,6 +842,15 @@ export default function AddInterventionScreen() {
             (current) => mergeClientServices(current ?? [], attachedServices),
           );
         }
+      } else if (!repriseSource.client_id) {
+        const chainId = repriseSource.reprise_chain_id || repriseSource.id;
+        const attachedChain = servicesAttachedToIntervention(repriseSource, "intervention_service_id");
+        if (chainId && attachedChain.length > 0) {
+          queryClient.setQueryData<ClientService[]>(
+            ["chain-services", chainId],
+            (current) => mergeClientServices(current ?? [], attachedChain),
+          );
+        }
       }
 
       if (repriseSource.hourly_rate_id)
@@ -767,17 +859,22 @@ export default function AddInterventionScreen() {
         setSelectedEmployeeIds(repriseSource.employees.map((e: any) => e.id));
       if (repriseSource.items && repriseSource.items.length > 0) {
         const withId = repriseSource.items.filter(
-          (i: any) => i.client_service_id,
+          (i: any) => i.client_service_id || i.intervention_service_id,
         );
         const withoutId = repriseSource.items.filter(
-          (i: any) => !i.client_service_id,
+          (i: any) => !i.client_service_id && !i.intervention_service_id,
         );
         setCheckedServiceIds(
-          new Set(withId.map((i: any) => String(i.client_service_id))),
+          new Set(
+            withId.map((i: any) =>
+              String(i.client_service_id || i.intervention_service_id),
+            ),
+          ),
         );
         const overrides: Record<string, string> = {};
         withId.forEach((i: any) => {
-          overrides[String(i.client_service_id)] = i.price.toString();
+          overrides[String(i.client_service_id || i.intervention_service_id)] =
+            i.price.toString();
         });
         setServicePriceOverrides(overrides);
         setAdHocItems(
@@ -818,15 +915,17 @@ export default function AddInterventionScreen() {
 
   // Items finaux = services cochés + items ad-hoc
   const allItems = useMemo(() => {
-    const serviceItems = availableClientServices
+    const usingChain = !selectedClient?.id;
+    const serviceItems = availableServices
       .filter((s) => checkedServiceIds.has(s.id))
       .map((s) => ({
         label: s.label,
         price: servicePriceOverrides[s.id] ?? s.price.toString(),
-        client_service_id: s.id,
+        client_service_id: usingChain ? undefined : s.id,
+        intervention_service_id: usingChain ? s.id : undefined,
       }));
     return [...serviceItems, ...adHocItems];
-  }, [availableClientServices, checkedServiceIds, servicePriceOverrides, adHocItems]);
+  }, [availableServices, selectedClient?.id, checkedServiceIds, servicePriceOverrides, adHocItems]);
 
   const totalPrice = useMemo(
     () =>
@@ -888,12 +987,15 @@ export default function AddInterventionScreen() {
     });
   };
 
+  const NO_CLIENT_ID = "__none__";
   const clientItems = useMemo(
-    () =>
-      (clients ?? []).map((c) => ({
+    () => [
+      { id: NO_CLIENT_ID, label: "Aucun", muted: true },
+      ...(clients ?? []).map((c) => ({
         id: c.id,
         label: c.name || c.address || "Client anonyme",
       })),
+    ],
     [clients],
   );
   const employeeItems = useMemo(
@@ -942,6 +1044,7 @@ export default function AddInterventionScreen() {
           label: i.label,
           price: Number(i.price) || 0,
           client_service_id: i.client_service_id ?? null,
+          intervention_service_id: i.intervention_service_id ?? null,
         })),
         hourly_rate_id: isAdmin
           ? (selectedRateId ?? null)
@@ -1460,10 +1563,14 @@ export default function AddInterventionScreen() {
                                   selectedClient.address ||
                                   "Client anonyme",
                               }
-                            : null
+                            : { id: NO_CLIENT_ID, label: "Aucun", muted: true }
                         }
                         items={clientItems}
                         onChange={(v) => {
+                          if (v.id === NO_CLIENT_ID) {
+                            setSelectedClient(null);
+                            return;
+                          }
                           const c = clients?.find((x) => x.id === v.id);
                           if (c) setSelectedClient(c);
                         }}
@@ -1895,7 +2002,43 @@ export default function AddInterventionScreen() {
                             } catch {
                               toast.error("Erreur", "Impossible d'ajouter");
                             }
+                          } else if (activeChainId) {
+                            try {
+                              const tempId = newTempId();
+                              const service = {
+                                id: tempId,
+                                label: newServiceLabel.trim(),
+                                price: Number(newServicePrice) || 0,
+                                position: availableChainServices.length,
+                              };
+                              applyChainServiceCreate(
+                                queryClient,
+                                activeChainId,
+                                service,
+                              );
+                              await enqueue({
+                                kind: "service-create",
+                                method: "POST",
+                                url: `/api/interventions/chain-services`,
+                                body: {
+                                  reprise_chain_id: activeChainId,
+                                  label: service.label,
+                                  price: service.price,
+                                  position: service.position,
+                                },
+                                tempId,
+                                label: `Prestation « ${service.label} »`,
+                              });
+                              setCheckedServiceIds(
+                                (prev) => new Set([...prev, tempId]),
+                              );
+                            } catch {
+                              toast.error("Erreur", "Impossible d'ajouter");
+                            }
                           } else {
+                            // Ni client ni chaîne connue (intervention neuve,
+                            // jamais sauvegardée) : rien de persistant possible
+                            // encore, on retombe sur un item ad-hoc.
                             addAdHocItem();
                             updateAdHocItem(
                               adHocItems.length,
@@ -1946,7 +2089,7 @@ export default function AddInterventionScreen() {
                   )}
 
                   {/* Services du client = cases à cocher */}
-                  {availableClientServices.map((svc) => {
+                  {availableServices.map((svc) => {
                     const checked = checkedServiceIds.has(svc.id);
                     const priceVal =
                       servicePriceOverrides[svc.id] ?? svc.price.toString();
@@ -2046,11 +2189,19 @@ export default function AddInterventionScreen() {
                         <Pressable
                           onPress={async () => {
                             try {
-                              applyServiceDelete(
-                                queryClient,
-                                selectedClient!.id,
-                                svc.id,
-                              );
+                              if (selectedClient?.id) {
+                                applyServiceDelete(
+                                  queryClient,
+                                  selectedClient.id,
+                                  svc.id,
+                                );
+                              } else if (activeChainId) {
+                                applyChainServiceDelete(
+                                  queryClient,
+                                  activeChainId,
+                                  svc.id,
+                                );
+                              }
                               setCheckedServiceIds((prev) => {
                                 const n = new Set(prev);
                                 n.delete(svc.id);
@@ -2061,10 +2212,13 @@ export default function AddInterventionScreen() {
                                 delete n[svc.id];
                                 return n;
                               });
+                              const deleteUrl = selectedClient?.id
+                                ? `/api/clients/${selectedClient.id}/services/${svc.id}`
+                                : `/api/interventions/chain-services/${svc.id}`;
                               await enqueue({
                                 kind: "service-delete",
                                 method: "DELETE",
-                                url: `/api/clients/${selectedClient!.id}/services/${svc.id}`,
+                                url: deleteUrl,
                                 label: `Suppression « ${svc.label} »`,
                               });
                             } catch {

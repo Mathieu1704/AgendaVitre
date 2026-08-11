@@ -164,12 +164,25 @@ class ClientService(Base):
     client = relationship("Client", back_populates="services")
 
 
+class InterventionService(Base):
+    """Catalogue de services pour une intervention sans client (liste persistée
+    par chaîne de reprises via reprise_chain_id, coche/décoche comme ClientService)."""
+    __tablename__ = "intervention_services"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    reprise_chain_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    label = Column(String, nullable=False)
+    price = Column(Numeric(10, 2), nullable=False, default=0)
+    position = Column(Float, default=0)
+
+
 class InterventionItem(Base):
     __tablename__ = "intervention_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     intervention_id = Column(UUID(as_uuid=True), ForeignKey("interventions.id"))
     client_service_id = Column(UUID(as_uuid=True), ForeignKey("client_services.id", ondelete="SET NULL"), nullable=True)
+    intervention_service_id = Column(UUID(as_uuid=True), ForeignKey("intervention_services.id", ondelete="SET NULL"), nullable=True)
 
     label = Column(String, nullable=False) # Ex: "RDC", "Velux"
     price = Column(Numeric(10, 2), nullable=False, default=0)
@@ -177,6 +190,7 @@ class InterventionItem(Base):
 
     intervention = relationship("Intervention", back_populates="items")
     client_service = relationship("ClientService")
+    intervention_service = relationship("InterventionService")
 
 class Intervention(Base):
     __tablename__ = "interventions"
@@ -203,6 +217,9 @@ class Intervention(Base):
     # Reprise RDV
     reprise_taken = Column(Boolean, nullable=True)
     reprise_note = Column(Text, nullable=True)
+    # Identité stable partagée par toutes les reprises d'une même intervention
+    # sans client (permet un catalogue de services persistant sans fiche client).
+    reprise_chain_id = Column(UUID(as_uuid=True), nullable=True, index=True)
 
     # Récurrence
     recurrence_rule = Column(JSONB, nullable=True)   # {"freq":"weekly","interval":1,"count":12}

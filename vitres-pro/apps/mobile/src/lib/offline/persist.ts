@@ -50,6 +50,7 @@ function isPersistableKey(key: readonly unknown[]): boolean {
   //    désormais comme donnée initiale.
   return (
     root === "client-services" ||
+    root === "chain-services" ||
     root === "employees" ||
     root === "company-settings" ||
     root === "hourly-rates" ||

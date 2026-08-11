@@ -142,11 +142,35 @@ class ClientServiceUpdate(BaseModel):
     price: Optional[float] = None
     position: Optional[float] = None
 
+# --- INTERVENTION SERVICE (catalogue de prestations pour une intervention
+# sans client, persistant par chaîne de reprises) ---
+class InterventionServiceCreate(BaseModel):
+    reprise_chain_id: UUID
+    label: str
+    price: float
+    position: float = 0
+    client_operation_id: Optional[UUID] = None
+
+class InterventionServiceOut(BaseModel):
+    id: UUID
+    reprise_chain_id: UUID
+    label: str
+    price: float
+    position: float = 0
+    class Config:
+        from_attributes = True
+
+class InterventionServiceUpdate(BaseModel):
+    label: Optional[str] = None
+    price: Optional[float] = None
+    position: Optional[float] = None
+
 # --- INTERVENTION ITEMS ---
 class InterventionItemBase(BaseModel):
     label: str  # Ex: "RDC", "Velux"
     price: float # Ex: 35.0
     client_service_id: Optional[UUID] = None
+    intervention_service_id: Optional[UUID] = None
     done: bool = True
 
 class InterventionItemCreate(InterventionItemBase):
@@ -224,6 +248,7 @@ class InterventionOut(BaseModel):
     sub_zone: Optional[str] = None
     reprise_taken: Optional[bool] = None
     reprise_note: Optional[str] = None
+    reprise_chain_id: Optional[UUID] = None
     recurrence_rule: Optional[Dict[str, Any]] = None
     recurrence_group_id: Optional[UUID] = None
     time_tbd: bool = False

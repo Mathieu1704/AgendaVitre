@@ -10,9 +10,13 @@ from pydantic import BaseModel
 
 from app.models.models import (
     get_db, Intervention, Client, Employee, InterventionItem,
-    intervention_employees, RawCalendarEvent, AuditLog, InAppNotification
+    intervention_employees, RawCalendarEvent, AuditLog, InAppNotification,
+    InterventionService
 )
-from app.schemas.schemas import InterventionCreate, InterventionOut
+from app.schemas.schemas import (
+    InterventionCreate, InterventionOut,
+    InterventionServiceCreate, InterventionServiceOut, InterventionServiceUpdate,
+)
 from app.core.deps import get_current_user
 from app.core.idempotency import already_processed, record_operation
 
@@ -152,6 +156,81 @@ def search_interventions(
     return query.order_by(Intervention.start_time.desc()).limit(200).all()
 
 
+# --- INTERVENTION SERVICES (catalogue de prestations pour une intervention
+# sans client, persistant par chaîne de reprises — miroir de client_services) ---
+
+@router.get("/chain-services", response_model=List[InterventionServiceOut])
+def get_intervention_services(
+    reprise_chain_id: UUID = Query(...),
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    return (
+        db.query(InterventionService)
+        .filter(InterventionService.reprise_chain_id == reprise_chain_id)
+        .order_by(InterventionService.position)
+        .all()
+    )
+
+
+@router.post("/chain-services", response_model=InterventionServiceOut)
+def create_intervention_service(
+    payload: InterventionServiceCreate,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    seen = already_processed(db, payload.client_operation_id)
+    if seen is not None and seen.result_id:
+        existing = db.query(InterventionService).filter(InterventionService.id == seen.result_id).first()
+        if existing:
+            return existing
+
+    service = InterventionService(
+        **payload.model_dump(exclude={"client_operation_id"}),
+    )
+    db.add(service)
+    db.flush()
+
+    record_operation(
+        db, payload.client_operation_id, current_user.id,
+        "POST /api/interventions/chain-services", service.id,
+    )
+
+    db.commit()
+    db.refresh(service)
+    return service
+
+
+@router.patch("/chain-services/{service_id}", response_model=InterventionServiceOut)
+def update_intervention_service(
+    service_id: UUID,
+    payload: InterventionServiceUpdate,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    service = db.query(InterventionService).filter(InterventionService.id == service_id).first()
+    if not service:
+        raise HTTPException(status_code=404, detail="Service introuvable")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(service, field, value)
+    db.commit()
+    db.refresh(service)
+    return service
+
+
+@router.delete("/chain-services/{service_id}", status_code=204)
+def delete_intervention_service(
+    service_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    service = db.query(InterventionService).filter(InterventionService.id == service_id).first()
+    if not service:
+        return
+    db.delete(service)
+    db.commit()
+
+
 @router.get("/{intervention_id}", response_model=InterventionOut)
 def read_intervention(
     intervention_id: UUID,
@@ -196,6 +275,21 @@ def create_intervention(
         else:
             data["hourly_rate_id"] = None
     new_intervention = Intervention(**data)
+    if new_intervention.id is None:
+        new_intervention.id = uuid.uuid4()
+
+    # Chaîne de reprises : identité stable reliant une intervention sans
+    # client à ses reprises suivantes (sert de catalogue "intervention_services").
+    # Non pertinent quand il y a un client : client_id joue déjà ce rôle.
+    if not new_intervention.client_id:
+        if intervention.reprise_of_id:
+            source = db.query(Intervention).filter(Intervention.id == intervention.reprise_of_id).first()
+            if source and not source.client_id:
+                if not source.reprise_chain_id:
+                    source.reprise_chain_id = source.id
+                new_intervention.reprise_chain_id = source.reprise_chain_id
+        if not new_intervention.reprise_chain_id:
+            new_intervention.reprise_chain_id = new_intervention.id
 
     if current_user.role != 'admin':
         employee = db.query(Employee).filter(Employee.id == current_user.id).first()
@@ -211,6 +305,7 @@ def create_intervention(
                 label=item_data.label,
                 price=item_data.price,
                 client_service_id=item_data.client_service_id,
+                intervention_service_id=item_data.intervention_service_id,
             )
             new_intervention.items.append(new_item)
             total_price += item_data.price
@@ -278,6 +373,12 @@ def update_intervention(
     if not db_intervention:
         raise HTTPException(status_code=404, detail="Introuvable")
 
+    # Backfill paresseux : une intervention sans client créée avant ce champ
+    # n'a pas de reprise_chain_id. On lui en attribue un dès la première
+    # modification pour qu'elle puisse avoir un catalogue de services persistant.
+    if not db_intervention.client_id and not db_intervention.reprise_chain_id:
+        db_intervention.reprise_chain_id = db_intervention.id
+
     # Filtrage des champs autorisés pour les non-admins
     if current_user.role != 'admin':
         EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time", "payment_mode", "is_invoice"}
@@ -302,6 +403,7 @@ def update_intervention(
                     label=item_data["label"],
                     price=item_data["price"],
                     client_service_id=item_data.get("client_service_id"),
+                    intervention_service_id=item_data.get("intervention_service_id"),
                 ))
         elif hasattr(db_intervention, key):
             setattr(db_intervention, key, value)

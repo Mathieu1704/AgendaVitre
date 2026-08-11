@@ -6,7 +6,7 @@ import { cn } from "../cn";
 import { ChevronDown, Search } from "lucide-react-native";
 import { useTheme } from "./ThemeToggle";
 
-export function Select<T extends { id: string; label: string }>({
+export function Select<T extends { id: string; label: string; muted?: boolean }>({
   value,
   onChange,
   items,
@@ -50,6 +50,7 @@ export function Select<T extends { id: string; label: string }>({
 
   const renderItem = useCallback(({ item: it }: { item: T }) => {
     const active = value?.id === it.id;
+    const muted = !!it.muted && !active;
     return (
       <Pressable
         key={it.id}
@@ -60,13 +61,24 @@ export function Select<T extends { id: string; label: string }>({
           paddingVertical: 13,
           marginBottom: 8,
           borderWidth: 1,
-          borderColor: active ? "#3B82F6" : isDark ? "#334155" : "#E2E8F0",
-          backgroundColor: active ? (isDark ? "#1E3A5F" : "#EFF6FF") : (isDark ? "#1E293B" : "#FFFFFF"),
+          borderColor: active ? "#3B82F6" : muted ? (isDark ? "#334155" : "#E2E8F0") : isDark ? "#334155" : "#E2E8F0",
+          backgroundColor: active
+            ? (isDark ? "#1E3A5F" : "#EFF6FF")
+            : muted
+              ? (isDark ? "#1E293B" : "#F1F5F9")
+              : (isDark ? "#1E293B" : "#FFFFFF"),
           height: ITEM_HEIGHT,
           justifyContent: "center",
         }}
       >
-        <Text style={{ fontWeight: "500", fontSize: 16, color: active ? "#3B82F6" : isDark ? "#F8FAFC" : "#09090B" }} numberOfLines={1}>
+        <Text
+          style={{
+            fontWeight: "500",
+            fontSize: 16,
+            color: active ? "#3B82F6" : muted ? "#94A3B8" : isDark ? "#F8FAFC" : "#09090B",
+          }}
+          numberOfLines={1}
+        >
           {it.label}
         </Text>
       </Pressable>
