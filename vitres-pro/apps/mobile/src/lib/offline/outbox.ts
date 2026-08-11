@@ -272,7 +272,9 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null;
  */
 function scheduleRetry(attempts: number): void {
   if (retryTimer) clearTimeout(retryTimer);
-  const delay = Math.min(30_000, 2_000 * 2 ** Math.min(attempts, 4));
+  // La première annonce « en ligne » arrive parfois avant que la route IP soit
+  // réellement prête. On retente vite au début, puis on espace progressivement.
+  const delay = Math.min(15_000, 500 * 2 ** Math.min(attempts, 5));
   retryTimer = setTimeout(() => {
     retryTimer = null;
     void flush();
@@ -312,6 +314,10 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
 
       const entry = queue[0];
 
+      if (__DEV__) {
+        console.info(`[outbox] envoi ${entry.kind} ${entry.id} (tentative ${entry.attempts + 1})`);
+      }
+
       // Un id temporaire encore non résolu à ce stade signale une file
       // incohérente (la création aurait dû précéder) : on écarte l'entrée
       // plutôt que de bloquer la file indéfiniment.
@@ -347,10 +353,19 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
 
         await removeQueuedEntry(entry.id);
         sent++;
+        if (__DEV__) {
+          console.info(`[outbox] envoyé et retiré ${entry.kind} ${entry.id}`);
+        }
         notify();
       } catch (error: any) {
         const message =
           error?.response?.data?.detail ?? error?.message ?? "Erreur inconnue";
+
+        if (__DEV__) {
+          console.warn(
+            `[outbox] échec ${entry.kind} ${entry.id}: ${String(message)}`,
+          );
+        }
 
         if (isAlreadyApplied(entry, error)) {
           await removeQueuedEntry(entry.id);

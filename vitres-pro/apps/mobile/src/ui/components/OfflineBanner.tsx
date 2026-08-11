@@ -32,7 +32,7 @@ const SYNC_NOTICE_DELAY = 2000;
 
 export function OfflineBanner({ topInset = 0 }: Props) {
   const online = useIsOnline();
-  const { pending, failed, stalledAttempts, refresh } = useOutboxSync();
+  const { pending, failed, stalledAttempts, pendingError, sync, refresh } = useOutboxSync();
   const [syncTakingLong, setSyncTakingLong] = useState(false);
 
   useEffect(() => {
@@ -99,13 +99,17 @@ export function OfflineBanner({ topInset = 0 }: Props) {
   // En ligne mais les envois n'aboutissent pas : l'appareil se croit connecté
   // alors que rien ne passe (réseau saturé, portail captif, coupure en cours).
   // Annoncer une « synchronisation » serait trompeur.
-  if (stalledAttempts >= 2) {
+  if (stalledAttempts >= 1) {
     return (
       <Bar
         topInset={topInset}
         background="#92400E"
         icon={<CloudOff size={14} color="#FDE68A" />}
-        text={`Connexion instable — ${pending} modification${plural(pending)} en attente`}
+        text={
+          `Synchronisation retardée — ${pending} modification${plural(pending)} en attente` +
+          (pendingError ? ` (${pendingError})` : "")
+        }
+        action={{ label: "Réessayer", onPress: () => void sync() }}
       />
     );
   }

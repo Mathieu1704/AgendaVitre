@@ -29,6 +29,7 @@ export function useOutboxSync() {
   // distinguer une synchronisation en cours d'un réseau qui répond mal :
   // l'appareil peut se croire connecté alors qu'aucune requête n'aboutit.
   const [stalledAttempts, setStalledAttempts] = useState(0);
+  const [pendingError, setPendingError] = useState<string | undefined>();
   const refreshVersion = useRef(0);
 
   const refresh = useCallback(async () => {
@@ -41,6 +42,7 @@ export function useOutboxSync() {
     if (version !== refreshVersion.current) return;
     setPending(queue.length);
     setStalledAttempts(queue[0]?.attempts ?? 0);
+    setPendingError(queue[0]?.lastError);
     setFailed(failedEntries);
   }, []);
 
@@ -123,5 +125,5 @@ export function useOutboxSync() {
     return () => clearInterval(timer);
   }, [online, pending, refresh]);
 
-  return { pending, failed, stalledAttempts, sync: run, refresh };
+  return { pending, failed, stalledAttempts, pendingError, sync: run, refresh };
 }
