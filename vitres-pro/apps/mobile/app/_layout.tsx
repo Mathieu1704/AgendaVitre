@@ -31,9 +31,10 @@ const queryClient = new QueryClient({
       // Sans un gcTime long, React Query purge les données 5 minutes après le
       // démontage : le cache persisté serait vidé avant d'avoir servi.
       gcTime: PERSIST_MAX_AGE,
-      // "offlineFirst" sert immédiatement le cache au lieu de laisser la
-      // requête en attente hors réseau.
-      networkMode: "offlineFirst",
+      // En mode `online`, une requête hors connexion conserve et affiche son
+      // cache sans exécuter queryFn. `offlineFirst` lançait au contraire une
+      // tentative (puis un retry) pour chaque écran au démarrage Android.
+      networkMode: "online",
       refetchOnWindowFocus: false,
       retry: 1,
     },

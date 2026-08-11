@@ -53,6 +53,11 @@ export const useAuth = () => {
 
     const checkRole = async () => {
       const cached = await hydrate();
+      if (!onlineManager.isOnline()) {
+        if (!cached && !cancelled) setIsAdmin(false);
+        if (!cancelled) setLoading(false);
+        return;
+      }
       try {
         const me = (await api.get("/api/employees/me")).data;
         const profile = {
