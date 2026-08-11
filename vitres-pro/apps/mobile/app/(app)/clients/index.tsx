@@ -19,12 +19,21 @@ import {
   Mail,
   ChevronRight,
   Users,
+  History,
 } from "lucide-react-native";
 
 import { api } from "../../../src/lib/api";
 import { Avatar } from "../../../src/ui/components/Avatar";
 import { Card } from "../../../src/ui/components/Card";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
+
+const formatSearchResultDate = (iso: string) =>
+  new Intl.DateTimeFormat("fr-BE", {
+    timeZone: "Europe/Brussels",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(iso));
 
 type Client = {
   id: string;
@@ -33,6 +42,14 @@ type Client = {
   city?: string | null;
   phone?: string | null;
   email?: string | null;
+};
+
+type InterventionSearchResult = {
+  id: string;
+  title: string;
+  start_time: string;
+  price_estimated: number | null;
+  client: { id: string; name: string | null } | null;
 };
 
 export default function ClientsListScreen() {
@@ -66,8 +83,25 @@ export default function ClientsListScreen() {
     clients?.filter(
       (c) =>
         (c.name ?? "").toLowerCase().includes(debouncedQuery.toLowerCase()) ||
-        (c.address ?? "").toLowerCase().includes(debouncedQuery.toLowerCase()),
+        (c.address ?? "").toLowerCase().includes(debouncedQuery.toLowerCase()) ||
+        (c.phone ?? "").includes(debouncedQuery),
     ) || [];
+
+  // Historique de tous les passages correspondant à la recherche (nom,
+  // adresse, téléphone) — cherche dans le texte des interventions, pas
+  // seulement dans les fiches clients. Remonte aussi les interventions
+  // jamais rattachées à un client.
+  const { data: matchingInterventions, isFetching: isSearchingHistory } =
+    useQuery({
+      queryKey: ["interventions-search", debouncedQuery],
+      queryFn: async () => {
+        const res = await api.get("/api/interventions/search", {
+          params: { q: debouncedQuery },
+        });
+        return res.data as InterventionSearchResult[];
+      },
+      enabled: debouncedQuery.trim().length >= 2,
+    });
 
   const renderItem = useCallback(
     ({ item }: { item: Client }) => (
@@ -198,7 +232,7 @@ export default function ClientsListScreen() {
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator size="large" color="#3B82F6" />
         </View>
-      ) : filteredClients.length > 0 ? (
+      ) : filteredClients.length > 0 || (matchingInterventions?.length ?? 0) > 0 ? (
         <FlatList
           data={filteredClients}
           keyExtractor={(item) => item.id}
@@ -210,6 +244,61 @@ export default function ClientsListScreen() {
           maxToRenderPerBatch={10}
           windowSize={5}
           removeClippedSubviews
+          ListFooterComponent={
+            debouncedQuery.trim().length >= 2 ? (
+              <View className="px-4 mt-2">
+                <View className="flex-row items-center mb-3 mt-2">
+                  <History size={16} color={isDark ? "#94A3B8" : "#64748B"} />
+                  <Text className="ml-2 text-sm font-semibold text-foreground dark:text-white">
+                    Historique des passages
+                  </Text>
+                  {isSearchingHistory && (
+                    <ActivityIndicator size="small" color="#3B82F6" style={{ marginLeft: 8 }} />
+                  )}
+                </View>
+                {(matchingInterventions?.length ?? 0) === 0 && !isSearchingHistory ? (
+                  <Text className="text-xs text-muted-foreground dark:text-slate-500 mb-2">
+                    Aucune intervention correspondante.
+                  </Text>
+                ) : (
+                  matchingInterventions?.map((item) => (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => router.push(`/(app)/calendar/${item.id}` as any)}
+                      className="mb-2 active:opacity-70"
+                    >
+                      <View
+                        className="p-4 bg-muted/40 dark:bg-slate-900"
+                        style={{ borderRadius: 16 }}
+                      >
+                        <View className="flex-row items-center justify-between mb-1">
+                          <Text className="text-xs font-semibold text-primary">
+                            {formatSearchResultDate(item.start_time)}
+                          </Text>
+                          {item.price_estimated != null && (
+                            <Text className="text-xs font-semibold text-foreground dark:text-white">
+                              {item.price_estimated.toFixed(2)} €
+                            </Text>
+                          )}
+                        </View>
+                        <Text
+                          className="text-sm text-foreground dark:text-slate-200"
+                          numberOfLines={2}
+                        >
+                          {item.title}
+                        </Text>
+                        {item.client?.name && (
+                          <Text className="mt-1 text-xs text-muted-foreground dark:text-slate-500">
+                            {item.client.name}
+                          </Text>
+                        )}
+                      </View>
+                    </Pressable>
+                  ))
+                )}
+              </View>
+            ) : null
+          }
         />
       ) : (
         <View className="flex-1 justify-center items-center px-10">
@@ -217,7 +306,7 @@ export default function ClientsListScreen() {
             <Users size={48} color={isDark ? "#475569" : "#CBD5E1"} />
           </View>
           <Text className="text-xl font-bold text-foreground dark:text-white text-center">
-            Aucun client trouvé
+            Aucun résultat
           </Text>
           <Text className="mt-2 text-center text-muted-foreground dark:text-slate-500">
             {searchQuery

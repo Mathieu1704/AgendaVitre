@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, or_
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime, date
+import re
 import uuid
 from pydantic import BaseModel
 
@@ -104,6 +105,51 @@ def read_interventions(
         except ValueError:
             pass
     return query.order_by(Intervention.start_time.asc()).all()
+
+
+@router.get("/search", response_model=List[InterventionOut])
+def search_interventions(
+    q: str = Query(..., min_length=2),
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Mini moteur de recherche : nom, adresse ou téléphone (avec ou sans
+    séparateurs) -> tout l'historique d'interventions qui s'y rapporte, que
+    l'intervention soit rattachée à une fiche client ou non."""
+    q = q.strip()
+    digits = re.sub(r"\D", "", q)
+
+    conditions = [
+        Intervention.title.ilike(f"%{q}%"),
+        Intervention.description.ilike(f"%{q}%"),
+        Client.name.ilike(f"%{q}%"),
+        Client.address.ilike(f"%{q}%"),
+    ]
+    if len(digits) >= 6:
+        digits_only = lambda col: func.regexp_replace(func.coalesce(col, ""), r"\D", "", "g")
+        conditions += [
+            digits_only(Intervention.title).ilike(f"%{digits}%"),
+            digits_only(Intervention.description).ilike(f"%{digits}%"),
+            digits_only(Client.phone).ilike(f"%{digits}%"),
+        ]
+
+    query = (
+        db.query(Intervention)
+        .outerjoin(Client, Intervention.client_id == Client.id)
+        .options(
+            selectinload(Intervention.client),
+            selectinload(Intervention.employees),
+            selectinload(Intervention.items),
+            selectinload(Intervention.hourly_rate),
+        )
+        .filter(or_(*conditions))
+    )
+    if current_user.role != 'admin':
+        query = query.filter(
+            Intervention.zone == current_user.zone,
+            Intervention.employees.any(id=current_user.id),
+        )
+    return query.order_by(Intervention.start_time.desc()).limit(200).all()
 
 
 @router.get("/{intervention_id}", response_model=InterventionOut)

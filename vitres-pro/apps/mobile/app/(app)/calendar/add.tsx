@@ -879,8 +879,6 @@ export default function AddInterventionScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (NEEDS_CLIENT.includes(intervType) && !selectedClient)
-      return toast.error("Client", "Sélectionne un client.");
     if (!title) return toast.error("Titre", "Titre requis.");
     const datePart = startDateStr.split("T")[0];
     let startParsed: Date, endParsed: Date, dur: number;
