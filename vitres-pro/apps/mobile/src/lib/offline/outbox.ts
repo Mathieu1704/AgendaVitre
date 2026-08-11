@@ -56,7 +56,8 @@ export type OutboxEntry = {
 };
 
 type Listener = () => void;
-const listeners = new Set<Listener>();
+type QueueListener = (pending: number) => void;
+const listeners = new Set<QueueListener>();
 
 /**
  * Abonnés notifiés après un envoi effectif.
@@ -100,16 +101,18 @@ async function syncPendingCount(): Promise<void> {
   pendingCount = (await readJson<OutboxEntry[]>(QUEUE_KEY, [])).length;
 }
 
-export function subscribeOutbox(fn: Listener): () => void {
+export function subscribeOutbox(fn: QueueListener): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
 
 function notify() {
-  void syncPendingCount();
   listeners.forEach((fn) => {
     try {
-      fn();
+      // `mutateQueue` a déjà écrit le stockage et mis ce compteur à jour.
+      // Le transmettre directement évite qu'une ancienne lecture AsyncStorage
+      // terminée en retard ressuscite visuellement une entrée déjà supprimée.
+      fn(pendingCount);
     } catch {
       /* un abonné défaillant ne doit pas interrompre les autres */
     }
@@ -354,7 +357,7 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
         await removeQueuedEntry(entry.id);
         sent++;
         if (__DEV__) {
-          console.info(`[outbox] envoyé et retiré ${entry.kind} ${entry.id}`);
+          console.info(`[outbox] envoyé et retiré ${entry.kind} ${entry.id} (${pendingCount} restante)`);
         }
         notify();
       } catch (error: any) {

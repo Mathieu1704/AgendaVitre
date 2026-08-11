@@ -93,7 +93,14 @@ export function useOutboxSync() {
       if (isOnline) void run();
     });
 
-    const unsubQueue = subscribeOutbox(() => {
+    const unsubQueue = subscribeOutbox((count) => {
+      // Mise à jour synchrone depuis la mutation de la file : le bandeau tombe
+      // dès le retrait réussi, sans attendre une nouvelle lecture du disque.
+      setPending(count);
+      if (count === 0) {
+        setStalledAttempts(0);
+        setPendingError(undefined);
+      }
       void refresh();
     });
 
