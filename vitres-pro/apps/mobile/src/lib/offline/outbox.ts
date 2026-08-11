@@ -16,6 +16,7 @@
  *  - les identifiants temporaires sont résolus avant envoi (voir idMap.ts).
  */
 import { api } from "../api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { readJson, writeJson, isOfflineSupported } from "./storage";
 import { isOnlineNow } from "./network";
 import {
@@ -184,7 +185,26 @@ async function mutateQueue(
   const operation = queueMutation.then(async () => {
     queueRevision++;
     result = mutation(await getQueue());
-    await writeJson(QUEUE_KEY, result);
+
+    // La file est critique : contrairement aux caches facultatifs, une erreur
+    // d'écriture ne doit pas être avalée. Sur Android, supprimer physiquement
+    // la clé vide évite qu'une ancienne valeur SQLite soit relue après succès.
+    if (isOfflineSupported) {
+      if (result.length === 0) {
+        await AsyncStorage.removeItem(QUEUE_KEY);
+      } else {
+        await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(result));
+      }
+
+      const stored = await AsyncStorage.getItem(QUEUE_KEY);
+      const storedQueue = stored ? (JSON.parse(stored) as OutboxEntry[]) : [];
+      const sameQueue =
+        storedQueue.length === result.length &&
+        storedQueue.every((entry, index) => entry.id === result[index]?.id);
+      if (!sameQueue) {
+        throw new Error("La file hors ligne n'a pas été enregistrée sur l'appareil");
+      }
+    }
     pendingCount = result.length;
   });
   queueMutation = operation.catch(() => {});
