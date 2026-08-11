@@ -7,7 +7,7 @@
  *
  * Retourne de quoi alimenter l'indicateur « N modifications en attente ».
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { onlineManager, useQueryClient } from "@tanstack/react-query";
 import {
@@ -24,16 +24,24 @@ export function useOutboxSync() {
   const queryClient = useQueryClient();
   const [pending, setPending] = useState(0);
   const [failed, setFailed] = useState<OutboxEntry[]>([]);
+  const [online, setOnline] = useState(() => onlineManager.isOnline());
   // Nombre de tentatives infructueuses sur l'entrée en tête de file. Permet de
   // distinguer une synchronisation en cours d'un réseau qui répond mal :
   // l'appareil peut se croire connecté alors qu'aucune requête n'aboutit.
   const [stalledAttempts, setStalledAttempts] = useState(0);
+  const refreshVersion = useRef(0);
 
   const refresh = useCallback(async () => {
-    const queue = await getQueue();
+    const version = ++refreshVersion.current;
+    const [queue, failedEntries] = await Promise.all([getQueue(), getFailed()]);
+
+    // Les notifications d'ajout et de retrait peuvent lancer deux lectures
+    // presque simultanées. Une lecture ancienne ne doit jamais réafficher un
+    // compteur déjà revenu à zéro après la fin de la synchronisation.
+    if (version !== refreshVersion.current) return;
     setPending(queue.length);
     setStalledAttempts(queue[0]?.attempts ?? 0);
-    setFailed(await getFailed());
+    setFailed(failedEntries);
   }, []);
 
   // Remplace les données optimistes par l'état réel du serveur : lui seul
@@ -78,7 +86,9 @@ export function useOutboxSync() {
     void run();
 
     const unsubOnline = onlineManager.subscribe(() => {
-      if (onlineManager.isOnline()) void run();
+      const isOnline = onlineManager.isOnline();
+      setOnline(isOnline);
+      if (isOnline) void run();
     });
 
     const unsubQueue = subscribeOutbox(() => {
@@ -103,6 +113,15 @@ export function useOutboxSync() {
       sub.remove();
     };
   }, [run, refresh, resync]);
+
+  // File non vide en ligne : on relit brièvement le stockage jusqu'à ce que le
+  // retrait final soit observé. Cette vérification ne fait aucun appel réseau
+  // et s'arrête immédiatement lorsque le compteur atteint zéro.
+  useEffect(() => {
+    if (pending === 0 || !online) return;
+    const timer = setInterval(() => void refresh(), 2_000);
+    return () => clearInterval(timer);
+  }, [online, pending, refresh]);
 
   return { pending, failed, stalledAttempts, sync: run, refresh };
 }
