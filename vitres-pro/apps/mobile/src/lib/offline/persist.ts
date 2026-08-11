@@ -53,6 +53,11 @@ function isPersistableKey(key: readonly unknown[]): boolean {
     root === "employees" ||
     root === "company-settings" ||
     root === "hourly-rates" ||
+    // Agrégats très légers utilisés par la barre d'heures du jour et la vue
+    // semaine. Sans eux, les interventions restaient visibles hors ligne mais
+    // la capacité disparaissait pour tous les jours non ouverts auparavant.
+    root === "planning-stats" ||
+    root === "planning-range" ||
     // Statistiques de charge par jour (coloration vert/orange/rouge du
     // calendrier de reprise). Légères — de simples agrégats par date, pas des
     // interventions complètes — donc peu coûteuses à conserver.

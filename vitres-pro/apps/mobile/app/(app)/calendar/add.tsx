@@ -608,7 +608,7 @@ export default function AddInterventionScreen() {
 
   // Charger les données d'édition normale
   useEffect(() => {
-    if (isEditMode && interventionData && clients) {
+    if (isEditMode && interventionData) {
       setTitle(interventionData.title);
       setDescription(interventionData.description || "");
       setPaymentMode(
@@ -624,12 +624,32 @@ export default function AddInterventionScreen() {
       setStartDateStr(toBrusselsDateTimeString(start));
       setEndDateStr(toBrusselsDateTimeString(end));
       setTimeTbd(interventionData.time_tbd ?? false);
-      const foundClient = clients.find(
-        (c) => c.id === interventionData.client_id,
-      );
+      const interventionClientId = interventionData.client_id ?? interventionData.client?.id;
+      const foundClient = clients?.find((c) => c.id === interventionClientId);
       if (foundClient) setSelectedClient(foundClient);
       else if (interventionData.client)
         setSelectedClient(interventionData.client);
+
+      // Hors ligne, le catalogue complet du client n'a peut-être jamais été
+      // ouvert. Les prestations déjà attachées à l'intervention suffisent
+      // néanmoins pour afficher les lignes cochées et conserver leur total.
+      // On ne remplace jamais un catalogue plus complet déjà en cache.
+      if (interventionClientId) {
+        const attachedServices: ClientService[] = (interventionData.items ?? [])
+          .filter((i: any) => i.client_service_id)
+          .map((i: any, position: number) => ({
+            id: String(i.client_service_id),
+            label: i.label,
+            price: Number(i.price) || 0,
+            position,
+          }));
+        if (attachedServices.length > 0) {
+          queryClient.setQueryData<ClientService[]>(
+            ["client-services", interventionClientId],
+            (current) => current && current.length > 0 ? current : attachedServices,
+          );
+        }
+      }
       if (interventionData.employees)
         setSelectedEmployeeIds(
           interventionData.employees.map((e: any) => e.id),
@@ -659,7 +679,7 @@ export default function AddInterventionScreen() {
         );
       }
     }
-  }, [isEditMode, interventionData, clients]);
+  }, [isEditMode, interventionData, clients, queryClient]);
 
   // Pré-remplir depuis la source reprise (= semaine suivante)
   useEffect(() => {
@@ -687,9 +707,27 @@ export default function AddInterventionScreen() {
       setEndDateStr(toBrusselsDateTimeString(nextEnd));
       setTimeTbd(isAdmin ? (repriseSource.time_tbd ?? true) : true);
 
-      const foundClient = clients?.find((c) => c.id === repriseSource.client_id);
+      const repriseClientId = repriseSource.client_id ?? repriseSource.client?.id;
+      const foundClient = clients?.find((c) => c.id === repriseClientId);
       if (foundClient) setSelectedClient(foundClient);
       else if (repriseSource.client) setSelectedClient(repriseSource.client);
+
+      if (repriseClientId) {
+        const attachedServices: ClientService[] = (repriseSource.items ?? [])
+          .filter((i: any) => i.client_service_id)
+          .map((i: any, position: number) => ({
+            id: String(i.client_service_id),
+            label: i.label,
+            price: Number(i.price) || 0,
+            position,
+          }));
+        if (attachedServices.length > 0) {
+          queryClient.setQueryData<ClientService[]>(
+            ["client-services", repriseClientId],
+            (current) => current && current.length > 0 ? current : attachedServices,
+          );
+        }
+      }
 
       if (repriseSource.hourly_rate_id)
         setSelectedRateId(repriseSource.hourly_rate_id);
@@ -718,7 +756,7 @@ export default function AddInterventionScreen() {
         );
       }
     }
-  }, [isRepriseMode, repriseSource, clients]); // clients optionnel, cf. commentaire ci-dessus
+  }, [isRepriseMode, repriseSource, clients, queryClient]); // clients optionnel, cf. commentaire ci-dessus
 
   // Reset form quand on navigue vers "nouveau" (pas edit, pas reprise)
   useFocusEffect(

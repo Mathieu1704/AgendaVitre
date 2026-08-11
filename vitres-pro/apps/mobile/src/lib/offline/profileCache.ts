@@ -18,6 +18,9 @@ export type CachedProfile = {
   role: string;
   zone: "hainaut" | "ardennes";
   fullName: string;
+  email?: string;
+  color?: string | null;
+  employeeId?: string;
 };
 
 const isWeb = Platform.OS === "web";

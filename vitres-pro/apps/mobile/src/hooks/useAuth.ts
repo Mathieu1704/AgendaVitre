@@ -61,6 +61,9 @@ export const useAuth = () => {
             | "hainaut"
             | "ardennes",
           fullName: me?.full_name ?? "",
+          email: me?.email ?? session?.user?.email,
+          color: me?.color ?? null,
+          employeeId: me?.id ? String(me.id) : undefined,
         };
         applyProfile(profile);
         await saveProfile(profile);

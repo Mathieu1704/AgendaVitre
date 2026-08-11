@@ -155,6 +155,31 @@ export async function getPendingCount(): Promise<number> {
   return (await getQueue()).length;
 }
 
+// AsyncStorage ne fournit pas de transaction. Une synchronisation peut retirer
+// la tête pendant qu'une seconde action ajoute une entrée ; avec le classique
+// read/modify/write, cette action pouvait alors réécrire l'ancienne tête et la
+// faire tourner indéfiniment dans le bandeau de synchronisation. Toutes les
+// mutations de la file passent donc par cette courte section critique.
+let queueMutation: Promise<void> = Promise.resolve();
+
+async function mutateQueue(
+  mutation: (queue: OutboxEntry[]) => OutboxEntry[],
+): Promise<OutboxEntry[]> {
+  let result: OutboxEntry[] = [];
+  const operation = queueMutation.then(async () => {
+    result = mutation(await getQueue());
+    await writeJson(QUEUE_KEY, result);
+    pendingCount = result.length;
+  });
+  queueMutation = operation.catch(() => {});
+  await operation;
+  return result;
+}
+
+async function removeQueuedEntry(id: string): Promise<void> {
+  await mutateQueue((queue) => queue.filter((entry) => entry.id !== id));
+}
+
 /** Ajoute une écriture en fin de file, puis tente de vider si le réseau est là. */
 export async function enqueue(
   entry: Omit<OutboxEntry, "id" | "createdAt" | "attempts">,
@@ -166,9 +191,7 @@ export async function enqueue(
     attempts: 0,
   };
 
-  const queue = await getQueue();
-  queue.push(full);
-  await writeJson(QUEUE_KEY, queue);
+  const queue = await mutateQueue((current) => [...current, full]);
   // Mise à jour synchrone : un écran peut interroger `hasPendingWrites()` juste
   // après l'appel, avant que la resynchronisation asynchrone n'ait eu lieu.
   pendingCount = queue.length;
@@ -294,7 +317,7 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
       // plutôt que de bloquer la file indéfiniment.
       if (await hasUnresolvedTempId({ url: entry.url, body: entry.body })) {
         await moveToFailed(entry, "Référence non résolue");
-        await writeJson(QUEUE_KEY, queue.slice(1));
+        await removeQueuedEntry(entry.id);
         failed++;
         notify();
         continue;
@@ -307,7 +330,7 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
       // `client_service_id` est nullable, l'item garde libellé et prix.
       if (await hasFailedTempId(entry.url)) {
         await moveToFailed(entry, "Prestation liée jamais créée");
-        await writeJson(QUEUE_KEY, queue.slice(1));
+        await removeQueuedEntry(entry.id);
         failed++;
         notify();
         continue;
@@ -322,7 +345,7 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
           await resolveTempId(entry.tempId, String(result.id));
         }
 
-        await writeJson(QUEUE_KEY, (await getQueue()).slice(1));
+        await removeQueuedEntry(entry.id);
         sent++;
         notify();
       } catch (error: any) {
@@ -330,7 +353,7 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
           error?.response?.data?.detail ?? error?.message ?? "Erreur inconnue";
 
         if (isAlreadyApplied(entry, error)) {
-          await writeJson(QUEUE_KEY, (await getQueue()).slice(1));
+          await removeQueuedEntry(entry.id);
           sent++;
           notify();
           continue;
@@ -338,7 +361,7 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
 
         if (isPermanentFailure(error)) {
           await moveToFailed(entry, String(message));
-          await writeJson(QUEUE_KEY, (await getQueue()).slice(1));
+          await removeQueuedEntry(entry.id);
           failed++;
           notify();
           continue;
@@ -346,19 +369,22 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
 
         // Erreur transitoire : on incrémente et on s'arrête là pour préserver
         // l'ordre. La file repartira au prochain retour de réseau.
-        const current = await getQueue();
-        current[0] = {
+        const updatedEntry = {
           ...entry,
           attempts: entry.attempts + 1,
           lastError: String(message),
         };
 
-        if (current[0].attempts >= MAX_ATTEMPTS) {
-          await moveToFailed(current[0], `Abandon après ${MAX_ATTEMPTS} tentatives`);
-          await writeJson(QUEUE_KEY, current.slice(1));
+        if (updatedEntry.attempts >= MAX_ATTEMPTS) {
+          await moveToFailed(updatedEntry, `Abandon après ${MAX_ATTEMPTS} tentatives`);
+          await removeQueuedEntry(entry.id);
           failed++;
         } else {
-          await writeJson(QUEUE_KEY, current);
+          await mutateQueue((queue) =>
+            queue.map((queued) =>
+              queued.id === entry.id ? updatedEntry : queued,
+            ),
+          );
         }
         notify();
         break;
@@ -392,8 +418,7 @@ export async function retryFailed(): Promise<void> {
   const failed = await getFailed();
   if (failed.length === 0) return;
 
-  const queue = await getQueue();
-  queue.push(
+  await mutateQueue((queue) => [...queue,
     ...failed.map((e) => ({
       ...e,
       // Un identifiant mal formé est rejeté en validation par le serveur : le
@@ -403,8 +428,7 @@ export async function retryFailed(): Promise<void> {
       attempts: 0,
       lastError: undefined,
     })),
-  );
-  await writeJson(QUEUE_KEY, queue);
+  ]);
   await writeJson(FAILED_KEY, []);
   notify();
 
@@ -418,7 +442,7 @@ export async function clearFailed(): Promise<void> {
 
 /** Purge complète (déconnexion). */
 export async function clearOutbox(): Promise<void> {
-  await writeJson(QUEUE_KEY, []);
+  await mutateQueue(() => []);
   await writeJson(FAILED_KEY, []);
   notify();
 }

@@ -39,6 +39,10 @@ import { toast } from "../../../src/ui/toast";
 import { supabase } from "../../../src/lib/supabase";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { api } from "../../../src/lib/api";
+import {
+  loadProfile as loadCachedProfile,
+  saveProfile as saveCachedProfile,
+} from "../../../src/lib/offline/profileCache";
 
 export default function ParametresScreen() {
   const router = useRouter();
@@ -94,27 +98,55 @@ export default function ParametresScreen() {
   // Charger le profil réel
   useEffect(() => {
     const loadProfile = async () => {
+      const cached = await loadCachedProfile();
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user;
+
+      // getSession lit le stockage local, contrairement à getUser qui exige le
+      // réseau. Le profil mis en cache est donc affiché immédiatement hors
+      // connexion au lieu de retomber sur « Utilisateur / indéfini ».
+      if (cached || user) {
+        setProfile({
+          ...(user ?? {}),
+          id: cached?.employeeId ?? user?.id,
+          email: cached?.email ?? user?.email,
+          full_name: cached?.fullName ?? "",
+          role: cached?.role ?? "employee",
+          zone: cached?.zone,
+          color: cached?.color,
+        });
+      }
+      setLoadingProfile(false);
+
       if (user) {
         try {
           const res = await api.get("/api/employees/me");
           setProfile({ ...user, ...res.data });
+          await saveCachedProfile({
+            role: res.data?.role ?? cached?.role ?? "employee",
+            zone: res.data?.zone === "ardennes" ? "ardennes" : "hainaut",
+            fullName: res.data?.full_name ?? cached?.fullName ?? "",
+            email: res.data?.email ?? user.email,
+            color: res.data?.color ?? null,
+            employeeId: res.data?.id ? String(res.data.id) : undefined,
+          });
         } catch {
-          try {
-            const res = await api.get("/api/employees");
-            const myProfile = res.data.find((e: any) => e.email === user.email);
+          // Si la liste des employés est déjà en cache, elle peut enrichir le
+          // profil sans provoquer un second appel voué à échouer hors ligne.
+          const employees = queryClient.getQueryData<any[]>(["employees"]);
+          const myProfile = employees?.find((e: any) => e.email === user.email);
+          if (myProfile) {
             setProfile({ ...user, ...myProfile });
-          } catch {
+          } else if (!cached) {
             setProfile(user);
           }
         }
       }
-      setLoadingProfile(false);
     };
-    loadProfile();
-  }, []);
+    void loadProfile();
+  }, [queryClient]);
 
   const handleChangePassword = async () => {
     if (!newPassword || newPassword.length < 8) {

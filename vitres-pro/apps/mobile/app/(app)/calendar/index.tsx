@@ -60,6 +60,7 @@ import {
   useBulkAssignEmployees,
 } from "../../../src/hooks/useInterventions";
 import { useEmployees } from "../../../src/hooks/useEmployees";
+import { usePlanningRangeStats } from "../../../src/hooks/usePlanning";
 import { MonthView } from "../../../src/ui/components/calendar/MonthView";
 import { WeekView } from "../../../src/ui/components/calendar/WeekView";
 import { DayView } from "../../../src/ui/components/calendar/DayView";
@@ -371,6 +372,11 @@ export default function CalendarScreen() {
     },
     staleTime: 30 * 1000,
     refetchOnMount: true,
+    // En changeant de mois, la clé React Query change. La fenêtre précédente
+    // couvre déjà le mois voisin : on la garde affichée pendant que la nouvelle
+    // clé attend le réseau, ce qui rend la navigation adjacente utilisable
+    // hors connexion sans stocker plusieurs copies des mêmes interventions.
+    placeholderData: (previousData) => previousData,
   });
 
   const { data: companySettings } = useQuery({
@@ -401,6 +407,14 @@ export default function CalendarScreen() {
 
   // Zone effective : admin peut choisir, employé est verrouillé sur sa zone
   const effectiveZone = isAdmin ? selectedZone : (userZone ?? "all");
+
+  // Une seule requête légère couvre les statistiques de tous les jours de la
+  // fenêtre. Elle alimente PlanningHeader et est conservée hors ligne.
+  usePlanningRangeStats(
+    toISODate(new Date(rangeStart)),
+    toISODate(new Date(rangeEnd)),
+    effectiveZone,
+  );
 
   const filterableEmployees = useMemo(() =>
     (allEmployees ?? []).filter((e: any) =>
