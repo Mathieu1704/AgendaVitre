@@ -97,6 +97,11 @@ export function hasPendingWrites(): boolean {
   return pendingCount > 0;
 }
 
+/** Snapshot synchrone utilisé par React pour afficher le bandeau. */
+export function getPendingCountSnapshot(): number {
+  return pendingCount;
+}
+
 async function syncPendingCount(): Promise<void> {
   pendingCount = (await readJson<OutboxEntry[]>(QUEUE_KEY, [])).length;
 }
@@ -120,7 +125,8 @@ function notify() {
 }
 
 // Au démarrage, la file peut déjà contenir des entrées d'une session précédente.
-void syncPendingCount();
+// Prévenir React après cette unique lecture initiale.
+void syncPendingCount().then(() => notify());
 
 /**
  * UUID v4.

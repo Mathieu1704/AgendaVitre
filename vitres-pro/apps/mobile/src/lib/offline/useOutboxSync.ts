@@ -7,13 +7,14 @@
  *
  * Retourne de quoi alimenter l'indicateur « N modifications en attente ».
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AppState } from "react-native";
 import { onlineManager, useQueryClient } from "@tanstack/react-query";
 import {
   flush,
   getQueue,
   getFailed,
+  getPendingCountSnapshot,
   subscribeOutbox,
   subscribeFlushed,
   type OutboxEntry,
@@ -22,7 +23,11 @@ import { isOfflineSupported } from "./storage";
 
 export function useOutboxSync() {
   const queryClient = useQueryClient();
-  const [pending, setPending] = useState(0);
+  const pending = useSyncExternalStore(
+    (onStoreChange) => subscribeOutbox(() => onStoreChange()),
+    getPendingCountSnapshot,
+    getPendingCountSnapshot,
+  );
   const [failed, setFailed] = useState<OutboxEntry[]>([]);
   const [online, setOnline] = useState(() => onlineManager.isOnline());
   // Nombre de tentatives infructueuses sur l'entrée en tête de file. Permet de
@@ -40,7 +45,6 @@ export function useOutboxSync() {
     // presque simultanées. Une lecture ancienne ne doit jamais réafficher un
     // compteur déjà revenu à zéro après la fin de la synchronisation.
     if (version !== refreshVersion.current) return;
-    setPending(queue.length);
     setStalledAttempts(queue[0]?.attempts ?? 0);
     setPendingError(queue[0]?.lastError);
     setFailed(failedEntries);
@@ -94,9 +98,6 @@ export function useOutboxSync() {
     });
 
     const unsubQueue = subscribeOutbox((count) => {
-      // Mise à jour synchrone depuis la mutation de la file : le bandeau tombe
-      // dès le retrait réussi, sans attendre une nouvelle lecture du disque.
-      setPending(count);
       if (count === 0) {
         setStalledAttempts(0);
         setPendingError(undefined);
