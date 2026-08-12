@@ -16,6 +16,7 @@ import {
 } from "../src/lib/offline/persist";
 import { flush as flushOutbox } from "../src/lib/offline/outbox";
 import { flushPersistedQueryCache } from "../src/lib/offline/chunkedPersister";
+import { supabase } from "../src/lib/supabase";
 import "../app.css";
 
 // Sentry désactivé temporairement : le build natif 1.0.2 a été publié sans le
@@ -137,7 +138,17 @@ function ThemedApp() {
 
 function RootLayout() {
   useEffect(() => {
+    // Sans ça, le rafraîchissement automatique du token Supabase (autoRefreshToken)
+    // ne tourne pas de façon fiable en arrière-plan sur React Native (les timers
+    // JS sont mis en pause) : un employé qui laisse l'app en arrière-plan plus
+    // d'1h revenait avec une session expirée, déconnexion "aléatoire" à la
+    // réouverture. Recommandation officielle Supabase pour RN.
     const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        supabase.auth.startAutoRefresh();
+      } else {
+        supabase.auth.stopAutoRefresh();
+      }
       if (state === "inactive" || state === "background") {
         void flushPersistedQueryCache();
       }
