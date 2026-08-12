@@ -238,7 +238,7 @@ export default function TarifsScreen() {
             )}
             <Button
               onPress={handleAdd}
-              disabled={createRate.isPending || (!newTimeOnly && !newRate) || (newTimeOnly && !newLabel.trim())}
+              disabled={createRate.isPending || (!newTimeOnly && !newRate)}
               style={{ marginTop: 4 }}
             >
               <View

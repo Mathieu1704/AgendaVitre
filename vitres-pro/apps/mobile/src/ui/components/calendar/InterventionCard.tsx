@@ -69,11 +69,16 @@ export const InterventionCard = React.memo(function InterventionCard({
   const typeConfig =
     TYPE_CONFIG[item.type ?? "intervention"] ?? TYPE_CONFIG["intervention"];
 
-  // Durée calculée quand time_tbd=true et taux non-time_only
+  // Durée calculée quand time_tbd=true : forfait fixe pour un taux
+  // "temps de travail uniquement" (rate.rate vaut 0, la division n'a pas de
+  // sens), sinon dérivée du prix estimé / taux horaire.
   const computedDurationH: number | null = (() => {
     if (!item.time_tbd) return null;
     const rate = item.hourly_rate;
-    if (!rate || rate.time_only) return null;
+    if (!rate) return null;
+    if (rate.time_only) {
+      return rate.fixed_hours && rate.fixed_hours > 0 ? rate.fixed_hours : null;
+    }
     if (!item.price_estimated || rate.rate <= 0) return null;
     return Math.round((item.price_estimated / rate.rate) * 4) / 4;
   })();

@@ -857,11 +857,7 @@ export default function RateSessionScreen() {
             </Button>
             <Button
               onPress={handleAddRate}
-              disabled={
-                (!newRateTimeOnly && !newRateValue) ||
-                (newRateTimeOnly && !newRateLabel.trim()) ||
-                createRate.isPending
-              }
+              disabled={(!newRateTimeOnly && !newRateValue) || createRate.isPending}
               className="flex-1"
             >
               {createRate.isPending ? (
