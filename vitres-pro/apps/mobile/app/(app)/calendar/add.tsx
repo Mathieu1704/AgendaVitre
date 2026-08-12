@@ -302,15 +302,22 @@ function generateDates(
 
 export default function AddInterventionScreen() {
   const router = useRouter();
-  const { id, reprise_of, from_view, from_date, from_zone } = useLocalSearchParams<{
+  const { id, reprise_of, duplicate_of, from_view, from_date, from_zone } = useLocalSearchParams<{
     id?: string;
     reprise_of?: string;
+    duplicate_of?: string;
     from_view?: string;
     from_date?: string;
     from_zone?: string;
   }>();
-  const isEditMode = !!id && !reprise_of;
+  const isEditMode = !!id && !reprise_of && !duplicate_of;
   const isRepriseMode = !!reprise_of;
+  // Duplication : même mécanisme de pré-remplissage que la reprise (catalogue,
+  // taux horaire, prestations), mais sans le suivi "reprise prise/pas prise"
+  // (ce n'est pas un RDV de suite, juste une copie sur un autre jour — utile
+  // pour un chantier étalé sur plusieurs jours, ex: 3 jours x 8h).
+  const isDuplicateMode = !!duplicate_of;
+  const repriseSourceId = reprise_of || duplicate_of;
 
   const { isAdmin, userZone } = useAuth();
   const queryClient = useQueryClient();
@@ -369,28 +376,28 @@ export default function AddInterventionScreen() {
   // hors réseau et le formulaire de reprise s'affichait entièrement vide
   // (client, titre, prestations non pré-remplis).
   const repriseSourceFromCache = useCallback(() => {
-    if (!reprise_of) return undefined;
-    const fromDetail = queryClient.getQueryData<any>(["intervention", reprise_of]);
+    if (!repriseSourceId) return undefined;
+    const fromDetail = queryClient.getQueryData<any>(["intervention", repriseSourceId]);
     if (fromDetail) return fromDetail;
     const lists = queryClient.getQueriesData<any[]>({ queryKey: ["interventions"] });
     for (const [, data] of lists) {
       if (!Array.isArray(data)) continue;
-      const found = data.find((i) => i?.id === reprise_of);
+      const found = data.find((i) => i?.id === repriseSourceId);
       if (found) return found;
     }
     return undefined;
-  }, [queryClient, reprise_of]);
+  }, [queryClient, repriseSourceId]);
 
-  // Données pour reprise (source originale)
+  // Données pour reprise/duplication (source originale)
   const { data: repriseSource, isLoading: isLoadingReprise } = useQuery({
-    queryKey: ["intervention-reprise", reprise_of],
+    queryKey: ["intervention-reprise", repriseSourceId],
     queryFn: async () => {
-      if (!reprise_of) return null;
-      return (await api.get(`/api/interventions/${reprise_of}`)).data;
+      if (!repriseSourceId) return null;
+      return (await api.get(`/api/interventions/${repriseSourceId}`)).data;
     },
     initialData: repriseSourceFromCache,
     initialDataUpdatedAt: 0,
-    enabled: isRepriseMode,
+    enabled: isRepriseMode || isDuplicateMode,
   });
 
   // --- States formulaire ---
@@ -426,7 +433,7 @@ export default function AddInterventionScreen() {
       const end = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
       return (await api.get(`/api/planning/range-stats?start_str=${start}&end_str=${end}&zone=${zone}`)).data as Record<string, any>;
     },
-    enabled: isRepriseMode,
+    enabled: isRepriseMode || isDuplicateMode,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -440,7 +447,7 @@ export default function AddInterventionScreen() {
       const end = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       return (await api.get(`/api/planning/range-stats?start_str=${start}&end_str=${end}&zone=${zone}`)).data as Record<string, any>;
     },
-    enabled: isRepriseMode,
+    enabled: isRepriseMode || isDuplicateMode,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -568,9 +575,9 @@ export default function AddInterventionScreen() {
 
   const attachedClientServices = useMemo(
     () => servicesAttachedToIntervention(
-      isEditMode ? interventionData : isRepriseMode ? repriseSource : null,
+      isEditMode ? interventionData : (isRepriseMode || isDuplicateMode) ? repriseSource : null,
     ),
-    [isEditMode, isRepriseMode, interventionData, repriseSource],
+    [isEditMode, isRepriseMode, isDuplicateMode, interventionData, repriseSource],
   );
 
   // La source de vérité de l'édition est l'intervention elle-même. Même si le
@@ -587,10 +594,10 @@ export default function AddInterventionScreen() {
   // Prédit ici la même valeur que le backend assignera à la création : la
   // chaîne d'une source sans client_id ni reprise_chain_id, c'est elle-même.
   const activeChainId = useMemo(() => {
-    const source = isEditMode ? interventionData : isRepriseMode ? repriseSource : null;
+    const source = isEditMode ? interventionData : (isRepriseMode || isDuplicateMode) ? repriseSource : null;
     if (!source || source.client_id) return null;
     return source.reprise_chain_id || source.id || null;
-  }, [isEditMode, isRepriseMode, interventionData, repriseSource]);
+  }, [isEditMode, isRepriseMode, isDuplicateMode, interventionData, repriseSource]);
 
   const chainServicesQueryKey = ["chain-services", activeChainId];
   const { data: chainServices = [] } = useQuery<ClientService[]>({
@@ -608,14 +615,14 @@ export default function AddInterventionScreen() {
   });
 
   const attachedChainServices = useMemo(() => {
-    const source = isEditMode ? interventionData : isRepriseMode ? repriseSource : null;
+    const source = isEditMode ? interventionData : (isRepriseMode || isDuplicateMode) ? repriseSource : null;
     if (!source || source.client_id) return [];
     const real = servicesAttachedToIntervention(source, "intervention_service_id");
     // Encore ad-hoc côté serveur, mais affichées dès maintenant comme des
     // cases cochées : le backend les rattachera par libellé à la sauvegarde.
     const pending = pendingChainServices(source, real.length);
     return [...real, ...pending];
-  }, [isEditMode, isRepriseMode, interventionData, repriseSource]);
+  }, [isEditMode, isRepriseMode, isDuplicateMode, interventionData, repriseSource]);
 
   const availableChainServices = useMemo(
     () => mergeClientServices(chainServices, attachedChainServices),
@@ -825,13 +832,13 @@ export default function AddInterventionScreen() {
     }
   }, [isEditMode, interventionData, clients, queryClient]);
 
-  // Pré-remplir depuis la source reprise (= semaine suivante)
+  // Pré-remplir depuis la source reprise/duplication
   useEffect(() => {
     // `clients` n'est volontairement pas mis en cache hors ligne (~3000
     // entrées, inutiles offline : chaque intervention embarque déjà son
     // client). Attendre `clients` bloquait donc tout le pré-remplissage hors
     // réseau, alors que `repriseSource.client` suffit (repli plus bas).
-    if (isRepriseMode && repriseSource) {
+    if ((isRepriseMode || isDuplicateMode) && repriseSource) {
       setTitle(repriseSource.title);
       setDescription(repriseSource.description || "");
       setPaymentMode(
@@ -845,7 +852,9 @@ export default function AddInterventionScreen() {
       const origStart = new Date(repriseSource.start_time);
       const origEnd = new Date(repriseSource.end_time);
       const nextDate = new Date(origStart);
-      nextDate.setDate(nextDate.getDate() + 7); // par défaut +1 semaine
+      // Reprise = +1 semaine par défaut (RDV suivant) ; duplication = +1 jour
+      // (typiquement un chantier étalé sur plusieurs jours consécutifs).
+      nextDate.setDate(nextDate.getDate() + (isDuplicateMode ? 1 : 7));
       const nextEnd = new Date(nextDate.getTime() + (origEnd.getTime() - origStart.getTime()));
       setStartDateStr(toBrusselsDateTimeString(nextDate));
       setEndDateStr(toBrusselsDateTimeString(nextEnd));
@@ -902,12 +911,12 @@ export default function AddInterventionScreen() {
         );
       }
     }
-  }, [isRepriseMode, repriseSource, clients, queryClient]); // clients optionnel, cf. commentaire ci-dessus
+  }, [isRepriseMode, isDuplicateMode, repriseSource, clients, queryClient]); // clients optionnel, cf. commentaire ci-dessus
 
-  // Reset form quand on navigue vers "nouveau" (pas edit, pas reprise)
+  // Reset form quand on navigue vers "nouveau" (pas edit, pas reprise, pas duplication)
   useFocusEffect(
     useCallback(() => {
-      if (!isEditMode && !isRepriseMode) {
+      if (!isEditMode && !isRepriseMode && !isDuplicateMode) {
         setTitle("");
         setDescription("");
         setIntervType("intervention");
@@ -927,7 +936,7 @@ export default function AddInterventionScreen() {
         setShowRecurrenceDropdown(false);
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isEditMode, isRepriseMode]),
+    }, [isEditMode, isRepriseMode, isDuplicateMode]),
   );
 
   // Items finaux = services cochés + items ad-hoc
@@ -1143,7 +1152,9 @@ export default function AddInterventionScreen() {
           start_time: occ.start.toISOString(),
           end_time: occ.end.toISOString(),
           time_tbd: isAdmin ? timeTbd : true,
-          ...(isRepriseMode && reprise_of ? { reprise_of_id: reprise_of } : {}),
+          ...((isRepriseMode || isDuplicateMode) && repriseSourceId
+            ? { reprise_of_id: repriseSourceId }
+            : {}),
           recurrence_rule:
             occurrences.length > 1
               ? {
@@ -1167,7 +1178,11 @@ export default function AddInterventionScreen() {
           method: "POST",
           url: "/api/interventions",
           body: payload,
-          label: isRepriseMode ? "RDV de reprise" : "Nouvelle intervention",
+          label: isRepriseMode
+            ? "RDV de reprise"
+            : isDuplicateMode
+              ? "Copie d'intervention"
+              : "Nouvelle intervention",
         });
       }
 
@@ -1190,7 +1205,9 @@ export default function AddInterventionScreen() {
           ? `${occurrences.length} interventions créées !`
           : isRepriseMode
             ? "RDV de reprise planifié !"
-            : "Intervention créée !";
+            : isDuplicateMode
+              ? "Intervention dupliquée !"
+              : "Intervention créée !";
       toast.success(
         "Succès",
         isOnlineNow() ? msg : `${msg} Sera synchronisé au retour du réseau.`,
@@ -1201,6 +1218,10 @@ export default function AddInterventionScreen() {
           pathname: "/(app)/calendar",
           params: { date: new Date().toISOString().split("T")[0], view: "day" },
         });
+      } else if (isDuplicateMode && duplicate_of) {
+        // Retour sur la fiche source : pratique pour dupliquer à nouveau
+        // (chantier sur plusieurs jours, ex: dupliquer une 3e fois pour le jour 3).
+        router.dismissTo(`/(app)/calendar/${duplicate_of}` as any);
       } else {
         router.dismissTo({
           pathname: "/(app)/calendar",
@@ -1266,7 +1287,7 @@ export default function AddInterventionScreen() {
   if (
     !isFormRenderReady ||
     (isEditMode && isLoadingIntervention) ||
-    (isRepriseMode && isLoadingReprise)
+    ((isRepriseMode || isDuplicateMode) && isLoadingReprise)
   ) {
     return (
       <View
@@ -1298,6 +1319,8 @@ export default function AddInterventionScreen() {
             else if (isEditMode) router.replace(`/(app)/calendar/${id}`);
             else if (isRepriseMode)
               router.replace(`/(app)/calendar/${reprise_of}` as any);
+            else if (isDuplicateMode)
+              router.replace(`/(app)/calendar/${duplicate_of}` as any);
             else
               router.replace({
                 pathname: "/(app)/calendar",
@@ -1315,9 +1338,11 @@ export default function AddInterventionScreen() {
         <Text className="text-lg font-bold ml-2 text-foreground dark:text-white">
           {isRepriseMode
             ? "Planifier la reprise"
-            : isEditMode
-              ? "Modifier l'intervention"
-              : "Nouvelle intervention"}
+            : isDuplicateMode
+              ? "Dupliquer l'intervention"
+              : isEditMode
+                ? "Modifier l'intervention"
+                : "Nouvelle intervention"}
         </Text>
       </View>
 
@@ -1462,16 +1487,20 @@ export default function AddInterventionScreen() {
               <Text className="text-2xl font-extrabold text-foreground dark:text-white text-center">
                 {isRepriseMode
                   ? "Reprise RDV"
-                  : isEditMode
-                    ? "Modifier"
-                    : "Planifier"}
+                  : isDuplicateMode
+                    ? "Dupliquer"
+                    : isEditMode
+                      ? "Modifier"
+                      : "Planifier"}
               </Text>
               <Text className="mt-1 text-muted-foreground text-center font-medium">
                 {isRepriseMode
                   ? "Planifie le prochain RDV pour ce client"
-                  : isEditMode
-                    ? "Mise à jour intervention"
-                    : "Nouvelle intervention"}
+                  : isDuplicateMode
+                    ? "Copie sur un autre jour"
+                    : isEditMode
+                      ? "Mise à jour intervention"
+                      : "Nouvelle intervention"}
               </Text>
             </CardHeader>
 
@@ -1689,9 +1718,9 @@ export default function AddInterventionScreen() {
                     onChange={setStartDateStr}
                     label="Date de l'intervention"
                     dateOnly
-                    dayColors={isRepriseMode ? dayColors : undefined}
-                    onMonthChange={isRepriseMode ? setCalendarMonth : undefined}
-                    minDate={isRepriseMode ? new Date().toISOString().split("T")[0] : undefined}
+                    dayColors={(isRepriseMode || isDuplicateMode) ? dayColors : undefined}
+                    onMonthChange={(isRepriseMode || isDuplicateMode) ? setCalendarMonth : undefined}
+                    minDate={(isRepriseMode || isDuplicateMode) ? new Date().toISOString().split("T")[0] : undefined}
                   />
                 ) : (
                   <>
@@ -1700,9 +1729,9 @@ export default function AddInterventionScreen() {
                       onChange={setStartDateStr}
                       label="Début de l'intervention"
                       dateOnly={!isAdmin}
-                      dayColors={isRepriseMode ? dayColors : undefined}
-                      onMonthChange={isRepriseMode ? setCalendarMonth : undefined}
-                      minDate={isRepriseMode ? new Date().toISOString().split("T")[0] : undefined}
+                      dayColors={(isRepriseMode || isDuplicateMode) ? dayColors : undefined}
+                      onMonthChange={(isRepriseMode || isDuplicateMode) ? setCalendarMonth : undefined}
+                      minDate={(isRepriseMode || isDuplicateMode) ? new Date().toISOString().split("T")[0] : undefined}
                     />
                     <DateTimePicker
                       value={endDateStr}
@@ -2487,6 +2516,8 @@ export default function AddInterventionScreen() {
                       if (router.canGoBack()) router.back();
                       else if (isRepriseMode)
                         router.replace(`/(app)/calendar/${reprise_of}` as any);
+                      else if (isDuplicateMode)
+                        router.replace(`/(app)/calendar/${duplicate_of}` as any);
                       else
                         router.replace({
                           pathname: "/(app)/calendar",
@@ -2514,9 +2545,11 @@ export default function AddInterventionScreen() {
                       ? "Envoi..."
                       : isRepriseMode
                         ? "Confirmer"
-                        : isEditMode
-                          ? "Mettre à jour"
-                          : "Valider"}
+                        : isDuplicateMode
+                          ? "Dupliquer"
+                          : isEditMode
+                            ? "Mettre à jour"
+                            : "Valider"}
                   </Button>
                 </View>
               </View>

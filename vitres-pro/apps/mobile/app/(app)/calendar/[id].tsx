@@ -965,6 +965,13 @@ export default function InterventionDetailScreen() {
             params: { id, from_view, from_date, from_zone },
           });
         }}
+        onDuplicate={() => {
+          setMenuVisible(false);
+          router.push({
+            pathname: "/(app)/calendar/add",
+            params: { duplicate_of: id, from_view, from_date, from_zone },
+          });
+        }}
         onDelete={handleDeleteRequest}
       />
 

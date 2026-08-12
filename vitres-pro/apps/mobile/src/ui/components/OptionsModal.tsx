@@ -1,12 +1,13 @@
 import React from "react";
 import { View, Text, Modal, Pressable, Platform } from "react-native";
-import { Edit2, Trash2, X } from "lucide-react-native";
+import { Edit2, Copy, Trash2, X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface OptionsModalProps {
   visible: boolean;
   onClose: () => void;
   onEdit: () => void;
+  onDuplicate?: () => void;
   onDelete: () => void;
 }
 
@@ -14,6 +15,7 @@ export const OptionsModal = ({
   visible,
   onClose,
   onEdit,
+  onDuplicate,
   onDelete,
 }: OptionsModalProps) => {
   const insets = useSafeAreaInsets();
@@ -53,6 +55,26 @@ export const OptionsModal = ({
               Modifier
             </Text>
           </Pressable>
+
+          {/* Option DUPLIQUER */}
+          {onDuplicate && (
+            <Pressable
+              onPress={() => {
+                onClose();
+                onDuplicate();
+              }}
+              className="flex-row items-center p-4 border-b border-border dark:border-slate-800 active:bg-muted/50 hover:bg-muted/50"
+            >
+              <Copy
+                size={20}
+                className="text-foreground dark:text-white mr-3"
+                color="#8B5CF6"
+              />
+              <Text className="font-semibold text-foreground dark:text-white">
+                Dupliquer
+              </Text>
+            </Pressable>
+          )}
 
           {/* Option SUPPRIMER */}
           <Pressable
