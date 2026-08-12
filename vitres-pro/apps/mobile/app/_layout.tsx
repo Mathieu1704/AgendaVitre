@@ -4,7 +4,8 @@ import { PaperProvider, MD3LightTheme, MD3DarkTheme } from "react-native-paper";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
+import * as Updates from "expo-updates";
 import { ToastHost } from "../src/ui/toast";
 import { ThemeProvider, useTheme } from "../src/ui/components/ThemeToggle";
 import { isOfflineSupported } from "../src/lib/offline/storage";
@@ -136,6 +137,25 @@ function ThemedApp() {
   );
 }
 
+// Par défaut, expo-updates ne vérifie une mise à jour OTA qu'au démarrage à
+// froid, et ne l'applique qu'au démarrage à froid SUIVANT (téléchargée en
+// silence, utilisée seulement la fois d'après). Un utilisateur qui ne tue
+// jamais complètement l'app (juste mise en arrière-plan / rouverte depuis le
+// multitâche) ne reçoit donc jamais rien. On vérifie et applique ici dès le
+// retour au premier plan pour ne plus en dépendre.
+async function checkForOtaUpdate() {
+  if (__DEV__ || Platform.OS === "web" || !Updates.isEnabled) return;
+  try {
+    const result = await Updates.checkForUpdateAsync();
+    if (result.isAvailable) {
+      await Updates.fetchUpdateAsync();
+      await Updates.reloadAsync();
+    }
+  } catch {
+    // Pas grave : la vérification automatique au prochain démarrage à froid reste le filet de sécurité.
+  }
+}
+
 function RootLayout() {
   useEffect(() => {
     // Sans ça, le rafraîchissement automatique du token Supabase (autoRefreshToken)
@@ -146,6 +166,7 @@ function RootLayout() {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         supabase.auth.startAutoRefresh();
+        void checkForOtaUpdate();
       } else {
         supabase.auth.stopAutoRefresh();
       }
