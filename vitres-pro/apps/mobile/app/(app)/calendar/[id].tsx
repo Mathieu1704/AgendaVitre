@@ -844,7 +844,7 @@ export default function InterventionDetailScreen() {
                   />
                 </View>
                 <Text className="text-xs font-bold text-foreground dark:text-white">
-                  Y aller
+                  GPS
                 </Text>
               </Pressable>
 
