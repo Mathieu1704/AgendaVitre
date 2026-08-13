@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, Modal, Pressable, Platform } from "react-native";
-import { Edit2, Copy, Trash2, X } from "lucide-react-native";
+import { Edit2, Copy, Ban, Trash2, X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface OptionsModalProps {
@@ -8,6 +8,7 @@ interface OptionsModalProps {
   onClose: () => void;
   onEdit: () => void;
   onDuplicate?: () => void;
+  onCancelIntervention?: () => void;
   onDelete: () => void;
 }
 
@@ -16,6 +17,7 @@ export const OptionsModal = ({
   onClose,
   onEdit,
   onDuplicate,
+  onCancelIntervention,
   onDelete,
 }: OptionsModalProps) => {
   const insets = useSafeAreaInsets();
@@ -72,6 +74,23 @@ export const OptionsModal = ({
               />
               <Text className="font-semibold text-foreground dark:text-white">
                 Dupliquer
+              </Text>
+            </Pressable>
+          )}
+
+          {/* Option MARQUER ANNULÉE (statut, distinct du bouton "Annuler" ci-dessous
+              qui ferme juste ce menu) */}
+          {onCancelIntervention && (
+            <Pressable
+              onPress={() => {
+                onClose();
+                setTimeout(onCancelIntervention, 100);
+              }}
+              className="flex-row items-center p-4 border-b border-border dark:border-slate-800 active:bg-orange-50 dark:active:bg-orange-900/20 hover:bg-orange-50"
+            >
+              <Ban size={20} color="#F97316" className="mr-3" />
+              <Text className="font-semibold text-orange-600 dark:text-orange-400">
+                Marquer annulée
               </Text>
             </Pressable>
           )}

@@ -9,7 +9,7 @@ import {
   Platform,
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Plus,
@@ -54,6 +54,7 @@ type InterventionSearchResult = {
 
 export default function ClientsListScreen() {
   const router = useRouter();
+  const { focus } = useLocalSearchParams<{ focus?: string }>();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
@@ -61,6 +62,18 @@ export default function ClientsListScreen() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
+
+  // Ouvre le clavier direct quand on arrive via le raccourci recherche
+  // (icône loupe du Planning) plutôt que d'obliger à retaper sur le champ.
+  useFocusEffect(
+    useCallback(() => {
+      if (focus) {
+        const t = setTimeout(() => searchInputRef.current?.focus(), 150);
+        return () => clearTimeout(t);
+      }
+    }, [focus]),
+  );
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -204,6 +217,7 @@ export default function ClientsListScreen() {
         >
           <Search size={18} color={isSearchFocused ? "#3B82F6" : "#94A3B8"} />
           <TextInput
+            ref={searchInputRef}
             placeholder="Rechercher un client..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}

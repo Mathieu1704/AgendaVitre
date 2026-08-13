@@ -46,6 +46,7 @@ import {
   applyPaymentMode,
   applyItemsDone,
   applyDeleteIntervention,
+  applyEditIntervention,
 } from "../../../src/lib/offline/optimistic";
 import { formatPrice } from "../../../src/lib/price";
 import { toast } from "../../../src/ui/toast";
@@ -81,6 +82,7 @@ export default function InterventionDetailScreen() {
   // 1. TOUS LES STATES
   const [menuVisible, setMenuVisible] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [editingPayment, setEditingPayment] = useState(false);
   const [pendingPaymentMode, setPendingPaymentMode] = useState<"cash" | "invoice" | "invoice_cash">("cash");
   const [showAllDoneConfirm, setShowAllDoneConfirm] = useState(false);
@@ -183,6 +185,35 @@ export default function InterventionDetailScreen() {
     },
   });
 
+  // Même statut que celui posé par le script detect_cancelled_events.py
+  // (colorId rouge côté Google Calendar) : l'intervention reste visible dans
+  // le planning, juste marquée annulée (badge rouge), contrairement à la
+  // suppression qui l'efface définitivement.
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      applyEditIntervention(queryClient, String(id), { status: "cancelled" });
+      await enqueue({
+        kind: "edit-intervention",
+        method: "PATCH",
+        url: `/api/interventions/${id}`,
+        body: { status: "cancelled" },
+        label: "Annulation de l'intervention",
+      });
+    },
+    onSuccess: () => {
+      toast.success(
+        "Annulée",
+        isOnlineNow()
+          ? "Intervention marquée annulée."
+          : "Marquée annulée. Sera synchronisée au retour du réseau.",
+      );
+    },
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      toast.error("Erreur", "Impossible d'annuler.");
+    },
+  });
+
   // 4. HELPER FUNCTIONS
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -216,6 +247,22 @@ export default function InterventionDetailScreen() {
       );
     } else {
       setTimeout(() => setShowDeleteConfirm(true), 200);
+    }
+  };
+
+  const handleCancelRequest = () => {
+    setMenuVisible(false);
+    if (Platform.OS !== "web") {
+      Alert.alert(
+        "Annuler l'intervention ?",
+        "Elle restera visible dans le planning, marquée comme annulée.",
+        [
+          { text: "Retour", style: "cancel" },
+          { text: "Annuler l'intervention", style: "destructive", onPress: () => cancelMutation.mutate() },
+        ]
+      );
+    } else {
+      setTimeout(() => setShowCancelConfirm(true), 200);
     }
   };
 
@@ -972,10 +1019,25 @@ export default function InterventionDetailScreen() {
             params: { duplicate_of: id, from_view, from_date, from_zone },
           });
         }}
+        onCancelIntervention={handleCancelRequest}
         onDelete={handleDeleteRequest}
       />
 
       {/* 2. LA CONFIRMATION CUSTOM */}
+      <ConfirmModal
+        visible={showCancelConfirm}
+        title="Annuler l'intervention ?"
+        message="Elle restera visible dans le planning, marquée comme annulée."
+        confirmText="Annuler l'intervention"
+        cancelText="Retour"
+        isDestructive={true}
+        onCancel={() => setShowCancelConfirm(false)}
+        onConfirm={() => {
+          setShowCancelConfirm(false);
+          cancelMutation.mutate();
+        }}
+      />
+
       <ConfirmModal
         visible={showDeleteConfirm}
         title="Supprimer l'intervention ?"

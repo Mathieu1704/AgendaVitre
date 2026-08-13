@@ -614,7 +614,9 @@ export default function CalendarScreen() {
             </Text>
             {isAdmin && (
               <Pressable
-                onPress={() => router.push("/(app)/clients")}
+                onPress={() =>
+                  router.push({ pathname: "/(app)/clients", params: { focus: "1" } })
+                }
                 hitSlop={10}
                 className="p-2 rounded-full bg-primary/10 active:opacity-60"
               >
