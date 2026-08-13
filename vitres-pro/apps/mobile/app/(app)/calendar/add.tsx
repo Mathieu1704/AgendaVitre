@@ -755,8 +755,18 @@ export default function AddInterventionScreen() {
   };
 
   // Charger les données d'édition normale
+  // Ne réhydrate qu'une fois par intervention : un refetch de `interventionData`
+  // (ex: resync de l'outbox après ajout/suppression d'une prestation catalogue)
+  // ne doit pas écraser les modifications locales pas encore sauvegardées
+  // (prix édité, cases cochées/décochées).
+  const hydratedEditIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (isEditMode && interventionData) {
+    if (
+      isEditMode &&
+      interventionData &&
+      hydratedEditIdRef.current !== interventionData.id
+    ) {
+      hydratedEditIdRef.current = interventionData.id;
       setTitle(interventionData.title);
       setDescription(interventionData.description || "");
       setPaymentMode(
@@ -833,12 +843,20 @@ export default function AddInterventionScreen() {
   }, [isEditMode, interventionData, clients, queryClient]);
 
   // Pré-remplir depuis la source reprise/duplication
+  // Même garde que pour l'édition normale : un refetch de `repriseSource` ne
+  // doit pas écraser les modifications locales déjà faites par l'utilisateur.
+  const hydratedRepriseIdRef = useRef<string | null>(null);
   useEffect(() => {
     // `clients` n'est volontairement pas mis en cache hors ligne (~3000
     // entrées, inutiles offline : chaque intervention embarque déjà son
     // client). Attendre `clients` bloquait donc tout le pré-remplissage hors
     // réseau, alors que `repriseSource.client` suffit (repli plus bas).
-    if ((isRepriseMode || isDuplicateMode) && repriseSource) {
+    if (
+      (isRepriseMode || isDuplicateMode) &&
+      repriseSource &&
+      hydratedRepriseIdRef.current !== repriseSource.id
+    ) {
+      hydratedRepriseIdRef.current = repriseSource.id;
       setTitle(repriseSource.title);
       setDescription(repriseSource.description || "");
       setPaymentMode(
@@ -2209,7 +2227,7 @@ export default function AddInterventionScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                           <TextInput
-                            value={checked ? priceVal : svc.price.toString()}
+                            value={priceVal}
                             placeholder="Prix"
                             keyboardType="numeric"
                             editable={checked}
