@@ -3,7 +3,9 @@ import { View, Text } from "react-native";
 import { usePlanningStats } from "../../hooks/usePlanning";
 
 function fmtH(h: number): string {
-  const rounded = Math.round(h * 2) / 2;
+  // Arrondi au quart d'heure — aligné sur l'écran "Session taux" (mobile)
+  // et intervention_hours (backend), qui font tous deux le même calcul.
+  const rounded = Math.round(h * 4) / 4;
   const hours = Math.floor(rounded);
   const mins = Math.round((rounded % 1) * 60);
   if (mins === 0) return `${hours}h`;
@@ -35,7 +37,7 @@ export const DailyStatsBadge = React.memo(function DailyStatsBadge({
   return (
     <View className={`px-3 py-1.5 rounded-full ${bgClass}`}>
       <Text className={`text-sm font-bold ${textClass}`}>
-        {fmtH(Math.round(stats.planned_hours * 2) / 2)} / {fmtH(stats.capacity_hours)}
+        {fmtH(stats.planned_hours)} / {fmtH(stats.capacity_hours)}
       </Text>
     </View>
   );

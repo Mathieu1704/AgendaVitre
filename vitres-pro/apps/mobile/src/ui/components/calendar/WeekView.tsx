@@ -8,7 +8,9 @@ import { RawEventCard } from "./RawEventCard";
 import { renderInterventionGroups, AssignModalState, InterventionGroupsCtx } from "./InterventionGroups";
 
 function fmtH(h: number): string {
-  const rounded = Math.round(h * 2) / 2;
+  // Arrondi au quart d'heure — aligné sur l'écran "Session taux" (mobile)
+  // et intervention_hours (backend), qui font tous deux le même calcul.
+  const rounded = Math.round(h * 4) / 4;
   const hours = Math.floor(rounded);
   const mins = Math.round((rounded % 1) * 60);
   if (mins === 0) return `${hours}h`;
@@ -91,7 +93,7 @@ export const WeekView = React.memo(function WeekView({
           {stat && (
             <View className={`mt-2 py-1 px-2 rounded-md items-center justify-center ${badgeBg}`}>
               <Text className={`text-[10px] font-bold ${badgeText}`}>
-                {fmtH(Math.round(stat.planned_hours * 2) / 2)} / {fmtH(stat.capacity_hours)}
+                {fmtH(stat.planned_hours)} / {fmtH(stat.capacity_hours)}
               </Text>
             </View>
           )}

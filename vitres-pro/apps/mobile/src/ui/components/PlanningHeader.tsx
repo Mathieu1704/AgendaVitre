@@ -5,7 +5,9 @@ import { cn } from "../cn";
 import { Zap } from "lucide-react-native";
 
 function fmtH(h: number): string {
-  const rounded = Math.round(h * 2) / 2;
+  // Arrondi au quart d'heure — aligné sur l'écran "Session taux" (mobile)
+  // et intervention_hours (backend), qui font tous deux le même calcul.
+  const rounded = Math.round(h * 4) / 4;
   const hours = Math.floor(rounded);
   const mins = Math.round((rounded % 1) * 60);
   if (mins === 0) return `${hours}h`;
@@ -51,7 +53,7 @@ export function PlanningHeader({ dateStr, zone, onRateSession }: { dateStr: stri
         )}
         <View className="flex-1">
           <Text className="text-2xl font-extrabold text-foreground dark:text-white">
-            {fmtH(Math.round(stats.planned_hours * 2) / 2)}
+            {fmtH(stats.planned_hours)}
             <Text className="text-sm font-normal text-muted-foreground">
               {" / "}
               {fmtH(stats.capacity_hours)} dispo

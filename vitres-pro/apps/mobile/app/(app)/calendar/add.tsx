@@ -990,7 +990,7 @@ export default function AddInterventionScreen() {
     (hourlyRates as any[])?.find((r: any) => r.id === selectedRateId) ?? null;
   const computedHoursRaw =
     selectedRate && totalPrice > 0
-      ? Math.round((totalPrice / selectedRate.rate) * 2) / 2
+      ? Math.round((totalPrice / selectedRate.rate) * 4) / 4
       : null;
   const computedHours =
     computedHoursRaw != null
