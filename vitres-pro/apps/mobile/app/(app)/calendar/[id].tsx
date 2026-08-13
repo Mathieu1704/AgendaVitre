@@ -1005,18 +1005,27 @@ export default function InterventionDetailScreen() {
                                   </View>
                                 )}
                               </View>
-                              <Text
-                                className={`font-bold ${
-                                  item.done === false
-                                    ? "text-muted-foreground line-through"
-                                    : "text-foreground dark:text-white"
-                                }`}
-                              >
-                                {formatPrice(
-                                  item.on_demand ? onDemandPrice(Number(item.price)) : item.price,
-                                  "0 €",
+                              <View className="flex-row items-center">
+                                {item.on_demand && (
+                                  <Text className="text-sm text-muted-foreground line-through mr-2">
+                                    {formatPrice(item.price, "0 €")}
+                                  </Text>
                                 )}
-                              </Text>
+                                <Text
+                                  className={`font-bold ${
+                                    item.done === false
+                                      ? "text-muted-foreground line-through"
+                                      : item.on_demand
+                                        ? "text-violet-500"
+                                        : "text-foreground dark:text-white"
+                                  }`}
+                                >
+                                  {formatPrice(
+                                    item.on_demand ? onDemandPrice(Number(item.price)) : item.price,
+                                    "0 €",
+                                  )}
+                                </Text>
+                              </View>
                             </View>
                           ))}
                           <View className="flex-row justify-between items-center pt-2 mt-1">
@@ -1225,9 +1234,16 @@ export default function InterventionDetailScreen() {
                       </View>
                     )}
                   </View>
-                  <Text style={{ fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B" }}>
-                    {formatPrice(item.on_demand ? onDemandPrice(Number(item.price)) : item.price, "0 €")}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    {item.on_demand && (
+                      <Text style={{ fontSize: 13, color: isDark ? "#64748B" : "#94A3B8", textDecorationLine: "line-through", marginRight: 6 }}>
+                        {formatPrice(item.price, "0 €")}
+                      </Text>
+                    )}
+                    <Text style={{ fontWeight: "700", color: item.on_demand ? "#8B5CF6" : isDark ? "#F8FAFC" : "#09090B" }}>
+                      {formatPrice(item.on_demand ? onDemandPrice(Number(item.price)) : item.price, "0 €")}
+                    </Text>
+                  </View>
                 </Pressable>
               );
             })}
@@ -1241,7 +1257,7 @@ export default function InterventionDetailScreen() {
                 .filter((item: any) => !notDoneIds.has(item.id))
                 .reduce((sum: number, item: any) => {
                   const base = Number(item.price);
-                  return sum + (item.on_demand ? base * 1.33 : base);
+                  return sum + (item.on_demand ? onDemandPrice(base) : base);
                 }, 0)
                 .toFixed(2)}{" "}
               €
