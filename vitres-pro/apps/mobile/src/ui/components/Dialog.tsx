@@ -9,6 +9,7 @@ export function Dialog({
   position = "center",
   maxWidth,
   containerStyle,
+  onShow,
 }: {
   open: boolean;
   onClose: () => void;
@@ -16,6 +17,10 @@ export function Dialog({
   position?: "center" | "bottom";
   maxWidth?: number;
   containerStyle?: ViewStyle;
+  // Fiable pour focus un champ (autoFocus ne se redéclenche pas quand le
+  // Modal reste monté et ne fait que changer de `visible` — onShow, si, à
+  // chaque ouverture, une fois la Modal réellement affichée).
+  onShow?: () => void;
 }) {
   // KeyboardAvoidingView ne se comporte pas de façon fiable dans un Modal RN
   // sur Android (fenêtre native séparée, indépendante du windowSoftInputMode
@@ -50,6 +55,7 @@ export function Dialog({
       transparent
       animationType="fade"
       onRequestClose={onClose}
+      onShow={onShow}
     >
       <Portal.Host>
         {/* Backdrop absolu — ferme la modale sur tap en dehors */}

@@ -96,6 +96,7 @@ export default function InterventionDetailScreen() {
     value: string;
     target: "client" | "intervention";
   }>(null);
+  const editingFieldInputRef = useRef<TextInput>(null);
 
   // Repli sur la liste du planning déjà en cache.
   // La fiche a sa propre requête ; hors réseau, une intervention jamais ouverte
@@ -1341,18 +1342,23 @@ export default function InterventionDetailScreen() {
         </View>
       </Dialog>
 
-      <Dialog open={!!editingField} onClose={() => setEditingField(null)} position="center">
+      <Dialog
+        open={!!editingField}
+        onClose={() => setEditingField(null)}
+        position="center"
+        onShow={() => editingFieldInputRef.current?.focus()}
+      >
         <View style={{ padding: 16, gap: 16 }}>
           <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", textAlign: "center" }}>
             Modifier {editingField?.label}
           </Text>
           <Input
+            ref={editingFieldInputRef}
             label={editingField?.label}
             value={editingField?.value ?? ""}
             onChangeText={(t) =>
               setEditingField((prev) => (prev ? { ...prev, value: t } : prev))
             }
-            autoFocus
             keyboardType={
               editingField?.field === "phone"
                 ? "phone-pad"
