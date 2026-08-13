@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Text,
+  TextInput,
   useWindowDimensions,
   Platform,
   Linking,
@@ -561,12 +562,23 @@ export default function InterventionDetailScreen() {
         {/* --- TITRE --- */}
         <View className="px-6 pt-4 pb-2">
           <View>
-            <Text
-              selectable
-              className="text-2xl font-extrabold text-foreground dark:text-white mb-3 leading-tight"
-            >
-              {intervention.title.replace(/[\r\n\u2028\u2029]+/g, " ").trim()}
-            </Text>
+            <TextInput
+              value={intervention.title.replace(/[\r\n\u2028\u2029]+/g, " ").trim()}
+              editable
+              multiline
+              showSoftInputOnFocus={false}
+              caretHidden
+              onChangeText={() => {}}
+              contextMenuHidden={false}
+              style={{
+                fontSize: 24,
+                fontWeight: "800",
+                lineHeight: 28,
+                marginBottom: 12,
+                color: isDark ? "#F8FAFC" : "#09090B",
+                padding: 0,
+              }}
+            />
 
             {/* Bloc paiement — tappable pour modifier */}
             {intervType === "intervention" && (() => {
