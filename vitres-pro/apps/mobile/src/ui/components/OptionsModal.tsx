@@ -98,7 +98,7 @@ export const OptionsModal = ({
                 <>
                   <RotateCcw size={20} color="#22C55E" className="mr-3" />
                   <Text className="font-semibold text-green-600 dark:text-green-400">
-                    Réactiver l'intervention
+                    Réactiver
                   </Text>
                 </>
               ) : (
