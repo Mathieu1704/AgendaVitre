@@ -128,7 +128,7 @@ export const InterventionCard = React.memo(function InterventionCard({
       className={`border border-border dark:border-slate-800 shadow-sm active:scale-[0.98] overflow-hidden${leftBarColor ? "" : " mb-3"}`}
       style={{ borderRadius: cardRadius, flex: leftBarColor ? 1 : undefined }}
     >
-      {employees.length > 0 && (
+      {(employees.length > 0 || isCancelled) && (
         <View
           style={{
             position: "absolute",
@@ -154,7 +154,7 @@ export const InterventionCard = React.memo(function InterventionCard({
           )}
         </View>
       )}
-      {employees.length > 0 && (
+      {(employees.length > 0 || isCancelled) && (
         <View style={{ flexDirection: "row", height: 18, width: "100%" }}>
           {isCancelled ? (
             <View

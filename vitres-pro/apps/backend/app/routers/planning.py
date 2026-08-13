@@ -126,6 +126,7 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
     ).filter(
         Intervention.start_time >= day_start,
         Intervention.start_time < day_end,
+        Intervention.status != "cancelled",
     )
     if sub_zone:
         int_query = int_query.filter(Intervention.sub_zone == sub_zone)
@@ -221,6 +222,7 @@ def get_range_stats_endpoint(
     ).filter(
         Intervention.start_time >= range_start_utc,
         Intervention.start_time < range_end_utc,
+        Intervention.status != "cancelled",
     )
     if sub_zone:
         int_query = int_query.filter(Intervention.sub_zone == sub_zone)
