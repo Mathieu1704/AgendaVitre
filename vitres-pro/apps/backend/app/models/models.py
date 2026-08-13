@@ -221,6 +221,14 @@ class Intervention(Base):
     # sans client (permet un catalogue de services persistant sans fiche client).
     reprise_chain_id = Column(UUID(as_uuid=True), nullable=True, index=True)
 
+    # Coordonnées de contact directement sur l'intervention : uniquement pour les
+    # interventions sans client lié (même logique que reprise_chain_id ci-dessus,
+    # pas de fiche client à créer pour un job ponctuel). Quand un client est lié,
+    # ce sont ses propres address/phone/email qui font foi.
+    address = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+
     # Récurrence
     recurrence_rule = Column(JSONB, nullable=True)   # {"freq":"weekly","interval":1,"count":12}
     recurrence_group_id = Column(UUID(as_uuid=True), nullable=True, index=True)
