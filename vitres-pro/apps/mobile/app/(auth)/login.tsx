@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "../../src/lib/supabase";
+import { consumeReturnTo } from "../../src/lib/returnTo";
 import { toast } from "../../src/ui/toast";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { Eye, EyeOff, AlertCircle } from "lucide-react-native";
@@ -72,7 +73,10 @@ export default function LoginScreen() {
       if (error) {
         toast.error("Erreur de connexion", error.message || "Email ou mot de passe incorrect.");
       } else {
-        router.replace("/(app)");
+        // Reconnecté après une déconnexion forcée (401) : revenir exactement
+        // là où l'utilisateur était plutôt que de le renvoyer à l'Accueil.
+        const returnTo = consumeReturnTo();
+        router.replace((returnTo || "/(app)") as any);
       }
     } finally {
       setLoading(false);

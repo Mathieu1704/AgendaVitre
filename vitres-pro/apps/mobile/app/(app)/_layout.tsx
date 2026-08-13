@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, useWindowDimensions, ActivityIndicator, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Tabs, Redirect } from "expo-router";
+import { Tabs, Redirect, usePathname, useGlobalSearchParams } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../src/lib/supabase";
 import { api } from "../../src/lib/api";
+import { rememberAppPath } from "../../src/lib/returnTo";
 import { Sidebar } from "../../src/ui/layout/Sidebar";
 import { Header } from "../../src/ui/layout/Header";
 import { CustomTabBar } from "../../src/ui/layout/CustomTabBar";
@@ -37,6 +38,18 @@ export default function AppLayout() {
   const queryClient = useQueryClient();
   const prefetchedRef = useRef(false);
   const prefetchedAdminRef = useRef(false);
+
+  // Mémorise l'écran courant à chaque navigation, pour pouvoir y revenir si
+  // l'API force une déconnexion (401) en pleine utilisation — voir returnTo.ts.
+  const pathname = usePathname();
+  const globalParams = useGlobalSearchParams();
+  useEffect(() => {
+    const search = Object.entries(globalParams)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join("&");
+    rememberAppPath(pathname, search);
+  }, [pathname, globalParams]);
 
   const prefetchMainData = () => {
     if (prefetchedRef.current) return;
