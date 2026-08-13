@@ -28,6 +28,7 @@ import {
   ChevronRight,
   Plus,
   CalendarCheck,
+  Search,
 } from "lucide-react-native";
 import Animated, {
   useSharedValue,
@@ -607,9 +608,20 @@ export default function CalendarScreen() {
       >
         {/* Titre + Toggle Liste/Calendrier + Btn Aujourd'hui */}
         <View className="flex-row justify-between items-center mb-4">
-          <Text className="text-3xl font-bold text-foreground dark:text-slate-50">
-            Planning
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Text className="text-3xl font-bold text-foreground dark:text-slate-50">
+              Planning
+            </Text>
+            {isAdmin && (
+              <Pressable
+                onPress={() => router.push("/(app)/clients")}
+                hitSlop={10}
+                className="p-2 rounded-full bg-primary/10 active:opacity-60"
+              >
+                <Search size={18} color="#3B82F6" />
+              </Pressable>
+            )}
+          </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Pressable
               onPress={handleToday}
