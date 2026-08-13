@@ -35,6 +35,10 @@ export interface Intervention {
   recurrence_group_id?: string | null;
   client?: Client;
   employees: Employee[]; // Liste d'employés maintenant
+  // Uniquement utilisées quand aucun client n'est lié (voir client.address/phone/email sinon)
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
 }
 
 export interface RawCalendarEvent {

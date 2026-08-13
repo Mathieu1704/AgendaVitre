@@ -1,5 +1,5 @@
 import React from "react";
-import { Modal, Pressable, View, ViewStyle } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, View, ViewStyle } from "react-native";
 import { Portal } from "react-native-paper";
 
 export function Dialog({
@@ -38,19 +38,25 @@ export function Dialog({
           }}
         />
         {/* Conteneur centré — pointerEvents box-none : laisse passer les touches sur le fond */}
-        <View
-          style={{
-            flex: 1,
-            padding: 16,
-            justifyContent: position === "bottom" ? "flex-end" : "center",
-            ...containerStyle,
-          }}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ flex: 1 }}
           pointerEvents="box-none"
         >
-          <View className="w-full max-w-md self-center rounded-3xl border border-border dark:border-slate-800 bg-card dark:bg-slate-900 shadow-2xl overflow-hidden" style={maxWidth ? { maxWidth } : undefined}>
-            {children}
+          <View
+            style={{
+              flex: 1,
+              padding: 16,
+              justifyContent: position === "bottom" ? "flex-end" : "center",
+              ...containerStyle,
+            }}
+            pointerEvents="box-none"
+          >
+            <View className="w-full max-w-md self-center rounded-3xl border border-border dark:border-slate-800 bg-card dark:bg-slate-900 shadow-2xl overflow-hidden" style={maxWidth ? { maxWidth } : undefined}>
+              {children}
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Portal.Host>
     </Modal>
   );

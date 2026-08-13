@@ -61,6 +61,7 @@ import { ConfirmModal } from "../../../src/ui/components/ConfirmModal";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
 import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
 import { Dialog } from "../../../src/ui/components/Dialog";
+import { Input } from "../../../src/ui/components/Input";
 import { toBrusselsDateTimeString, parseBrusselsDateTimeString } from "../../../src/lib/date";
 
 export default function InterventionDetailScreen() {
@@ -88,6 +89,12 @@ export default function InterventionDetailScreen() {
   const [showAllDoneConfirm, setShowAllDoneConfirm] = useState(false);
   const [showItemsChecklist, setShowItemsChecklist] = useState(false);
   const [notDoneIds, setNotDoneIds] = useState<Set<string>>(new Set());
+  const [editingField, setEditingField] = useState<null | {
+    field: "address" | "phone" | "email";
+    label: string;
+    value: string;
+    target: "client" | "intervention";
+  }>(null);
 
   // Repli sur la liste du planning déjà en cache.
   // La fiche a sa propre requête ; hors réseau, une intervention jamais ouverte
@@ -212,6 +219,55 @@ export default function InterventionDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
       toast.error("Erreur", "Impossible de mettre à jour le statut.");
     },
+  });
+
+  // Édition rapide (admin) de l'adresse/téléphone/email depuis les boutons
+  // "Y aller"/"Appeler"/"Email" : corrige une valeur mal encodée (client lié),
+  // ou encode ces coordonnées directement sur l'intervention (pas de client).
+  const updateClientFieldMutation = useMutation({
+    mutationFn: async ({ field, value }: { field: "address" | "phone" | "email"; value: string }) => {
+      if (!intervention?.client?.id) throw new Error("no client");
+      const res = await api.patch(`/api/clients/${intervention.client.id}`, {
+        [field]: value,
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
+      queryClient.invalidateQueries({ queryKey: ["client", intervention?.client?.id] });
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      toast.success("Succès", "Client mis à jour.");
+      setEditingField(null);
+    },
+    onError: () => toast.error("Erreur", "Impossible de mettre à jour le client."),
+  });
+
+  const CONTACT_FIELD_LABELS: Record<"address" | "phone" | "email", string> = {
+    address: "adresse",
+    phone: "téléphone",
+    email: "email",
+  };
+
+  const updateInterventionContactMutation = useMutation({
+    mutationFn: async ({ field, value }: { field: "address" | "phone" | "email"; value: string }) => {
+      applyEditIntervention(queryClient, String(id), { [field]: value });
+      await enqueue({
+        kind: "edit-intervention",
+        method: "PATCH",
+        url: `/api/interventions/${id}`,
+        body: { [field]: value },
+        label: `Modification ${CONTACT_FIELD_LABELS[field]}`,
+      });
+    },
+    onSuccess: () => {
+      toast.success(
+        "Succès",
+        isOnlineNow() ? "Intervention mise à jour." : "Sera synchronisé au retour du réseau.",
+      );
+      setEditingField(null);
+    },
+    onError: () => toast.error("Erreur", "Impossible de mettre à jour l'intervention."),
   });
 
   // 4. HELPER FUNCTIONS
@@ -726,8 +782,19 @@ export default function InterventionDetailScreen() {
             )}
           </View>
 
-          {/* LIGNE 2 : ACTIONS RAPIDES (seulement si client lié) */}
-          {hasClient && intervention.client && (
+          {/* LIGNE 2 : ACTIONS RAPIDES (intervention/devis, avec ou sans client lié) */}
+          {hasClient && (() => {
+            const contactTarget: "client" | "intervention" = intervention.client?.id
+              ? "client"
+              : "intervention";
+            const contactAddress = intervention.client?.address ?? intervention.address;
+            const contactPhone = intervention.client?.phone ?? intervention.phone;
+            const contactEmail = intervention.client?.email ?? intervention.email;
+            const openFieldEditor = (field: "address" | "phone" | "email", label: string, value?: string | null) => {
+              if (!isAdmin) return;
+              setEditingField({ field, label, value: value ?? "", target: contactTarget });
+            };
+            return (
             <View
               className={`flex-row w-full ${isDesktop ? "gap-4" : "gap-2"}`}
               style={{
@@ -738,10 +805,8 @@ export default function InterventionDetailScreen() {
               <Pressable
                 className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
                 onPress={() => {
-                  if (intervention.client?.address) {
-                    const query = encodeURIComponent(
-                      intervention.client.address,
-                    );
+                  if (contactAddress) {
+                    const query = encodeURIComponent(contactAddress);
                     const url = Platform.select({
                       ios: `https://maps.google.com/maps?q=${query}`,
                       android: `geo:0,0?q=${query}`,
@@ -749,12 +814,11 @@ export default function InterventionDetailScreen() {
                     });
                     Linking.openURL(url!);
                   } else {
-                    toast.error(
-                      "Pas d'adresse",
-                      "Aucune adresse pour ce client.",
-                    );
+                    toast.error("Pas d'adresse", "Aucune adresse renseignée.");
                   }
                 }}
+                onLongPress={() => openFieldEditor("address", "Adresse", contactAddress)}
+                delayLongPress={400}
               >
                 <View className="bg-emerald-500/10 p-3 rounded-full mb-2">
                   <Navigation
@@ -773,16 +837,15 @@ export default function InterventionDetailScreen() {
               <Pressable
                 className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
                 onPress={() => {
-                  if (intervention.client?.phone) {
-                    const cleanedPhone = intervention.client.phone.replace(
-                      /\s/g,
-                      "",
-                    );
+                  if (contactPhone) {
+                    const cleanedPhone = contactPhone.replace(/\s/g, "");
                     Linking.openURL(`tel:${cleanedPhone}`);
                   } else {
                     toast.error("Pas de téléphone", "Aucun numéro renseigné.");
                   }
                 }}
+                onLongPress={() => openFieldEditor("phone", "Téléphone", contactPhone)}
+                delayLongPress={400}
               >
                 <View className="bg-blue-500/10 p-3 rounded-full mb-2">
                   <Phone
@@ -801,14 +864,14 @@ export default function InterventionDetailScreen() {
               <Pressable
                 className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
                 onPress={() => {
-                  if (intervention.client?.email) {
-                    Linking.openURL(
-                      `mailto:${intervention.client.email.trim()}`,
-                    );
+                  if (contactEmail) {
+                    Linking.openURL(`mailto:${contactEmail.trim()}`);
                   } else {
                     toast.error("Pas d'email", "Aucun email renseigné.");
                   }
                 }}
+                onLongPress={() => openFieldEditor("email", "Email", contactEmail)}
+                delayLongPress={400}
               >
                 <View className="bg-orange-500/10 p-3 rounded-full mb-2">
                   <Mail
@@ -823,7 +886,8 @@ export default function InterventionDetailScreen() {
                 </Text>
               </Pressable>
             </View>
-          )}
+            );
+          })()}
 
           {/* 3. SUIVI TEMPS RÉEL (Si dispo) */}
           {(intervention.real_start_time || intervention.real_end_time) && (
@@ -1217,6 +1281,48 @@ export default function InterventionDetailScreen() {
               Annuler
             </Button>
             <Button onPress={handleSaveTime} style={{ flex: 1 }} disabled={timeMutation.isPending}>
+              Enregistrer
+            </Button>
+          </View>
+        </View>
+      </Dialog>
+
+      <Dialog open={!!editingField} onClose={() => setEditingField(null)} position="bottom">
+        <View style={{ padding: 16, gap: 16 }}>
+          <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", textAlign: "center" }}>
+            Modifier {editingField?.label}
+          </Text>
+          <Input
+            label={editingField?.label}
+            value={editingField?.value ?? ""}
+            onChangeText={(t) =>
+              setEditingField((prev) => (prev ? { ...prev, value: t } : prev))
+            }
+            autoFocus
+            keyboardType={
+              editingField?.field === "phone"
+                ? "phone-pad"
+                : editingField?.field === "email"
+                  ? "email-address"
+                  : "default"
+            }
+          />
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <Button variant="outline" onPress={() => setEditingField(null)} style={{ flex: 1 }}>
+              Annuler
+            </Button>
+            <Button
+              onPress={() => {
+                if (!editingField) return;
+                if (editingField.target === "client") {
+                  updateClientFieldMutation.mutate(editingField);
+                } else {
+                  updateInterventionContactMutation.mutate(editingField);
+                }
+              }}
+              style={{ flex: 1 }}
+              disabled={updateClientFieldMutation.isPending || updateInterventionContactMutation.isPending}
+            >
               Enregistrer
             </Button>
           </View>
