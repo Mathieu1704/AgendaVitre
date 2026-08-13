@@ -277,9 +277,17 @@ function isPermanentFailure(error: any): boolean {
  * Une suppression rejouée sur une ressource déjà supprimée renvoie 404.
  * L'état visé est pourtant atteint : la traiter comme un échec ferait
  * apparaître une alerte rouge alors que tout s'est bien passé.
+ *
+ * Idem pour un renommage/prix de prestation dont l'entrée catalogue a
+ * disparu entre-temps (supprimée ailleurs, ou jamais un vrai id catalogue) :
+ * l'intervention elle-même garde son libellé/prix propre, cette écriture ne
+ * synchronisait que le catalogue réutilisable — son échec n'est pas une
+ * perte de données à faire remonter comme une alerte.
  */
 function isAlreadyApplied(entry: OutboxEntry, error: any): boolean {
-  return entry.method === "DELETE" && error?.response?.status === 404;
+  if (error?.response?.status !== 404) return false;
+  if (entry.method === "DELETE") return true;
+  return entry.kind === "service-price" || entry.kind === "service-rename";
 }
 
 async function moveToFailed(entry: OutboxEntry, message: string): Promise<void> {

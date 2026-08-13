@@ -647,11 +647,26 @@ export default function AddInterventionScreen() {
     ? availableClientServices
     : availableChainServices;
 
+  // `availableServices` mélange le catalogue réellement en ligne
+  // (clientServices/chainServices) avec des lignes "attachées" affichées
+  // uniquement pour garder l'historique visible (catalogue pas encore chargé,
+  // ou entrée supprimée depuis) — leur id n'est pas forcément un service
+  // catalogue existant. Ne persister que sur un vrai id du catalogue en
+  // direct, sinon le PATCH renvoie 404 ("Service introuvable").
+  const isLiveCatalogService = useCallback(
+    (serviceId: string) =>
+      selectedClient?.id
+        ? clientServices.some((s) => s.id === serviceId)
+        : chainServices.some((s) => s.id === serviceId),
+    [selectedClient?.id, clientServices, chainServices],
+  );
+
   const scheduleServiceLabelSave = useCallback(
     (serviceId: string, label: string) => {
       // "En attente" : rien à sauvegarder côté serveur pour l'instant — la
       // saisie reste dans serviceLabelDrafts et part avec la validation.
       if (isPendingChainId(serviceId)) return;
+      if (!isLiveCatalogService(serviceId)) return;
       const clientId = selectedClient?.id;
       if (!clientId && !activeChainId) return;
       if (serviceLabelTimers.current[serviceId]) {
@@ -689,7 +704,7 @@ export default function AddInterventionScreen() {
         }
       }, 500);
     },
-    [selectedClient?.id, activeChainId, queryClient],
+    [selectedClient?.id, activeChainId, queryClient, isLiveCatalogService],
   );
 
   // Sauvegarde le prix d'une prestation dans le catalogue, indépendamment de
@@ -698,6 +713,7 @@ export default function AddInterventionScreen() {
   const scheduleServicePriceSave = useCallback(
     (serviceId: string, priceText: string) => {
       if (isPendingChainId(serviceId)) return;
+      if (!isLiveCatalogService(serviceId)) return;
       const price = parseFloat(priceText);
       if (!Number.isFinite(price)) return;
       const clientId = selectedClient?.id;
@@ -727,7 +743,7 @@ export default function AddInterventionScreen() {
         }
       }, 500);
     },
-    [selectedClient?.id, activeChainId, queryClient],
+    [selectedClient?.id, activeChainId, queryClient, isLiveCatalogService],
   );
 
   // Détail du client sélectionné (dont ses autres RDV), pour avertir des doublons
