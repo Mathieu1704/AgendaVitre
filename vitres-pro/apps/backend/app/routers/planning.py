@@ -70,7 +70,10 @@ def intervention_hours(interv) -> float:
     if (interv.price_estimated
             and float(interv.price_estimated) > 0
             and rate.rate > 0):
-        return float(interv.price_estimated) / rate.rate
+        # Arrondi au quart d'heure, comme côté mobile (rate-session.tsx,
+        # Math.round(x*4)/4) — sans ça, le total du jour (ici) et le total
+        # affiché dans "Session taux" divergent légèrement.
+        return round((float(interv.price_estimated) / rate.rate) * 4) / 4
 
     return 0.0
 
