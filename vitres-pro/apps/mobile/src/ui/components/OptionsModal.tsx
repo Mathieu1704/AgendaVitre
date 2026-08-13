@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, Modal, Pressable, Platform } from "react-native";
-import { Edit2, Copy, Ban, Trash2, X } from "lucide-react-native";
+import { Edit2, Copy, Ban, RotateCcw, Trash2, X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface OptionsModalProps {
@@ -9,6 +9,7 @@ interface OptionsModalProps {
   onEdit: () => void;
   onDuplicate?: () => void;
   onCancelIntervention?: () => void;
+  isCancelled?: boolean;
   onDelete: () => void;
 }
 
@@ -18,6 +19,7 @@ export const OptionsModal = ({
   onEdit,
   onDuplicate,
   onCancelIntervention,
+  isCancelled = false,
   onDelete,
 }: OptionsModalProps) => {
   const insets = useSafeAreaInsets();
@@ -78,20 +80,35 @@ export const OptionsModal = ({
             </Pressable>
           )}
 
-          {/* Option MARQUER ANNULÉE (statut, distinct du bouton "Annuler" ci-dessous
-              qui ferme juste ce menu) */}
+          {/* Option MARQUER ANNULÉE / RÉACTIVER (statut, distinct du bouton
+              "Annuler" ci-dessous qui ferme juste ce menu) */}
           {onCancelIntervention && (
             <Pressable
               onPress={() => {
                 onClose();
                 setTimeout(onCancelIntervention, 100);
               }}
-              className="flex-row items-center p-4 border-b border-border dark:border-slate-800 active:bg-orange-50 dark:active:bg-orange-900/20 hover:bg-orange-50"
+              className={
+                isCancelled
+                  ? "flex-row items-center p-4 border-b border-border dark:border-slate-800 active:bg-green-50 dark:active:bg-green-900/20 hover:bg-green-50"
+                  : "flex-row items-center p-4 border-b border-border dark:border-slate-800 active:bg-orange-50 dark:active:bg-orange-900/20 hover:bg-orange-50"
+              }
             >
-              <Ban size={20} color="#F97316" className="mr-3" />
-              <Text className="font-semibold text-orange-600 dark:text-orange-400">
-                Marquer annulée
-              </Text>
+              {isCancelled ? (
+                <>
+                  <RotateCcw size={20} color="#22C55E" className="mr-3" />
+                  <Text className="font-semibold text-green-600 dark:text-green-400">
+                    Réactiver l'intervention
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Ban size={20} color="#F97316" className="mr-3" />
+                  <Text className="font-semibold text-orange-600 dark:text-orange-400">
+                    Marquer annulée
+                  </Text>
+                </>
+              )}
             </Pressable>
           )}
 

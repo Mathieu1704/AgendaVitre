@@ -190,27 +190,27 @@ export default function InterventionDetailScreen() {
   // le planning, juste marquée annulée (badge rouge), contrairement à la
   // suppression qui l'efface définitivement.
   const cancelMutation = useMutation({
-    mutationFn: async () => {
-      applyEditIntervention(queryClient, String(id), { status: "cancelled" });
+    mutationFn: async (targetStatus: "cancelled" | "planned") => {
+      applyEditIntervention(queryClient, String(id), { status: targetStatus });
       await enqueue({
         kind: "edit-intervention",
         method: "PATCH",
         url: `/api/interventions/${id}`,
-        body: { status: "cancelled" },
-        label: "Annulation de l'intervention",
+        body: { status: targetStatus },
+        label: targetStatus === "cancelled" ? "Annulation de l'intervention" : "Réactivation de l'intervention",
       });
     },
-    onSuccess: () => {
+    onSuccess: (_data, targetStatus) => {
       toast.success(
-        "Annulée",
+        targetStatus === "cancelled" ? "Annulée" : "Réactivée",
         isOnlineNow()
-          ? "Intervention marquée annulée."
-          : "Marquée annulée. Sera synchronisée au retour du réseau.",
+          ? `Intervention ${targetStatus === "cancelled" ? "marquée annulée" : "réactivée"}.`
+          : "Sera synchronisée au retour du réseau.",
       );
     },
     onError: () => {
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
-      toast.error("Erreur", "Impossible d'annuler.");
+      toast.error("Erreur", "Impossible de mettre à jour le statut.");
     },
   });
 
@@ -252,13 +252,19 @@ export default function InterventionDetailScreen() {
 
   const handleCancelRequest = () => {
     setMenuVisible(false);
+    // Réactiver est une action légère et sans risque : pas besoin de confirmation,
+    // contrairement à l'annulation (qui affecte le total d'heures du jour).
+    if (intervention?.status === "cancelled") {
+      cancelMutation.mutate("planned");
+      return;
+    }
     if (Platform.OS !== "web") {
       Alert.alert(
         "Annuler l'intervention ?",
         "Elle restera visible dans le planning, marquée comme annulée.",
         [
           { text: "Retour", style: "cancel" },
-          { text: "Annuler l'intervention", style: "destructive", onPress: () => cancelMutation.mutate() },
+          { text: "Annuler l'intervention", style: "destructive", onPress: () => cancelMutation.mutate("cancelled") },
         ]
       );
     } else {
@@ -1020,6 +1026,7 @@ export default function InterventionDetailScreen() {
           });
         }}
         onCancelIntervention={handleCancelRequest}
+        isCancelled={intervention?.status === "cancelled"}
         onDelete={handleDeleteRequest}
       />
 
@@ -1034,7 +1041,7 @@ export default function InterventionDetailScreen() {
         onCancel={() => setShowCancelConfirm(false)}
         onConfirm={() => {
           setShowCancelConfirm(false);
-          cancelMutation.mutate();
+          cancelMutation.mutate("cancelled");
         }}
       />
 
