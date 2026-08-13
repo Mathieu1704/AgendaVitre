@@ -1,5 +1,5 @@
-import React from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, View, ViewStyle } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, View, ViewStyle } from "react-native";
 import { Portal } from "react-native-paper";
 
 export function Dialog({
@@ -17,6 +17,33 @@ export function Dialog({
   maxWidth?: number;
   containerStyle?: ViewStyle;
 }) {
+  // KeyboardAvoidingView ne se comporte pas de façon fiable dans un Modal RN
+  // sur Android (fenêtre native séparée, indépendante du windowSoftInputMode
+  // de l'Activity) : on suit la hauteur du clavier nous-mêmes et on l'ajoute
+  // en paddingBottom. iOS reste sur KeyboardAvoidingView/"padding", déjà
+  // fonctionnel.
+  const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
+      setAndroidKeyboardHeight(e.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      setAndroidKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const basePaddingBottom = containerStyle?.paddingBottom ?? 16;
+  const resolvedPaddingBottom =
+    typeof basePaddingBottom === "number"
+      ? basePaddingBottom + androidKeyboardHeight
+      : basePaddingBottom;
+
   return (
     <Modal
       visible={open}
@@ -38,16 +65,8 @@ export function Dialog({
           }}
         />
         {/* Conteneur centré — pointerEvents box-none : laisse passer les touches sur le fond */}
-        {/*
-          RN Modal ouvre sa propre fenêtre native sur Android : elle n'hérite
-          pas du windowSoftInputMode="adjustResize" de l'Activity, donc rien
-          ne se redimensionne automatiquement à l'ouverture du clavier.
-          behavior="height" force KeyboardAvoidingView à rétrécir lui-même la
-          zone visible (contrairement à "padding", peu fiable dans un Modal
-          Android).
-        */}
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={{ flex: 1 }}
           pointerEvents="box-none"
         >
@@ -57,6 +76,7 @@ export function Dialog({
               padding: 16,
               justifyContent: position === "bottom" ? "flex-end" : "center",
               ...containerStyle,
+              paddingBottom: resolvedPaddingBottom,
             }}
             pointerEvents="box-none"
           >
