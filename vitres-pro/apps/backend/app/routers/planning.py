@@ -1,14 +1,18 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, selectinload
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Optional
 from sqlalchemy.sql import func
 
+BRUSSELS_TZ = ZoneInfo("Europe/Brussels")
+
 
 def _utc_bounds(d: date):
-    """Retourne les bornes UTC couvrant un jour calendaire Brussels (UTC+1/+2)."""
-    start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc) - timedelta(hours=2)
-    end   = datetime(d.year, d.month, d.day, tzinfo=timezone.utc) + timedelta(hours=26)
+    """Retourne les bornes UTC exactes du jour calendaire Brussels d (minuit à minuit),
+    en tenant compte du décalage été/hiver (UTC+1/+2)."""
+    start = datetime(d.year, d.month, d.day, tzinfo=BRUSSELS_TZ).astimezone(timezone.utc)
+    end   = (datetime(d.year, d.month, d.day, tzinfo=BRUSSELS_TZ) + timedelta(days=1)).astimezone(timezone.utc)
     return start, end
 
 from app.models.models import get_db, Intervention, Employee, Absence, CompanySettings, ProgressiveHours, CompanyClosure
