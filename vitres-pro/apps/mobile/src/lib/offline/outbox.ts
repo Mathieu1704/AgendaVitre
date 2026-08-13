@@ -41,6 +41,7 @@ export type OutboxKind =
   | "delete-intervention" // suppression (admin)
   | "service-create"
   | "service-rename"
+  | "service-price"
   | "service-delete";
 
 export type OutboxEntry = {

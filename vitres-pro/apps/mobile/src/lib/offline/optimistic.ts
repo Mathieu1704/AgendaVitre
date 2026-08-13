@@ -272,6 +272,19 @@ export function applyServiceRename(
   );
 }
 
+export function applyServicePriceUpdate(
+  qc: QueryClient,
+  clientId: string,
+  serviceId: string,
+  price: number,
+): void {
+  qc.setQueryData<any[]>(["client-services", clientId], (prev) =>
+    Array.isArray(prev)
+      ? prev.map((s) => (s?.id === serviceId ? { ...s, price } : s))
+      : prev,
+  );
+}
+
 export function applyServiceDelete(
   qc: QueryClient,
   clientId: string,
@@ -306,6 +319,19 @@ export function applyChainServiceRename(
   qc.setQueryData<any[]>(["chain-services", chainId], (prev) =>
     Array.isArray(prev)
       ? prev.map((s) => (s?.id === serviceId ? { ...s, label } : s))
+      : prev,
+  );
+}
+
+export function applyChainServicePriceUpdate(
+  qc: QueryClient,
+  chainId: string,
+  serviceId: string,
+  price: number,
+): void {
+  qc.setQueryData<any[]>(["chain-services", chainId], (prev) =>
+    Array.isArray(prev)
+      ? prev.map((s) => (s?.id === serviceId ? { ...s, price } : s))
       : prev,
   );
 }

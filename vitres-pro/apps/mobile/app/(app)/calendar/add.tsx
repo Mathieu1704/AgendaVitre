@@ -29,9 +29,11 @@ import {
   applyMarkDone,
   applyServiceCreate,
   applyServiceRename,
+  applyServicePriceUpdate,
   applyServiceDelete,
   applyChainServiceCreate,
   applyChainServiceRename,
+  applyChainServicePriceUpdate,
   applyChainServiceDelete,
 } from "../../../src/lib/offline/optimistic";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
@@ -485,6 +487,9 @@ export default function AddInterventionScreen() {
   const serviceLabelTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>(
     {},
   );
+  const servicePriceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>(
+    {},
+  );
   const [adHocItems, setAdHocItems] = useState<Item[]>([]);
   const [isAddingService, setIsAddingService] = useState(false);
   const [newServiceLabel, setNewServiceLabel] = useState("");
@@ -674,6 +679,44 @@ export default function AddInterventionScreen() {
             const next = { ...prev };
             delete next[serviceId];
             return next;
+          });
+        }
+      }, 500);
+    },
+    [selectedClient?.id, activeChainId, queryClient],
+  );
+
+  // Sauvegarde le prix d'une prestation dans le catalogue, indépendamment de
+  // la case cochée : décocher une prestation l'exclut de cette intervention,
+  // mais un prix corrigé ici doit rester acquis pour la prochaine fois.
+  const scheduleServicePriceSave = useCallback(
+    (serviceId: string, priceText: string) => {
+      if (isPendingChainId(serviceId)) return;
+      const price = parseFloat(priceText);
+      if (!Number.isFinite(price)) return;
+      const clientId = selectedClient?.id;
+      if (!clientId && !activeChainId) return;
+      if (servicePriceTimers.current[serviceId]) {
+        clearTimeout(servicePriceTimers.current[serviceId]);
+      }
+      servicePriceTimers.current[serviceId] = setTimeout(async () => {
+        if (clientId) {
+          applyServicePriceUpdate(queryClient, clientId, serviceId, price);
+          await enqueue({
+            kind: "service-price",
+            method: "PATCH",
+            url: `/api/clients/${clientId}/services/${serviceId}`,
+            body: { price },
+            label: "Prix de prestation",
+          });
+        } else if (activeChainId) {
+          applyChainServicePriceUpdate(queryClient, activeChainId, serviceId, price);
+          await enqueue({
+            kind: "service-price",
+            method: "PATCH",
+            url: `/api/interventions/chain-services/${serviceId}`,
+            body: { price },
+            label: "Prix de prestation",
           });
         }
       }, 500);
@@ -2230,13 +2273,13 @@ export default function AddInterventionScreen() {
                             value={priceVal}
                             placeholder="Prix"
                             keyboardType="numeric"
-                            editable={checked}
-                            onChangeText={(t) =>
+                            onChangeText={(t) => {
                               setServicePriceOverrides((prev) => ({
                                 ...prev,
                                 [svc.id]: t,
-                              }))
-                            }
+                              }));
+                              scheduleServicePriceSave(svc.id, t);
+                            }}
                             style={[
                               {
                                 borderWidth: 1,

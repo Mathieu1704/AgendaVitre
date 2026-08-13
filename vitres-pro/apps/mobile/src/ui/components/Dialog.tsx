@@ -38,8 +38,16 @@ export function Dialog({
           }}
         />
         {/* Conteneur centré — pointerEvents box-none : laisse passer les touches sur le fond */}
+        {/*
+          RN Modal ouvre sa propre fenêtre native sur Android : elle n'hérite
+          pas du windowSoftInputMode="adjustResize" de l'Activity, donc rien
+          ne se redimensionne automatiquement à l'ouverture du clavier.
+          behavior="height" force KeyboardAvoidingView à rétrécir lui-même la
+          zone visible (contrairement à "padding", peu fiable dans un Modal
+          Android).
+        */}
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ flex: 1 }}
           pointerEvents="box-none"
         >
