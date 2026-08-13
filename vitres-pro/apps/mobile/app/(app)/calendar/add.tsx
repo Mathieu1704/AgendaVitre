@@ -1798,7 +1798,15 @@ export default function AddInterventionScreen() {
 
               {/* TITRE + DATE + DURÉE */}
               <View style={{ gap: 16 }}>
-                <Input label="Titre" value={title} onChangeText={setTitle} />
+                <Input
+                  label="Titre"
+                  value={title}
+                  onChangeText={setTitle}
+                  multiline
+                  textAlignVertical="top"
+                  style={{ height: undefined, minHeight: 48, alignItems: "flex-start", paddingVertical: 10 }}
+                  inputStyle={{ height: undefined, minHeight: 28 }}
+                />
 
                 {isAdmin && (
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4 }}>
