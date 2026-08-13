@@ -95,6 +95,9 @@ export const InterventionCard = React.memo(function InterventionCard({
   const employees: any[] = [...(item.employees ?? [])].sort((a: any, b: any) =>
     (a.id as string).localeCompare(b.id as string),
   );
+  // Une intervention annulée reste rouge même si un employé est déjà
+  // assigné : le statut prime sur la couleur d'affectation.
+  const isCancelled = item.status === "cancelled";
 
   const card = (
     <Pressable
@@ -136,28 +139,30 @@ export const InterventionCard = React.memo(function InterventionCard({
             flexDirection: "row",
           }}
         >
-          {employees.map((e: any) => (
-            <View
-              key={e.id}
-              style={{
-                flex: 1,
-                backgroundColor: (e.color ?? "#3B82F6") + "2C",
-              }}
-            />
-          ))}
+          {isCancelled ? (
+            <View style={{ flex: 1, backgroundColor: "#EF44442C" }} />
+          ) : (
+            employees.map((e: any) => (
+              <View
+                key={e.id}
+                style={{
+                  flex: 1,
+                  backgroundColor: (e.color ?? "#3B82F6") + "2C",
+                }}
+              />
+            ))
+          )}
         </View>
       )}
       {employees.length > 0 && (
         <View style={{ flexDirection: "row", height: 18, width: "100%" }}>
-          {employees.map((emp: any) => (
+          {isCancelled ? (
             <View
-              key={emp.id}
               style={{
                 flex: 1,
-                backgroundColor: emp.color ?? "#94A3B8",
+                backgroundColor: "#EF4444",
                 alignItems: "center",
                 justifyContent: "center",
-                overflow: "hidden",
               }}
             >
               <Text
@@ -167,13 +172,39 @@ export const InterventionCard = React.memo(function InterventionCard({
                   fontWeight: "700",
                   color: "#fff",
                   paddingHorizontal: 4,
-                  letterSpacing: 0.2,
+                  letterSpacing: 0.5,
                 }}
               >
-                {(emp.full_name ?? emp.email ?? "?").split(" ")[0]}
+                ANNULÉE
               </Text>
             </View>
-          ))}
+          ) : (
+            employees.map((emp: any) => (
+              <View
+                key={emp.id}
+                style={{
+                  flex: 1,
+                  backgroundColor: emp.color ?? "#94A3B8",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                }}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontSize: 9,
+                    fontWeight: "700",
+                    color: "#fff",
+                    paddingHorizontal: 4,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {(emp.full_name ?? emp.email ?? "?").split(" ")[0]}
+                </Text>
+              </View>
+            ))
+          )}
         </View>
       )}
 
