@@ -561,7 +561,10 @@ export default function InterventionDetailScreen() {
         {/* --- TITRE --- */}
         <View className="px-6 pt-4 pb-2">
           <View>
-            <Text className="text-2xl font-extrabold text-foreground dark:text-white mb-3 leading-tight">
+            <Text
+              selectable
+              className="text-2xl font-extrabold text-foreground dark:text-white mb-3 leading-tight"
+            >
               {intervention.title.replace(/[\r\n\u2028\u2029]+/g, " ").trim()}
             </Text>
 
