@@ -177,6 +177,7 @@ export default function RateSessionScreen() {
     return interventions
       .filter((i: any) => {
         if (i.type !== "intervention") return false;
+        if (i.status === "cancelled") return false;
         const iDate = toBrusselsDateTimeString(new Date(i.start_time)).split(
           "T",
         )[0];
