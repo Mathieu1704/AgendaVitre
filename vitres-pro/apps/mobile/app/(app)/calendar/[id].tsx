@@ -49,7 +49,7 @@ import {
   applyDeleteIntervention,
   applyEditIntervention,
 } from "../../../src/lib/offline/optimistic";
-import { formatPrice } from "../../../src/lib/price";
+import { formatPrice, onDemandPrice } from "../../../src/lib/price";
 import { toast } from "../../../src/ui/toast";
 import { Button } from "../../../src/ui/components/Button";
 import { Card, CardContent } from "../../../src/ui/components/Card";
@@ -987,15 +987,24 @@ export default function InterventionDetailScreen() {
                               key={idx}
                               className="flex-row justify-between items-center pb-2 border-b border-border dark:border-slate-800 last:border-0"
                             >
-                              <Text
-                                className={`font-medium flex-1 mr-4 ${
-                                  item.done === false
-                                    ? "text-muted-foreground line-through"
-                                    : "text-foreground dark:text-white"
-                                }`}
-                              >
-                                {item.label}
-                              </Text>
+                              <View className="flex-row items-center flex-1 mr-4">
+                                <Text
+                                  className={`font-medium ${
+                                    item.done === false
+                                      ? "text-muted-foreground line-through"
+                                      : "text-foreground dark:text-white"
+                                  }`}
+                                >
+                                  {item.label}
+                                </Text>
+                                {item.on_demand && (
+                                  <View className="ml-2 px-1.5 py-0.5 rounded-md bg-violet-500/10">
+                                    <Text className="text-[10px] font-bold text-violet-500">
+                                      +33%
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
                               <Text
                                 className={`font-bold ${
                                   item.done === false
@@ -1003,7 +1012,10 @@ export default function InterventionDetailScreen() {
                                     : "text-foreground dark:text-white"
                                 }`}
                               >
-                                {formatPrice(item.price, "0 €")}
+                                {formatPrice(
+                                  item.on_demand ? onDemandPrice(Number(item.price)) : item.price,
+                                  "0 €",
+                                )}
                               </Text>
                             </View>
                           ))}
@@ -1195,18 +1207,26 @@ export default function InterventionDetailScreen() {
                   >
                     {checked && <Check size={13} color="#fff" />}
                   </View>
-                  <Text
-                    style={{
-                      flex: 1,
-                      color: isDark ? "#F8FAFC" : "#09090B",
-                      textDecorationLine: checked ? "none" : "line-through",
-                      opacity: checked ? 1 : 0.5,
-                    }}
-                  >
-                    {item.label}
-                  </Text>
+                  <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+                    <Text
+                      style={{
+                        color: isDark ? "#F8FAFC" : "#09090B",
+                        textDecorationLine: checked ? "none" : "line-through",
+                        opacity: checked ? 1 : 0.5,
+                      }}
+                    >
+                      {item.label}
+                    </Text>
+                    {item.on_demand && (
+                      <View style={{ marginLeft: 6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: "rgba(139,92,246,0.1)" }}>
+                        <Text style={{ fontSize: 10, fontWeight: "700", color: "#8B5CF6" }}>
+                          +33%
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                   <Text style={{ fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B" }}>
-                    {formatPrice(item.price, "0 €")}
+                    {formatPrice(item.on_demand ? onDemandPrice(Number(item.price)) : item.price, "0 €")}
                   </Text>
                 </Pressable>
               );
@@ -1219,7 +1239,10 @@ export default function InterventionDetailScreen() {
             <Text style={{ fontWeight: "800", fontSize: 18, color: "#3B82F6" }}>
               {(intervention?.items || [])
                 .filter((item: any) => !notDoneIds.has(item.id))
-                .reduce((sum: number, item: any) => sum + Number(item.price), 0)
+                .reduce((sum: number, item: any) => {
+                  const base = Number(item.price);
+                  return sum + (item.on_demand ? base * 1.33 : base);
+                }, 0)
                 .toFixed(2)}{" "}
               €
             </Text>
@@ -1302,7 +1325,7 @@ export default function InterventionDetailScreen() {
         </View>
       </Dialog>
 
-      <Dialog open={!!editingField} onClose={() => setEditingField(null)} position="bottom">
+      <Dialog open={!!editingField} onClose={() => setEditingField(null)} position="center">
         <View style={{ padding: 16, gap: 16 }}>
           <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", textAlign: "center" }}>
             Modifier {editingField?.label}

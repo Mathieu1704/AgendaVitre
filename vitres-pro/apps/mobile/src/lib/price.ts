@@ -18,3 +18,14 @@ export function formatPrice(
   // Les montants ronds restent lisibles sans décimales.
   return Number.isInteger(n) ? `${n} €` : `${n.toFixed(2)} €`;
 }
+
+/** Supplément "à la demande" appliqué à une prestation. */
+export const ON_DEMAND_MULTIPLIER = 1.33;
+
+/**
+ * Prix majoré "à la demande", arrondi au multiple de 5€ supérieur pour
+ * limiter la monnaie sur le terrain (ex: 25€ -> 33.25€ -> 35€).
+ */
+export function onDemandPrice(basePrice: number): number {
+  return Math.ceil((basePrice * ON_DEMAND_MULTIPLIER) / 5) * 5;
+}

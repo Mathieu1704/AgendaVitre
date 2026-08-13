@@ -172,6 +172,7 @@ class InterventionItemBase(BaseModel):
     client_service_id: Optional[UUID] = None
     intervention_service_id: Optional[UUID] = None
     done: bool = True
+    on_demand: bool = False
 
 class InterventionItemCreate(InterventionItemBase):
     pass

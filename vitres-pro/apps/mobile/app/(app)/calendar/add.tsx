@@ -20,6 +20,7 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../src/lib/api";
+import { onDemandPrice } from "../../../src/lib/price";
 import { enqueue } from "../../../src/lib/offline/outbox";
 import { isOnlineNow } from "../../../src/lib/offline/network";
 import { newTempId } from "../../../src/lib/offline/idMap";
@@ -80,6 +81,7 @@ type Item = {
   price: string;
   client_service_id?: string | null;
   intervention_service_id?: string | null;
+  on_demand?: boolean;
 };
 type ClientService = {
   id: string;
@@ -478,6 +480,10 @@ export default function AddInterventionScreen() {
   const [servicePriceOverrides, setServicePriceOverrides] = useState<
     Record<string, string>
   >({});
+  // Supplément "à la demande" (+33%) par prestation, par service id
+  const [onDemandServiceIds, setOnDemandServiceIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [focusedServiceLabelId, setFocusedServiceLabelId] = useState<
     string | null
   >(null);
@@ -875,10 +881,18 @@ export default function AddInterventionScreen() {
           overrides[String(resolveId(i))] = i.price.toString();
         });
         setServicePriceOverrides(overrides);
+        setOnDemandServiceIds(
+          new Set(
+            withId
+              .filter((i: any) => i.on_demand)
+              .map((i: any) => String(resolveId(i))),
+          ),
+        );
         setAdHocItems(
           withoutId.map((i: any) => ({
             label: i.label,
             price: i.price.toString(),
+            on_demand: i.on_demand ?? false,
           })),
         );
       }
@@ -964,10 +978,18 @@ export default function AddInterventionScreen() {
           overrides[String(resolveId(i))] = i.price.toString();
         });
         setServicePriceOverrides(overrides);
+        setOnDemandServiceIds(
+          new Set(
+            withId
+              .filter((i: any) => i.on_demand)
+              .map((i: any) => String(resolveId(i))),
+          ),
+        );
         setAdHocItems(
           withoutId.map((i: any) => ({
             label: i.label,
             price: i.price.toString(),
+            on_demand: i.on_demand ?? false,
           })),
         );
       }
@@ -986,6 +1008,7 @@ export default function AddInterventionScreen() {
         setSelectedEmployeeIds([]);
         setCheckedServiceIds(new Set());
         setServicePriceOverrides({});
+        setOnDemandServiceIds(new Set());
         setAdHocItems([]);
         setPaymentMode(hideCash ? "invoice" : "cash");
         setStartDateStr(defaultStart);
@@ -1015,17 +1038,18 @@ export default function AddInterventionScreen() {
           // moment de la sauvegarde (voir _migrate_orphan_items_to_chain).
           client_service_id: usingChain || pending ? undefined : s.id,
           intervention_service_id: usingChain && !pending ? s.id : undefined,
+          on_demand: onDemandServiceIds.has(s.id),
         };
       });
     return [...serviceItems, ...adHocItems];
-  }, [availableServices, selectedClient?.id, checkedServiceIds, servicePriceOverrides, serviceLabelDrafts, adHocItems]);
+  }, [availableServices, selectedClient?.id, checkedServiceIds, servicePriceOverrides, onDemandServiceIds, serviceLabelDrafts, adHocItems]);
 
   const totalPrice = useMemo(
     () =>
-      allItems.reduce(
-        (acc, item) => acc + (parseFloat(item.price as string) || 0),
-        0,
-      ),
+      allItems.reduce((acc, item) => {
+        const base = parseFloat(item.price as string) || 0;
+        return acc + (item.on_demand ? onDemandPrice(base) : base);
+      }, 0),
     [allItems],
   );
 
@@ -1064,6 +1088,14 @@ export default function AddInterventionScreen() {
     });
   };
 
+  const toggleServiceOnDemand = (id: string) => {
+    setOnDemandServiceIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
   const addAdHocItem = () =>
     setAdHocItems((prev) => [...prev, { label: "", price: "" }]);
   const removeAdHocItem = (index: number) =>
@@ -1076,6 +1108,13 @@ export default function AddInterventionScreen() {
     setAdHocItems((prev) => {
       const n = [...prev];
       n[index] = { ...n[index], [field]: value };
+      return n;
+    });
+  };
+  const toggleAdHocOnDemand = (index: number) => {
+    setAdHocItems((prev) => {
+      const n = [...prev];
+      n[index] = { ...n[index], on_demand: !n[index].on_demand };
       return n;
     });
   };
@@ -1138,6 +1177,7 @@ export default function AddInterventionScreen() {
           price: Number(i.price) || 0,
           client_service_id: i.client_service_id ?? null,
           intervention_service_id: i.intervention_service_id ?? null,
+          on_demand: i.on_demand ?? false,
         })),
         hourly_rate_id: isAdmin
           ? (selectedRateId ?? null)
@@ -2204,6 +2244,7 @@ export default function AddInterventionScreen() {
                   {/* Services du client = cases à cocher */}
                   {availableServices.map((svc) => {
                     const checked = checkedServiceIds.has(svc.id);
+                    const onDemand = onDemandServiceIds.has(svc.id);
                     const priceVal =
                       servicePriceOverrides[svc.id] ?? svc.price.toString();
                     return (
@@ -2300,6 +2341,30 @@ export default function AddInterventionScreen() {
                           />
                         </View>
                         <Pressable
+                          disabled={!checked}
+                          onPress={() => toggleServiceOnDemand(svc.id)}
+                          style={{
+                            paddingHorizontal: 8,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            borderWidth: 1.5,
+                            borderColor: checked && onDemand ? "#8B5CF6" : "#CBD5E1",
+                            backgroundColor: checked && onDemand ? "#8B5CF6" : "transparent",
+                            opacity: checked ? 1 : 0.4,
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: "700",
+                              color: checked && onDemand ? "#fff" : "#64748B",
+                            }}
+                          >
+                            +33%
+                          </Text>
+                        </Pressable>
+                        <Pressable
                           onPress={async () => {
                             try {
                               // "En attente" : rien n'existe encore côté
@@ -2334,6 +2399,11 @@ export default function AddInterventionScreen() {
                               setServicePriceOverrides((prev) => {
                                 const n = { ...prev };
                                 delete n[svc.id];
+                                return n;
+                              });
+                              setOnDemandServiceIds((prev) => {
+                                const n = new Set(prev);
+                                n.delete(svc.id);
                                 return n;
                               });
                               const deleteUrl = selectedClient?.id
@@ -2382,6 +2452,28 @@ export default function AddInterventionScreen() {
                           }
                         />
                       </View>
+                      <Pressable
+                        onPress={() => toggleAdHocOnDemand(index)}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                          borderWidth: 1.5,
+                          borderColor: item.on_demand ? "#8B5CF6" : "#CBD5E1",
+                          backgroundColor: item.on_demand ? "#8B5CF6" : "transparent",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "700",
+                            color: item.on_demand ? "#fff" : "#64748B",
+                          }}
+                        >
+                          +33%
+                        </Text>
+                      </Pressable>
                       <Pressable
                         onPress={() => removeAdHocItem(index)}
                         className="p-2"

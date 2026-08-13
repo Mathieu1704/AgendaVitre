@@ -4,6 +4,7 @@ from sqlalchemy.sql import func, or_
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime, date
+import math
 import re
 import uuid
 from pydantic import BaseModel
@@ -21,6 +22,17 @@ from app.core.deps import get_current_user
 from app.core.idempotency import already_processed, record_operation
 
 router = APIRouter()
+
+# Supplément "à la demande" par prestation : le prix de base (InterventionItem.price)
+# reste inchangé, la majoration se calcule à la volée partout où un total est sommé.
+# Arrondi au multiple de 5€ supérieur pour limiter la monnaie sur le terrain.
+ON_DEMAND_MULTIPLIER = 1.33
+
+def _item_effective_price(item) -> float:
+    price = float(item.price)
+    if not item.on_demand:
+        return price
+    return math.ceil((price * ON_DEMAND_MULTIPLIER) / 5) * 5
 
 class BulkAssignBody(BaseModel):
     date: date
@@ -348,9 +360,10 @@ def create_intervention(
                 price=item_data.price,
                 client_service_id=item_data.client_service_id,
                 intervention_service_id=intervention_service_id,
+                on_demand=item_data.on_demand,
             )
             new_intervention.items.append(new_item)
-            total_price += item_data.price
+            total_price += _item_effective_price(item_data)
 
     if not new_intervention.price_estimated or new_intervention.price_estimated == 0:
         new_intervention.price_estimated = total_price
@@ -461,6 +474,7 @@ def update_intervention(
                     price=item_data["price"],
                     client_service_id=item_data.get("client_service_id"),
                     intervention_service_id=intervention_service_id,
+                    on_demand=item_data.get("on_demand", False),
                 ))
         elif hasattr(db_intervention, key):
             setattr(db_intervention, key, value)
@@ -514,7 +528,7 @@ def update_items_done(
         item.done = item.id not in not_done_ids
 
     db_intervention.price_estimated = sum(
-        float(item.price) for item in db_intervention.items if item.done
+        _item_effective_price(item) for item in db_intervention.items if item.done
     )
 
     _add_audit(

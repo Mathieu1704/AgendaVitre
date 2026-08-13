@@ -10,6 +10,7 @@
  * caches distincts alimentés par des requêtes différentes.
  */
 import type { QueryClient } from "@tanstack/react-query";
+import { onDemandPrice } from "../price";
 
 type AnyIntervention = Record<string, any>;
 export type InterventionCacheSnapshot = [readonly unknown[], unknown];
@@ -115,10 +116,11 @@ export function applyItemsDone(
       ...item,
       done: !notDone.has(item.id),
     }));
-    const total = nextItems.reduce(
-      (sum: number, item: any) => (item.done ? sum + (Number(item.price) || 0) : sum),
-      0,
-    );
+    const total = nextItems.reduce((sum: number, item: any) => {
+      if (!item.done) return sum;
+      const base = Number(item.price) || 0;
+      return sum + (item.on_demand ? onDemandPrice(base) : base);
+    }, 0);
     return { ...current, items: nextItems, price_estimated: total };
   });
 }

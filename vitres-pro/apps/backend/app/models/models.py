@@ -187,6 +187,7 @@ class InterventionItem(Base):
     label = Column(String, nullable=False) # Ex: "RDC", "Velux"
     price = Column(Numeric(10, 2), nullable=False, default=0)
     done = Column(Boolean, nullable=False, default=True, server_default="true")
+    on_demand = Column(Boolean, nullable=False, default=False, server_default="false")
 
     intervention = relationship("Intervention", back_populates="items")
     client_service = relationship("ClientService")
