@@ -1346,6 +1346,7 @@ export default function InterventionDetailScreen() {
         open={!!editingField}
         onClose={() => setEditingField(null)}
         position="center"
+        keyboardVerticalOffset={-80}
         onShow={() => editingFieldInputRef.current?.focus()}
       >
         <View style={{ padding: 16, gap: 16 }}>

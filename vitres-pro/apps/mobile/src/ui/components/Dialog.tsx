@@ -1,6 +1,20 @@
 import React, { useEffect, useState } from "react";
-import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, View, ViewStyle } from "react-native";
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  LayoutAnimation,
+  Modal,
+  Platform,
+  Pressable,
+  UIManager,
+  View,
+  ViewStyle,
+} from "react-native";
 import { Portal } from "react-native-paper";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export function Dialog({
   open,
@@ -9,6 +23,7 @@ export function Dialog({
   position = "center",
   maxWidth,
   containerStyle,
+  keyboardVerticalOffset = 0,
   onShow,
 }: {
   open: boolean;
@@ -17,6 +32,7 @@ export function Dialog({
   position?: "center" | "bottom";
   maxWidth?: number;
   containerStyle?: ViewStyle;
+  keyboardVerticalOffset?: number;
   // Fiable pour focus un champ (autoFocus ne se redéclenche pas quand le
   // Modal reste monté et ne fait que changer de `visible` — onShow, si, à
   // chaque ouverture, une fois la Modal réellement affichée).
@@ -30,11 +46,33 @@ export function Dialog({
   const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
 
   useEffect(() => {
+    if (Platform.OS !== "ios") return;
+
+    // KeyboardAvoidingView met bien son padding à jour, mais n'anime pas
+    // toujours ce changement de layout dans une Modal. On réutilise les
+    // durée et courbe natives du clavier pour le prochain layout React.
+    const syncWithKeyboard = (
+      event: Parameters<typeof Keyboard.scheduleLayoutAnimation>[0],
+    ) => {
+      Keyboard.scheduleLayoutAnimation(event);
+    };
+    const showSub = Keyboard.addListener("keyboardWillShow", syncWithKeyboard);
+    const hideSub = Keyboard.addListener("keyboardWillHide", syncWithKeyboard);
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     if (Platform.OS !== "android") return;
     const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setAndroidKeyboardHeight(e.endCoordinates?.height ?? 0);
     });
     const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setAndroidKeyboardHeight(0);
     });
     return () => {
@@ -73,6 +111,7 @@ export function Dialog({
         {/* Conteneur centré — pointerEvents box-none : laisse passer les touches sur le fond */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={keyboardVerticalOffset}
           style={{ flex: 1 }}
           pointerEvents="box-none"
         >
