@@ -142,8 +142,10 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
         hours = intervention_hours(inter)
         if hours <= 0:
             continue
-        nb_assigned = len(inter.employees)
-        total_planned += hours * (nb_assigned if nb_assigned > 0 else 1)
+        # Heures de l'intervention elle-meme, sans multiplier par le nombre
+        # d'employes assignes : 2 ouvriers sur un chantier de 4h ne doivent
+        # pas compter comme 8h dans le total planifie du jour.
+        total_planned += hours
 
     status = "ok"
     if total_planned > (total_capacity + tolerance):
@@ -273,8 +275,7 @@ def get_range_stats_endpoint(
         for iv in interventions_by_day.get(current, []):
             h = intervention_hours(iv)
             if h > 0:
-                nb = len(iv.employees)
-                total_planned += h * (nb if nb > 0 else 1)
+                total_planned += h
 
         if total_planned > (total_capacity + tolerance):
             status = "overload"
