@@ -1291,7 +1291,39 @@ export default function AddInterventionScreen() {
       if (occurrences.length === 0)
         return toast.error("Date", "Vérifie la date.");
 
-      const groupId = occurrences.length > 1 ? newUuidV4() : undefined;
+      // En duplication, l'intervention source existe déjà et représente la
+      // première occurrence de la série : elle doit donc en faire partie
+      // (même recurrence_group_id), pas seulement les copies nouvellement
+      // créées. Si la source appartenait déjà à une série, on la rejoint au
+      // lieu d'en ouvrir une nouvelle.
+      const sourceGroupId = isDuplicateMode
+        ? (repriseSource?.recurrence_group_id ?? undefined)
+        : undefined;
+      const groupId =
+        occurrences.length > 1 ? sourceGroupId ?? newUuidV4() : undefined;
+
+      if (isDuplicateMode && repriseSourceId && groupId && !sourceGroupId) {
+        const sourceRecurrenceRule = {
+          freq:
+            recurrence.freq === "custom" ? recurrence.unit : recurrence.freq,
+          interval: recurrence.freq === "custom" ? recurrence.interval : 1,
+          count: occurrences.length + 1,
+        };
+        applyEditIntervention(queryClient, String(repriseSourceId), {
+          recurrence_group_id: groupId,
+          recurrence_rule: sourceRecurrenceRule,
+        });
+        await enqueue({
+          kind: "edit-intervention",
+          method: "PATCH",
+          url: `/api/interventions/${repriseSourceId}`,
+          body: {
+            recurrence_group_id: groupId,
+            recurrence_rule: sourceRecurrenceRule,
+          },
+          label: "Rattachement à la série",
+        });
+      }
 
       // Chaque occurrence part comme une entrée distincte, avec sa propre clé
       // d'idempotence : un rejeu ne peut pas dupliquer une occurrence isolée.
@@ -2802,7 +2834,7 @@ export default function AddInterventionScreen() {
       <Dialog
         open={showRecurrenceScopeDialog}
         onClose={() => setShowRecurrenceScopeDialog(false)}
-        position="bottom"
+        position="center"
       >
         <View style={{ padding: 20, gap: 12 }}>
           <Text style={{ fontSize: 17, fontWeight: "700", textAlign: "center" }}>

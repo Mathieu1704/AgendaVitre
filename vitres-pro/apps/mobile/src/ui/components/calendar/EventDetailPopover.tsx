@@ -14,6 +14,7 @@ import { CalEvent } from "./CalendarEventBlock";
 import { api } from "../../../lib/api";
 import { toast } from "../../toast";
 import { ConfirmModal } from "../ConfirmModal";
+import { formatRecurrenceLabel } from "../../../lib/recurrence";
 
 interface Props {
   event: CalEvent & {
@@ -35,60 +36,6 @@ const TYPE_CONFIG: Record<string, { bg: string; color: string; label: string }> 
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
-}
-
-function getOrdinalLabel(n: number) {
-  if (n === 1) return "premier";
-  if (n === 2) return "deuxieme";
-  if (n === 3) return "troisieme";
-  if (n === 4) return "quatrieme";
-  if (n === 5) return "cinquieme";
-  return `${n}e`;
-}
-
-function formatRecurrenceLabel(
-  recurrenceRule: CalEvent["recurrence_rule"],
-  startTimeIso: string,
-) {
-  if (!recurrenceRule?.freq) return null;
-
-  const start = new Date(startTimeIso);
-  const interval = Math.max(1, Number(recurrenceRule.interval) || 1);
-  const weekday = start.toLocaleDateString("fr-FR", {
-    weekday: "long",
-    timeZone: "Europe/Brussels",
-  });
-  const monthDay = start.toLocaleDateString("fr-FR", {
-    day: "numeric",
-    month: "long",
-    timeZone: "Europe/Brussels",
-  });
-  const weekOfMonth = Math.ceil(start.getUTCDate() / 7);
-
-  switch ((recurrenceRule.freq || "").toLowerCase()) {
-    case "daily":
-    case "day":
-      return interval === 1 ? "Tous les jours" : `Tous les ${interval} jours`;
-    case "weekly":
-    case "week":
-      return interval === 1
-        ? `Chaque semaine le ${weekday}`
-        : `Toutes les ${interval} semaines le ${weekday}`;
-    case "monthly":
-    case "month":
-      return interval === 1
-        ? `Tous les mois le ${getOrdinalLabel(weekOfMonth)} ${weekday}`
-        : `Tous les ${interval} mois le ${getOrdinalLabel(weekOfMonth)} ${weekday}`;
-    case "yearly":
-    case "year":
-      return interval === 1
-        ? `Chaque annee le ${monthDay}`
-        : `Tous les ${interval} ans le ${monthDay}`;
-    case "weekdays":
-      return "Tous les jours de semaine";
-    default:
-      return "Evenement recurrent";
-  }
 }
 
 function HoverableTitle({

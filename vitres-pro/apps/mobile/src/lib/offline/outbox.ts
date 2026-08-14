@@ -42,7 +42,9 @@ export type OutboxKind =
   | "service-create"
   | "service-rename"
   | "service-price"
-  | "service-delete";
+  | "service-delete"
+  | "edit-intervention-scope"
+  | "delete-intervention-scope";
 
 export type OutboxEntry = {
   id: string;                  // sert aussi de client_operation_id
