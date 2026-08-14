@@ -27,13 +27,26 @@ export default function CreateEmployeeScreen() {
   const [password, setPassword] = useState("Bienvenue2026!");
   const [selectedColor, setSelectedColor] = useState("#3B82F6");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [hoursPerWeekday, setHoursPerWeekday] = useState<Record<string, number>>({
+  const DEFAULT_HOURS: Record<string, number> = {
     "1": 7.6,
     "2": 7.6,
     "3": 7.6,
     "4": 7.6,
     "5": 7.6,
-  });
+  };
+  const [hoursPerWeekday, setHoursPerWeekday] = useState<Record<string, number>>(DEFAULT_HOURS);
+  const [noFixedHours, setNoFixedHours] = useState(false);
+  const previousHoursRef = React.useRef<Record<string, number>>(DEFAULT_HOURS);
+
+  const handleToggleNoFixedHours = (value: boolean) => {
+    setNoFixedHours(value);
+    if (value) {
+      previousHoursRef.current = hoursPerWeekday;
+      setHoursPerWeekday({ "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 });
+    } else {
+      setHoursPerWeekday(previousHoursRef.current);
+    }
+  };
   const { employees } = useEmployees();
   const usedColors = employees.map((e: any) => e.color).filter(Boolean);
 
@@ -55,13 +68,13 @@ export default function CreateEmployeeScreen() {
   });
 
   const handleSubmit = () => {
-    if (!email || !password || !fullName)
-      return toast.error("Oups", "Tout remplir !");
+    if (!email || !fullName)
+      return toast.error("Oups", "Nom et email requis !");
 
     mutation.mutate({
       full_name: fullName,
       email,
-      password,
+      password: password || undefined, // vide => généré automatiquement côté serveur
       color: selectedColor,
       role: isAdmin ? "admin" : "employee",
       hours_per_weekday: hoursPerWeekday,
@@ -125,7 +138,8 @@ export default function CreateEmployeeScreen() {
               onChangeText={setEmail}
             />
             <Input
-              label="Mot de passe provisoire"
+              label="Mot de passe provisoire (optionnel)"
+              placeholder="Laisser vide pour générer automatiquement"
               value={password}
               onChangeText={setPassword}
             />
@@ -148,13 +162,26 @@ export default function CreateEmployeeScreen() {
             />
 
             <View>
-              <Text className="text-sm font-semibold text-foreground dark:text-white mb-1.5">
-                Heures par jour
-              </Text>
+              <View className="flex-row items-center justify-between mb-1.5">
+                <Text className="text-sm font-semibold text-foreground dark:text-white">
+                  Heures par jour
+                </Text>
+                <View className="flex-row items-center" style={{ gap: 8 }}>
+                  <Text className="text-xs text-muted-foreground dark:text-slate-400">
+                    Sans horaire fixe (0h)
+                  </Text>
+                  <Switch
+                    value={noFixedHours}
+                    onValueChange={handleToggleNoFixedHours}
+                    trackColor={{ false: "#767577", true: "#22C55E" }}
+                  />
+                </View>
+              </View>
               <WeekdayHoursPicker
                 value={hoursPerWeekday}
                 onChange={setHoursPerWeekday}
                 isDark={isDark}
+                disabled={noFixedHours}
               />
             </View>
 

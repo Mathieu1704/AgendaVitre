@@ -1,3 +1,5 @@
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict
@@ -16,7 +18,9 @@ router = APIRouter()
 # --- SCHEMAS LOCAUX ---
 class EmployeeCreateRequest(BaseModel):
     email: str
-    password: str
+    # Optionnel : si vide, un mot de passe aléatoire est généré côté serveur
+    # (l'admin peut réinitialiser le mot de passe plus tard via reset-password).
+    password: Optional[str] = None
     full_name: str
     color: str = "#3B82F6"
     weekly_hours: float = 38.0
@@ -66,10 +70,11 @@ def create_employee(
         raise HTTPException(status_code=403, detail="Accès refusé. Admin requis.")
 
     # 2. Création dans Supabase Auth
+    password = emp_data.password or secrets.token_urlsafe(12)
     try:
         user_response = supabase_admin.auth.admin.create_user({
             "email": emp_data.email,
-            "password": emp_data.password,
+            "password": password,
             "email_confirm": True,
             "user_metadata": {"full_name": emp_data.full_name}
         })
