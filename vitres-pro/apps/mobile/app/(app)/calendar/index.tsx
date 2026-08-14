@@ -782,6 +782,7 @@ export default function CalendarScreen() {
               cursorDate={cursorDate}
               isDark={isDark}
               isAdmin={isAdmin}
+              isSubcontractor={isSubcontractor}
               itemsByDate={itemsByDate}
               effectiveZone={effectiveZone}
               viewMode={viewMode}
@@ -824,6 +825,7 @@ export default function CalendarScreen() {
                   setViewMode={setViewMode}
                   isDark={isDark}
                   isAdmin={isAdmin}
+                  isSubcontractor={isSubcontractor}
                   itemsByDate={itemsByDate}
                   effectiveZone={effectiveZone}
                   filterItem={filterItem}

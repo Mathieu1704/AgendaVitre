@@ -286,6 +286,9 @@ interface FilterChipsBarProps {
   activeEmployeeId: string | null;
   setActiveEmployeeId: (id: string | null) => void;
   employees: { id: string; full_name?: string | null; color: string }[];
+  // Un sous-traitant n'a rien à faire des devis/tournées ni des statuts —
+  // seuls "Intervention" et "Note" le concernent, sans filtre de statut.
+  isSubcontractor?: boolean;
 }
 
 export const FilterChipsBar = React.memo(function FilterChipsBar({
@@ -299,11 +302,15 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
   activeEmployeeId,
   setActiveEmployeeId,
   employees,
+  isSubcontractor,
 }: FilterChipsBarProps) {
   const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
   const hasFilters = activeTypes.size > 0 || activeStatuses.size > 0 || activeEmployeeId !== null;
   const activeEmp = employees.find(e => e.id === activeEmployeeId);
   const activeEmpName = activeEmp?.full_name?.split(" ")[0] ?? activeEmp?.full_name ?? null;
+  const visibleTypes = isSubcontractor
+    ? FILTER_TYPES.filter(f => f.id === "intervention" || f.id === "note")
+    : FILTER_TYPES;
 
   return (
     <>
@@ -321,7 +328,7 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
             <Text style={{ fontSize: 11, fontWeight: "700", color: isDark ? "#CBD5E1" : "#64748B" }}>✕ Tout</Text>
           </Pressable>
         )}
-        {FILTER_TYPES.map(f => {
+        {visibleTypes.map(f => {
           const active = activeTypes.has(f.id);
           return (
             <Pressable
@@ -333,19 +340,23 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
             </Pressable>
           );
         })}
-        <View style={{ width: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginHorizontal: 4 }} />
-        {FILTER_STATUSES.map(f => {
-          const active = activeStatuses.has(f.id);
-          return (
-            <Pressable
-              key={f.id}
-              onPress={() => toggleStatus(f.id)}
-              style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: active ? f.color : isDark ? "#1E293B" : "#F1F5F9", borderWidth: 1, borderColor: active ? f.color : isDark ? "#334155" : "#E2E8F0" }}
-            >
-              <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>{f.label}</Text>
-            </Pressable>
-          );
-        })}
+        {!isSubcontractor && (
+          <>
+            <View style={{ width: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginHorizontal: 4 }} />
+            {FILTER_STATUSES.map(f => {
+              const active = activeStatuses.has(f.id);
+              return (
+                <Pressable
+                  key={f.id}
+                  onPress={() => toggleStatus(f.id)}
+                  style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: active ? f.color : isDark ? "#1E293B" : "#F1F5F9", borderWidth: 1, borderColor: active ? f.color : isDark ? "#334155" : "#E2E8F0" }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>{f.label}</Text>
+                </Pressable>
+              );
+            })}
+          </>
+        )}
         {employees.length > 0 && (
           <>
             <View style={{ width: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginHorizontal: 4 }} />

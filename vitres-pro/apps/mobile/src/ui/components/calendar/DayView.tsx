@@ -22,6 +22,7 @@ interface DayViewProps {
   cursorDate: Date;
   isDark: boolean;
   isAdmin: boolean;
+  isSubcontractor?: boolean;
   itemsByDate: Record<string, any[]>;
   effectiveZone: string;
   viewMode: string;
@@ -48,6 +49,7 @@ export const DayView = React.memo(function DayView({
   cursorDate,
   isDark,
   isAdmin,
+  isSubcontractor,
   itemsByDate,
   effectiveZone,
   viewMode,
@@ -188,11 +190,12 @@ export const DayView = React.memo(function DayView({
           setActiveStatuses={setActiveStatuses}
           activeEmployeeId={activeEmployeeId}
           setActiveEmployeeId={setActiveEmployeeId}
-          employees={employees}
+          employees={isAdmin ? employees : []}
+          isSubcontractor={isSubcontractor}
         />
       </View>
     ),
-    [iso, effectiveZone, isAdmin, unassigned, activeTypes, activeStatuses, isDark, toggleType, toggleStatus, setActiveTypes, setActiveStatuses, router],
+    [iso, effectiveZone, isAdmin, isSubcontractor, unassigned, activeTypes, activeStatuses, isDark, toggleType, toggleStatus, setActiveTypes, setActiveStatuses, router, employees, activeEmployeeId, setActiveEmployeeId],
   );
 
   const listFooter = useMemo(

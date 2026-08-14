@@ -16,6 +16,7 @@ interface MonthViewProps {
   setViewMode: React.Dispatch<React.SetStateAction<any>>;
   isDark: boolean;
   isAdmin: boolean;
+  isSubcontractor?: boolean;
   itemsByDate: Record<string, any[]>;
   effectiveZone: string;
   userZone?: string;
@@ -44,6 +45,7 @@ export const MonthView = React.memo(function MonthView({
   setViewMode,
   isDark,
   isAdmin,
+  isSubcontractor,
   itemsByDate,
   effectiveZone,
   filterItem,
@@ -178,7 +180,8 @@ export const MonthView = React.memo(function MonthView({
             setActiveStatuses={setActiveStatuses}
             activeEmployeeId={activeEmployeeId}
             setActiveEmployeeId={setActiveEmployeeId}
-            employees={employees}
+            employees={isAdmin ? employees : []}
+            isSubcontractor={isSubcontractor}
           />
           {dayList.length === 0 && dayRawEvents.length === 0 ? (
             <Text className="text-muted-foreground dark:text-slate-500 text-center py-8">Rien de prévu.</Text>
