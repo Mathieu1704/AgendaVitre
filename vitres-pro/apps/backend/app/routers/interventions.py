@@ -603,8 +603,14 @@ def update_intervention_recurrence_scope(
     return {"ok": True, "updated": updated}
 
 
+class NewAdjustmentItem(BaseModel):
+    label: str
+    price: float  # négatif = déduction partielle, positif = supplément
+
+
 class ItemsDoneBody(BaseModel):
     not_done_item_ids: List[UUID] = []
+    new_items: List[NewAdjustmentItem] = []
 
 
 @router.patch("/{intervention_id}/items-done", response_model=InterventionOut)
@@ -615,7 +621,8 @@ def update_items_done(
     current_user: Employee = Depends(get_current_user),
 ):
     """Marque certaines prestations comme non faites lors de la clôture d'une
-    intervention, et recalcule price_estimated en conséquence."""
+    intervention, ajoute d'éventuels ajustements ad-hoc (déduction partielle
+    ou supplément imprévu) et recalcule price_estimated en conséquence."""
     db_intervention = _load_intervention(intervention_id, db)
     if not db_intervention:
         raise HTTPException(status_code=404, detail="Introuvable")
@@ -626,15 +633,30 @@ def update_items_done(
     for item in db_intervention.items:
         item.done = item.id not in not_done_ids
 
+    new_rows = [
+        InterventionItem(
+            intervention_id=intervention_id,
+            label=adj.label,
+            price=adj.price,
+            done=True,
+            on_demand=False,
+            is_adjustment=True,
+        )
+        for adj in body.new_items
+    ]
+    for row in new_rows:
+        db.add(row)
+
     db_intervention.price_estimated = sum(
         _item_effective_price(item) for item in db_intervention.items if item.done
-    )
+    ) + sum(float(row.price) for row in new_rows)
 
     _add_audit(
         db, "items_adjusted", current_user.id, intervention_id,
-        f"Prestations ajustées : {len(not_done_ids)} non faite(s)",
+        f"Prestations ajustées : {len(not_done_ids)} non faite(s), {len(new_rows)} ajustement(s)",
         {
             "not_done_item_ids": [str(i) for i in not_done_ids],
+            "new_items": [{"label": adj.label, "price": adj.price} for adj in body.new_items],
             "new_price_estimated": db_intervention.price_estimated,
         },
     )

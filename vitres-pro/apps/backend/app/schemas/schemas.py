@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List, Dict, Any, Literal
-from datetime import datetime
+from datetime import datetime, date
 from uuid import UUID
 import unicodedata
 
@@ -173,6 +173,7 @@ class InterventionItemBase(BaseModel):
     intervention_service_id: Optional[UUID] = None
     done: bool = True
     on_demand: bool = False
+    is_adjustment: bool = False
 
 class InterventionItemCreate(InterventionItemBase):
     pass
@@ -297,3 +298,83 @@ class NotificationOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# --- TIMETRACKING ---
+class TimeEntryOut(BaseModel):
+    work_date: date
+    clock_in_at: Optional[datetime] = None
+    clock_out_at: Optional[datetime] = None
+    status: Literal["not_started", "in_progress", "done"]
+    worked_hours: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DailyEntryOut(BaseModel):
+    date: date
+    clock_in_at: Optional[datetime] = None
+    clock_out_at: Optional[datetime] = None
+    is_absence: bool
+    actual_hours: float
+    edited_by_admin: bool = False
+
+
+class WeeklySummaryEmployeeOut(BaseModel):
+    employee_id: UUID
+    full_name: Optional[str] = None
+    role: str
+    cash_amount: float
+    cash_settled: bool
+    overtime_balance_hours: float
+    overtime_period_start: date
+    overtime_period_end: date
+    daily_entries: List[DailyEntryOut]
+
+
+class WeeklySummaryOut(BaseModel):
+    week_start: date
+    week_end: date
+    employees: List[WeeklySummaryEmployeeOut]
+
+
+class CashSettlementIn(BaseModel):
+    employee_id: UUID
+    week_start: date
+
+
+class CashSettlementOut(BaseModel):
+    id: UUID
+    employee_id: UUID
+    amount: float
+    week_start: date
+    confirmed_at: datetime
+    confirmed_by: Optional[UUID] = None
+
+    class Config:
+        from_attributes = True
+
+
+class OvertimeSettlementIn(BaseModel):
+    employee_id: UUID
+
+
+class OvertimeSettlementOut(BaseModel):
+    id: UUID
+    employee_id: UUID
+    delta_hours: float
+    period_start: date
+    period_end: date
+    confirmed_at: datetime
+    confirmed_by: Optional[UUID] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TimeEntryCorrectionIn(BaseModel):
+    employee_id: UUID
+    work_date: date
+    clock_in_at: Optional[datetime] = None
+    clock_out_at: Optional[datetime] = None

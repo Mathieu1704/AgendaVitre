@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, Text, Numeric, create_engine, Table, Float, Date, Integer
+from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, Text, Numeric, create_engine, Table, Float, Date, Integer, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from sqlalchemy.sql import func
@@ -188,6 +188,10 @@ class InterventionItem(Base):
     price = Column(Numeric(10, 2), nullable=False, default=0)
     done = Column(Boolean, nullable=False, default=True, server_default="true")
     on_demand = Column(Boolean, nullable=False, default=False, server_default="false")
+    # Correction de prix ad-hoc ajoutée à la clôture (déduction partielle ou
+    # supplément imprévu), pas une vraie prestation du catalogue : exclue du
+    # préremplissage d'une future reprise, mais reste visible dans le détail.
+    is_adjustment = Column(Boolean, nullable=False, default=False, server_default="false")
 
     intervention = relationship("Intervention", back_populates="items")
     client_service = relationship("ClientService")
@@ -278,6 +282,61 @@ class InAppNotification(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     recipient = relationship("Employee", foreign_keys=[recipient_id])
+
+
+class EmployeeTimeEntry(Base):
+    """Pointage journalier : début/fin de journée d'un employé (remplace le message informel)."""
+    __tablename__ = "employee_time_entries"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    work_date = Column(Date, nullable=False)
+    clock_in_at = Column(DateTime(timezone=True), nullable=True)
+    clock_out_at = Column(DateTime(timezone=True), nullable=True)
+    edited_by_admin = Column(Boolean, default=False, nullable=False, server_default="false")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    employee = relationship("Employee")
+
+    __table_args__ = (
+        UniqueConstraint("employee_id", "work_date", name="uq_time_entry_employee_day"),
+    )
+
+
+class OvertimeSettlement(Base):
+    """Historique des règlements ('Soldé') : remise à zéro du solde heures sup/en moins."""
+    __tablename__ = "overtime_settlements"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    delta_hours = Column(Float, nullable=False)
+    period_start = Column(Date, nullable=False)
+    period_end = Column(Date, nullable=False)
+    confirmed_at = Column(DateTime(timezone=True), server_default=func.now())
+    confirmed_by = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    confirmed_by_employee = relationship("Employee", foreign_keys=[confirmed_by])
+
+
+class CashSettlement(Base):
+    """Historique des règlements ('Payé') : cash remis par un employé pour une semaine donnée."""
+    __tablename__ = "cash_settlements"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    amount = Column(Numeric(10, 2), nullable=False)
+    week_start = Column(Date, nullable=False)
+    confirmed_at = Column(DateTime(timezone=True), server_default=func.now())
+    confirmed_by = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    confirmed_by_employee = relationship("Employee", foreign_keys=[confirmed_by])
+
+    __table_args__ = (
+        UniqueConstraint("employee_id", "week_start", name="uq_cash_settlement_employee_week"),
+    )
 
 
 class RawCalendarEvent(Base):
