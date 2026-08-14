@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   EyeOff,
   ChevronLeft,
+  Calculator,
 } from "lucide-react-native";
 
 import { api } from "../../../src/lib/api";
@@ -56,7 +57,11 @@ export default function HeuresEncaissementScreen() {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  const { data: summary, isLoading, error, refetch, isRefetching } = useWeeklySummary();
+  const [includeCurrentWeek, setIncludeCurrentWeek] = useState(false);
+  const { data: summary, isLoading, error, refetch, isRefetching } = useWeeklySummary(
+    undefined,
+    includeCurrentWeek,
+  );
   const { data: companySettings } = useQuery({
     queryKey: ["company-settings"],
     queryFn: async () => (await api.get("/api/settings/company")).data,
@@ -125,7 +130,10 @@ export default function HeuresEncaissementScreen() {
   const handleConfirmOvertime = async () => {
     if (!overtimeConfirm) return;
     try {
-      await confirmOvertime.mutateAsync({ employee_id: overtimeConfirm.employee_id });
+      await confirmOvertime.mutateAsync({
+        employee_id: overtimeConfirm.employee_id,
+        include_current_week: includeCurrentWeek,
+      });
       toast.success("Solde d'heures remis à zéro");
     } catch (e: any) {
       toast.error("Erreur", e?.response?.data?.detail || "Impossible de confirmer.");
@@ -160,6 +168,39 @@ export default function HeuresEncaissementScreen() {
         {summary && (
           <Text className="text-sm text-muted-foreground mt-1 ml-14">
             Semaine du {summary.week_start} au {summary.week_end}
+          </Text>
+        )}
+        <Pressable
+          onPress={() => setIncludeCurrentWeek((v) => !v)}
+          style={{
+            marginLeft: 56,
+            marginTop: 10,
+            alignSelf: "flex-start",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 14,
+            borderWidth: 1.5,
+            borderColor: includeCurrentWeek ? "#3B82F6" : (isDark ? "#334155" : "#E2E8F0"),
+            backgroundColor: includeCurrentWeek ? "rgba(59,130,246,0.1)" : "transparent",
+          }}
+        >
+          <Calculator size={13} color={includeCurrentWeek ? "#3B82F6" : "#94A3B8"} />
+          <Text
+            style={{
+              fontSize: 12,
+              fontWeight: "700",
+              color: includeCurrentWeek ? "#3B82F6" : "#94A3B8",
+            }}
+          >
+            Calculer avec la semaine en cours
+          </Text>
+        </Pressable>
+        {includeCurrentWeek && (
+          <Text style={{ marginLeft: 56, marginTop: 4, fontSize: 11, color: "#94A3B8" }}>
+            Solde provisoire — la semaine n'est pas encore terminée.
           </Text>
         )}
       </View>

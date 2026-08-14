@@ -64,13 +64,21 @@ export interface WeeklySummary {
   employees: WeeklySummaryEmployee[];
 }
 
-export const useWeeklySummary = (weekStart?: string) =>
+export const useWeeklySummary = (weekStart?: string, includeCurrentWeek?: boolean) =>
   useQuery({
-    queryKey: ["timetracking", "weekly-summary", weekStart ?? "current"],
+    queryKey: [
+      "timetracking",
+      "weekly-summary",
+      weekStart ?? "current",
+      includeCurrentWeek ?? false,
+    ],
     queryFn: async () =>
       (
         await api.get("/api/timetracking/weekly-summary", {
-          params: weekStart ? { week_start: weekStart } : undefined,
+          params: {
+            ...(weekStart ? { week_start: weekStart } : {}),
+            ...(includeCurrentWeek ? { include_current_week: true } : {}),
+          },
         })
       ).data as WeeklySummary,
   });
@@ -88,7 +96,7 @@ export const useConfirmCashSettlement = () => {
 export const useConfirmOvertimeSettlement = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (vars: { employee_id: string }) =>
+    mutationFn: async (vars: { employee_id: string; include_current_week?: boolean }) =>
       (await api.post("/api/timetracking/overtime-settlements", vars)).data,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["timetracking", "weekly-summary"] }),

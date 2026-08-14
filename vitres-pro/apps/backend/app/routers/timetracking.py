@@ -128,10 +128,22 @@ def _weekly_actual_hours(db: Session, emp: Employee, week_start: date, week_end:
     return total
 
 
-def _overtime_balance(db: Session, emp: Employee) -> tuple[float, date, date]:
+def _overtime_balance(
+    db: Session, emp: Employee, include_current_week: bool = False
+) -> tuple[float, date, date]:
     """Solde d'heures sup/en moins depuis le dernier règlement (ou depuis le
-    premier pointage si jamais réglé), calculé à la volée jusqu'à la semaine
-    courante incluse."""
+    premier pointage si jamais réglé), calculé à la volée.
+
+    Par défaut, on ne juge que les semaines complètes : la semaine en cours
+    n'est comptée qu'une fois terminée (dimanche passé), sinon un employé qui
+    n'a pas encore fini sa semaine afficherait un solde négatif artificiel
+    (0h réelles jusqu'ici - 37h de plancher) avant même d'avoir eu la chance
+    de pointer ses heures.
+
+    `include_current_week=True` force l'inclusion de la semaine en cours
+    (jusqu'à aujourd'hui) — calcul manuel/anticipé demandé par l'admin, par
+    ex. le vendredi après-midi quand la semaine de travail est déjà terminée
+    sans attendre le dimanche calendaire."""
     today = _today_brussels()
     current_week_start, current_week_end = _week_bounds(today)
 
@@ -153,24 +165,23 @@ def _overtime_balance(db: Session, emp: Employee) -> tuple[float, date, date]:
         period_start = first_entry.work_date if first_entry else current_week_start
         period_start, _ = _week_bounds(period_start)
 
-    # On ne juge que les semaines complètes : la semaine en cours n'est comptée
-    # qu'une fois terminée (dimanche passé), sinon un employé qui n'a pas encore
-    # fini sa semaine afficherait un solde négatif artificiel (0h réelles jusqu'ici
-    # - 37h de plancher) avant même d'avoir eu la chance de pointer ses heures.
-    last_complete_week_end = current_week_start - timedelta(days=1)
+    last_counted_week_end = (
+        current_week_end if include_current_week else current_week_start - timedelta(days=1)
+    )
 
-    if period_start > last_complete_week_end:
-        return 0.0, period_start, last_complete_week_end
+    if period_start > last_counted_week_end:
+        return 0.0, period_start, last_counted_week_end
 
     total_delta = 0.0
     week_cursor = period_start
-    while week_cursor <= last_complete_week_end:
+    while week_cursor <= last_counted_week_end:
         w_start, w_end = _week_bounds(week_cursor)
+        w_end = min(w_end, last_counted_week_end)
         actual = _weekly_actual_hours(db, emp, w_start, w_end)
         total_delta += weekly_delta_hours(actual)
         week_cursor = w_end + timedelta(days=1)
 
-    return round(total_delta, 2), period_start, last_complete_week_end
+    return round(total_delta, 2), period_start, last_counted_week_end
 
 
 def _weekly_cash_amount(db: Session, emp: Employee, week_start: date, week_end: date) -> float:
@@ -395,6 +406,7 @@ def correct_entry(
 @router.get("/weekly-summary", response_model=WeeklySummaryOut)
 def weekly_summary(
     week_start: Optional[str] = None,
+    include_current_week: bool = False,
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
@@ -422,7 +434,9 @@ def weekly_summary(
             cash_amount = _weekly_cash_amount(db, emp, w_start, w_end)
             cash_settled = False
 
-        overtime_balance, period_start, period_end = _overtime_balance(db, emp)
+        overtime_balance, period_start, period_end = _overtime_balance(
+            db, emp, include_current_week=include_current_week
+        )
 
         result_employees.append(WeeklySummaryEmployeeOut(
             employee_id=emp.id,
@@ -486,7 +500,9 @@ def confirm_overtime_settlement(
     if not emp:
         raise HTTPException(status_code=404, detail="Employé introuvable")
 
-    balance, period_start, period_end = _overtime_balance(db, emp)
+    balance, period_start, period_end = _overtime_balance(
+        db, emp, include_current_week=payload.include_current_week
+    )
 
     settlement = OvertimeSettlement(
         employee_id=payload.employee_id,

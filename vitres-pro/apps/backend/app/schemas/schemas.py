@@ -358,6 +358,7 @@ class CashSettlementOut(BaseModel):
 
 class OvertimeSettlementIn(BaseModel):
     employee_id: UUID
+    include_current_week: bool = False
 
 
 class OvertimeSettlementOut(BaseModel):
