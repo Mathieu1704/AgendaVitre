@@ -616,8 +616,6 @@ def update_items_done(
 ):
     """Marque certaines prestations comme non faites lors de la clôture d'une
     intervention, et recalcule price_estimated en conséquence."""
-    if current_user.role == 'subcontractor':
-        raise HTTPException(status_code=403, detail="Réservé aux admins et employés.")
     db_intervention = _load_intervention(intervention_id, db)
     if not db_intervention:
         raise HTTPException(status_code=404, detail="Introuvable")
@@ -643,6 +641,8 @@ def update_items_done(
 
     db.commit()
     db.refresh(db_intervention)
+    if current_user.role == 'subcontractor':
+        _strip_prices([db_intervention])
     return db_intervention
 
 
@@ -673,6 +673,44 @@ def delete_intervention(
     db.delete(db_intervention)
     db.commit()
     return {"message": "Intervention supprimée"}
+
+
+@router.delete("/{intervention_id}/recurrence-scope")
+def delete_intervention_recurrence_scope(
+    intervention_id: UUID,
+    scope: Literal["following", "all"],
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Supprime toute une série récurrente, ou cette occurrence et celles qui
+    suivent — voir `delete_intervention` pour une seule occurrence."""
+    if current_user.role != 'admin':
+        raise HTTPException(status_code=403, detail="Seul un admin peut supprimer.")
+
+    anchor = db.query(Intervention).filter(Intervention.id == intervention_id).first()
+    if not anchor or not anchor.recurrence_group_id:
+        raise HTTPException(status_code=404, detail="Intervention introuvable ou hors série")
+
+    query = db.query(Intervention).filter(Intervention.recurrence_group_id == anchor.recurrence_group_id)
+    if scope == "following":
+        query = query.filter(Intervention.start_time >= anchor.start_time)
+    targets = query.all()
+    ids = [t.id for t in targets]
+
+    db.query(RawCalendarEvent).filter(
+        RawCalendarEvent.linked_intervention_id.in_(ids)
+    ).update({"linked_intervention_id": None, "status": "pending"}, synchronize_session=False)
+
+    _add_audit(
+        db, "deleted", current_user.id, None,
+        f"Supprimée en série ({'toutes' if scope == 'all' else 'celle-ci et les suivantes'}) : {len(ids)} occurrence(s)",
+        {"scope": scope, "count": len(ids), "intervention_ids": [str(i) for i in ids]},
+    )
+
+    for target in targets:
+        db.delete(target)
+    db.commit()
+    return {"ok": True, "deleted": len(ids)}
 
 
 @router.post("/{intervention_id}/no-reprise")

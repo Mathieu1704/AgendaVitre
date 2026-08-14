@@ -31,6 +31,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({
 }, ref) {
   const [isFocused, setIsFocused] = useState(false);
   const { isDark } = useTheme();
+  const isMultiline = !!props.multiline;
 
   return (
     <View style={[{ gap: 6, width: "100%" }, containerStyle]}>
@@ -56,7 +57,10 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({
           style,
         ]}
         className={cn(
-          "h-12 flex-row items-center border px-4 bg-background dark:bg-slate-900",
+          isMultiline
+            ? "min-h-[80px] flex-row items-start border px-4 py-3"
+            : "h-12 flex-row items-center border px-4",
+          "bg-background dark:bg-slate-900",
           "border-border dark:border-slate-700",
           isFocused && "border-primary dark:border-primary",
           className,
@@ -67,11 +71,11 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({
           placeholderTextColor={isDark ? "#64748B" : "#A1A1AA"}
           onFocus={(e) => { setIsFocused(true); onFocusProp?.(e); }}
           onBlur={(e) => { setIsFocused(false); onBlurProp?.(e); }}
-          textAlignVertical="center"
+          textAlignVertical={isMultiline ? "top" : "center"}
           style={[
             {
               flex: 1,
-              height: "100%",
+              ...(isMultiline ? { minHeight: 56 } : { height: "100%" }),
               paddingVertical: 0,
               fontSize: 16,
               ...(Platform.OS !== "web"

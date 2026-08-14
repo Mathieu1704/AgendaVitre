@@ -396,10 +396,11 @@ export default function InterventionDetailScreen() {
     onError: () => toast.error("Erreur", "Impossible d'enregistrer les prestations."),
   });
 
-  // Clôture simplifiée pour les sous-traitants : pas de checklist par item, pas
-  // de reprise de RDV — juste un statut global, et une notification à l'admin
-  // en cas de problème (réutilise l'endpoint /no-reprise, déjà fait pour ça).
-  const [showSubcontractorNotDone, setShowSubcontractorNotDone] = useState(false);
+  // Clôture pour les sous-traitants : même checklist par prestation que pour
+  // les employés (trace des services faits/pas faits sur l'intervention),
+  // mais sans prix affichés et sans navigation vers le formulaire de reprise
+  // — en cas de service non fait, on notifie juste l'admin (endpoint
+  // /no-reprise, déjà fait pour ça).
   const [subcontractorNote, setSubcontractorNote] = useState("");
 
   const subcontractorDoneMutation = useMutation({
@@ -422,28 +423,50 @@ export default function InterventionDetailScreen() {
     onError: () => toast.error("Erreur", "Impossible de clôturer l'intervention."),
   });
 
-  const subcontractorNotDoneMutation = useMutation({
-    mutationFn: async (note: string) => {
-      applyMarkDone(queryClient, String(id), { repriseTaken: false, note });
+  const subcontractorChecklistMutation = useMutation({
+    mutationFn: async (notDoneItemIds: string[]) => {
+      const note = subcontractorNote.trim();
+      applyItemsDone(queryClient, String(id), notDoneItemIds);
       await enqueue({
-        kind: "no-reprise",
-        method: "POST",
-        url: `/api/interventions/${id}/no-reprise`,
-        body: { note },
-        label: "Clôture sans reprise",
+        kind: "items-done",
+        method: "PATCH",
+        url: `/api/interventions/${id}/items-done`,
+        body: { not_done_item_ids: notDoneItemIds },
+        label: "Prestations réalisées",
       });
+      if (notDoneItemIds.length > 0) {
+        applyMarkDone(queryClient, String(id), { repriseTaken: false, note });
+        await enqueue({
+          kind: "no-reprise",
+          method: "POST",
+          url: `/api/interventions/${id}/no-reprise`,
+          body: { note },
+          label: "Clôture sans reprise",
+        });
+      } else {
+        applyEditIntervention(queryClient, String(id), { status: "done" });
+        await enqueue({
+          kind: "edit-intervention",
+          method: "PATCH",
+          url: `/api/interventions/${id}`,
+          body: { status: "done" },
+          label: "Clôture de l'intervention",
+        });
+      }
     },
-    onSuccess: () => {
-      setShowSubcontractorNotDone(false);
+    onSuccess: (_data, notDoneItemIds) => {
+      setShowItemsChecklist(false);
       setSubcontractorNote("");
       toast.success(
-        "Enregistré",
+        notDoneItemIds.length > 0 ? "Enregistré" : "Terminée",
         isOnlineNow()
-          ? "L'admin a été notifié."
+          ? notDoneItemIds.length > 0
+            ? "L'admin a été notifié."
+            : "Intervention clôturée."
           : "Sera synchronisé au retour du réseau.",
       );
     },
-    onError: () => toast.error("Erreur", "Impossible d'enregistrer."),
+    onError: () => toast.error("Erreur", "Impossible d'enregistrer les prestations."),
   });
 
   const [showTimeEdit, setShowTimeEdit] = useState(false);
@@ -1200,32 +1223,14 @@ export default function InterventionDetailScreen() {
         className="absolute bottom-0 left-0 right-0 px-4 pt-4"
         style={{ paddingBottom: Math.max(insets.bottom, 16) }}
       >
-        {(intervention.status === "planned" || intervention.status === "in_progress") && isSubcontractor && (
-          <View className="flex-row" style={{ gap: 10 }}>
-            <Button
-              onPress={() => setShowSubcontractorNotDone(true)}
-              disabled={subcontractorDoneMutation.isPending}
-              className="flex-1 h-14 bg-red-500 hover:bg-red-600 rounded-full"
-            >
-              <Text className="text-white font-bold text-base">Pas terminée</Text>
-            </Button>
-            <Button
-              onPress={() => subcontractorDoneMutation.mutate()}
-              loading={subcontractorDoneMutation.isPending}
-              className="flex-1 h-14 bg-blue-500 hover:bg-blue-600 rounded-full"
-            >
-              <View className="flex-row items-center">
-                <CheckCircle2 size={20} color="white" strokeWidth={2.5} />
-                <Text className="text-white font-bold text-base ml-2">Terminée</Text>
-              </View>
-            </Button>
-          </View>
-        )}
-
-        {(intervention.status === "planned" || intervention.status === "in_progress") && !isSubcontractor && (
+        {(intervention.status === "planned" || intervention.status === "in_progress") && (
           <Button
             onPress={() => {
               if (!intervention.items || intervention.items.length === 0) {
+                if (isSubcontractor) {
+                  subcontractorDoneMutation.mutate();
+                  return;
+                }
                 router.push({
                   pathname: "/(app)/calendar/add",
                   params: { reprise_of: id, from_view, from_date, from_zone },
@@ -1235,6 +1240,7 @@ export default function InterventionDetailScreen() {
               setNotDoneIds(new Set());
               setShowAllDoneConfirm(true);
             }}
+            loading={isSubcontractor && subcontractorDoneMutation.isPending}
             className="w-full h-14 bg-blue-500 hover:bg-blue-600 rounded-full"
           >
             <View className="flex-row items-center">
@@ -1255,48 +1261,6 @@ export default function InterventionDetailScreen() {
           </View>
         )}
       </View>
-
-      {/* Sous-traitant : intervention pas terminée — note optionnelle, notifie l'admin */}
-      <Dialog
-        open={showSubcontractorNotDone}
-        onClose={() => setShowSubcontractorNotDone(false)}
-        position="center"
-      >
-        <View style={{ padding: 16, gap: 16 }}>
-          <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", textAlign: "center" }}>
-            Intervention pas terminée
-          </Text>
-          <Text style={{ fontSize: 13, color: isDark ? "#94A3B8" : "#64748B", textAlign: "center" }}>
-            L'admin sera notifié pour organiser la suite.
-          </Text>
-          <Input
-            label="Note (optionnelle)"
-            placeholder="Ex: client absent, matériel manquant..."
-            value={subcontractorNote}
-            onChangeText={setSubcontractorNote}
-            multiline
-          />
-          <View style={{ flexDirection: "row", gap: 12 }}>
-            <Pressable
-              onPress={() => setShowSubcontractorNotDone(false)}
-              style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: isDark ? "#1E293B" : "#F1F5F9" }}
-            >
-              <Text style={{ fontWeight: "600", color: isDark ? "#F8FAFC" : "#09090B" }}>
-                Annuler
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => subcontractorNotDoneMutation.mutate(subcontractorNote.trim())}
-              disabled={subcontractorNotDoneMutation.isPending}
-              style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: "#3B82F6", opacity: subcontractorNotDoneMutation.isPending ? 0.6 : 1 }}
-            >
-              <Text style={{ fontWeight: "700", color: "#fff" }}>
-                Envoyer
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </Dialog>
 
       {/* 1. LE MENU 3 POINTS */}
       <OptionsModal
@@ -1405,6 +1369,10 @@ export default function InterventionDetailScreen() {
         cancelText="Non"
         onConfirm={() => {
           setShowAllDoneConfirm(false);
+          if (isSubcontractor) {
+            subcontractorDoneMutation.mutate();
+            return;
+          }
           router.push({
             pathname: "/(app)/calendar/add",
             params: { reprise_of: id, from_view, from_date, from_zone },
@@ -1471,35 +1439,48 @@ export default function InterventionDetailScreen() {
                       </View>
                     )}
                   </View>
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    {item.on_demand && (
-                      <Text style={{ fontSize: 13, color: isDark ? "#64748B" : "#94A3B8", textDecorationLine: "line-through", marginRight: 6 }}>
-                        {formatPrice(item.price, "0 €")}
+                  {!isSubcontractor && (
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      {item.on_demand && (
+                        <Text style={{ fontSize: 13, color: isDark ? "#64748B" : "#94A3B8", textDecorationLine: "line-through", marginRight: 6 }}>
+                          {formatPrice(item.price, "0 €")}
+                        </Text>
+                      )}
+                      <Text style={{ fontWeight: "700", color: item.on_demand ? "#8B5CF6" : isDark ? "#F8FAFC" : "#09090B" }}>
+                        {formatPrice(item.on_demand ? onDemandPrice(Number(item.price)) : item.price, "0 €")}
                       </Text>
-                    )}
-                    <Text style={{ fontWeight: "700", color: item.on_demand ? "#8B5CF6" : isDark ? "#F8FAFC" : "#09090B" }}>
-                      {formatPrice(item.on_demand ? onDemandPrice(Number(item.price)) : item.price, "0 €")}
-                    </Text>
-                  </View>
+                    </View>
+                  )}
                 </Pressable>
               );
             })}
           </View>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTopWidth: 1, borderTopColor: isDark ? "#1E293B" : "#E2E8F0" }}>
-            <Text style={{ fontWeight: "700", fontSize: 16, color: isDark ? "#F8FAFC" : "#09090B" }}>
-              Total
-            </Text>
-            <Text style={{ fontWeight: "800", fontSize: 18, color: "#3B82F6" }}>
-              {(intervention?.items || [])
-                .filter((item: any) => !notDoneIds.has(item.id))
-                .reduce((sum: number, item: any) => {
-                  const base = Number(item.price);
-                  return sum + (item.on_demand ? onDemandPrice(base) : base);
-                }, 0)
-                .toFixed(2)}{" "}
-              €
-            </Text>
-          </View>
+          {!isSubcontractor && (
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTopWidth: 1, borderTopColor: isDark ? "#1E293B" : "#E2E8F0" }}>
+              <Text style={{ fontWeight: "700", fontSize: 16, color: isDark ? "#F8FAFC" : "#09090B" }}>
+                Total
+              </Text>
+              <Text style={{ fontWeight: "800", fontSize: 18, color: "#3B82F6" }}>
+                {(intervention?.items || [])
+                  .filter((item: any) => !notDoneIds.has(item.id))
+                  .reduce((sum: number, item: any) => {
+                    const base = Number(item.price);
+                    return sum + (item.on_demand ? onDemandPrice(base) : base);
+                  }, 0)
+                  .toFixed(2)}{" "}
+                €
+              </Text>
+            </View>
+          )}
+          {isSubcontractor && notDoneIds.size > 0 && (
+            <Input
+              label="Note pour l'admin (optionnelle)"
+              placeholder="Ex: client absent, matériel manquant..."
+              value={subcontractorNote}
+              onChangeText={setSubcontractorNote}
+              multiline
+            />
+          )}
           <View style={{ flexDirection: "row", gap: 12 }}>
             <Pressable
               onPress={() => setShowItemsChecklist(false)}
@@ -1510,9 +1491,13 @@ export default function InterventionDetailScreen() {
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => itemsDoneMutation.mutate(Array.from(notDoneIds))}
-              disabled={itemsDoneMutation.isPending}
-              style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: "#3B82F6", opacity: itemsDoneMutation.isPending ? 0.6 : 1 }}
+              onPress={() =>
+                isSubcontractor
+                  ? subcontractorChecklistMutation.mutate(Array.from(notDoneIds))
+                  : itemsDoneMutation.mutate(Array.from(notDoneIds))
+              }
+              disabled={isSubcontractor ? subcontractorChecklistMutation.isPending : itemsDoneMutation.isPending}
+              style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: "#3B82F6", opacity: (isSubcontractor ? subcontractorChecklistMutation.isPending : itemsDoneMutation.isPending) ? 0.6 : 1 }}
             >
               <Text style={{ fontWeight: "700", color: "#fff" }}>
                 Valider
