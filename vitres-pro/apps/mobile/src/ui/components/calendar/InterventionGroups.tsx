@@ -340,23 +340,19 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
             </Pressable>
           );
         })}
-        {!isSubcontractor && (
-          <>
-            <View style={{ width: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginHorizontal: 4 }} />
-            {FILTER_STATUSES.map(f => {
-              const active = activeStatuses.has(f.id);
-              return (
-                <Pressable
-                  key={f.id}
-                  onPress={() => toggleStatus(f.id)}
-                  style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: active ? f.color : isDark ? "#1E293B" : "#F1F5F9", borderWidth: 1, borderColor: active ? f.color : isDark ? "#334155" : "#E2E8F0" }}
-                >
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>{f.label}</Text>
-                </Pressable>
-              );
-            })}
-          </>
-        )}
+        <View style={{ width: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginHorizontal: 4 }} />
+        {FILTER_STATUSES.map(f => {
+          const active = activeStatuses.has(f.id);
+          return (
+            <Pressable
+              key={f.id}
+              onPress={() => toggleStatus(f.id)}
+              style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, backgroundColor: active ? f.color : isDark ? "#1E293B" : "#F1F5F9", borderWidth: 1, borderColor: active ? f.color : isDark ? "#334155" : "#E2E8F0" }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : isDark ? "#94A3B8" : "#64748B" }}>{f.label}</Text>
+            </Pressable>
+          );
+        })}
         {employees.length > 0 && (
           <>
             <View style={{ width: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginHorizontal: 4 }} />
