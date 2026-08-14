@@ -17,6 +17,7 @@ import {
   TYPE_COLORS,
 } from "./InterventionGroups";
 import { InterventionCard } from "./InterventionCard";
+import { DayStartRow, DayEndRow } from "./DayTrackerBar";
 
 interface DayViewProps {
   cursorDate: Date;
@@ -193,6 +194,7 @@ export const DayView = React.memo(function DayView({
           employees={isAdmin ? employees : []}
           isSubcontractor={isSubcontractor}
         />
+        <DayStartRow date={iso} />
       </View>
     ),
     [iso, effectiveZone, isAdmin, isSubcontractor, unassigned, activeTypes, activeStatuses, isDark, toggleType, toggleStatus, setActiveTypes, setActiveStatuses, router, employees, activeEmployeeId, setActiveEmployeeId],
@@ -201,6 +203,7 @@ export const DayView = React.memo(function DayView({
   const listFooter = useMemo(
     () => (
       <View>
+        <DayEndRow date={iso} />
         {assigned.length > 0 && (
           <View className="mb-4">
             <View className="flex-row items-center gap-2 mb-2">

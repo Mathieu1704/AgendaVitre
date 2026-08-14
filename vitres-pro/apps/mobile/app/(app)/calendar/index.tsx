@@ -65,7 +65,6 @@ import { usePlanningRangeStats } from "../../../src/hooks/usePlanning";
 import { MonthView } from "../../../src/ui/components/calendar/MonthView";
 import { WeekView } from "../../../src/ui/components/calendar/WeekView";
 import { DayView } from "../../../src/ui/components/calendar/DayView";
-import { DayTrackerBar } from "../../../src/ui/components/calendar/DayTrackerBar";
 import { YearView } from "../../../src/ui/components/calendar/YearView";
 import { AssignModalState } from "../../../src/ui/components/calendar/InterventionGroups";
 
@@ -756,8 +755,6 @@ export default function CalendarScreen() {
           </Pressable>
         </View>
       </View>
-
-      <DayTrackerBar />
 
       {/* === CONTENU === */}
       {displayMode === "calendar" ? (

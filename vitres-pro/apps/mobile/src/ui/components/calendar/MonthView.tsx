@@ -7,6 +7,7 @@ import { useRawEventsByRange } from "../../../hooks/useRawEvents";
 import { RawEventCard } from "./RawEventCard";
 import { FilterChipsBar, renderInterventionGroups, AssignModalState, InterventionGroupsCtx } from "./InterventionGroups";
 import { PlanningHeader } from "../PlanningHeader";
+import { DayStartRow, DayEndRow } from "./DayTrackerBar";
 
 interface MonthViewProps {
   cursorDate: Date;
@@ -183,9 +184,11 @@ export const MonthView = React.memo(function MonthView({
             employees={isAdmin ? employees : []}
             isSubcontractor={isSubcontractor}
           />
+          <DayStartRow date={selectedDate} />
           {dayList.length === 0 && dayRawEvents.length === 0 ? (
             <Text className="text-muted-foreground dark:text-slate-500 text-center py-8">Rien de prévu.</Text>
           ) : renderInterventionGroups(dayList, selectedDate, false, ctx)}
+          <DayEndRow date={selectedDate} />
         </View>
       </View>
     </View>

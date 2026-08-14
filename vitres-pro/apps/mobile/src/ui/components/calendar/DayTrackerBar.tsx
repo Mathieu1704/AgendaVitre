@@ -10,16 +10,38 @@ import {
 import { useTheme } from "../ThemeToggle";
 import { Dialog } from "../Dialog";
 import { toast } from "../../toast";
+import { toISODate } from "../../../lib/date";
 
-export function DayTrackerBar() {
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Petit connecteur vertical façon "chemin" entre le pointage et les RDV. */
+function PathLine({ isDark }: { isDark: boolean }) {
+  return (
+    <View
+      style={{
+        width: 2,
+        height: 14,
+        alignSelf: "center",
+        backgroundColor: isDark ? "#334155" : "#E2E8F0",
+      }}
+    />
+  );
+}
+
+/**
+ * Nœud "Commencer ma journée" — à placer juste avant la 1ère intervention
+ * du jour, uniquement pour le jour courant.
+ */
+export function DayStartRow({ date }: { date: string }) {
   const { isAdmin } = useAuth();
   const { isDark } = useTheme();
   const { data, isLoading } = useTodayTimeEntry();
   const clockIn = useClockIn();
-  const clockOut = useClockOut();
-  const [confirmEnd, setConfirmEnd] = useState(false);
 
-  if (isAdmin || isLoading || !data) return null;
+  if (isAdmin || isLoading || !data || date !== toISODate(new Date())) return null;
 
   const handleClockIn = async () => {
     try {
@@ -30,19 +52,9 @@ export function DayTrackerBar() {
     }
   };
 
-  const handleClockOut = async () => {
-    setConfirmEnd(false);
-    try {
-      await clockOut.mutateAsync();
-      toast.success("Journée terminée", "À demain !");
-    } catch (e: any) {
-      toast.error("Erreur", e?.response?.data?.detail || "Impossible de pointer.");
-    }
-  };
-
   return (
-    <View style={{ paddingHorizontal: 24, paddingBottom: 12 }}>
-      {data.status === "not_started" && (
+    <View style={{ paddingHorizontal: 4, marginBottom: 10 }}>
+      {data.status === "not_started" ? (
         <Pressable
           onPress={handleClockIn}
           disabled={clockIn.isPending}
@@ -68,61 +80,102 @@ export function DayTrackerBar() {
             </>
           )}
         </Pressable>
-      )}
-
-      {data.status === "in_progress" && (
-        <Pressable
-          onPress={() => setConfirmEnd(true)}
-          disabled={clockOut.isPending}
-          style={({ pressed }) => ({
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            height: 52,
-            borderRadius: 26,
-            backgroundColor: pressed ? "#EA580C" : "#F97316",
-            opacity: clockOut.isPending ? 0.7 : 1,
-          })}
-        >
-          {clockOut.isPending ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <>
-              <Square size={16} color="white" fill="white" />
-              <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>
-                Terminer ma journée
-              </Text>
-            </>
-          )}
-        </Pressable>
-      )}
-
-      {data.status === "done" && (
+      ) : (
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "center",
-            gap: 8,
-            paddingVertical: 10,
+            gap: 6,
+            paddingVertical: 8,
           }}
         >
-          <CheckCircle2 size={16} color="#10B981" />
-          <Text
-            style={{
-              color: isDark ? "#94A3B8" : "#64748B",
-              fontWeight: "600",
-              fontSize: 13,
-            }}
-          >
-            Journée terminée
-            {typeof data.worked_hours === "number"
-              ? ` · ${data.worked_hours.toFixed(1)}h travaillées`
-              : ""}
+          <CheckCircle2 size={14} color="#10B981" />
+          <Text style={{ color: isDark ? "#94A3B8" : "#64748B", fontWeight: "600", fontSize: 12 }}>
+            Journée commencée{data.clock_in_at ? ` à ${formatTime(data.clock_in_at)}` : ""}
           </Text>
         </View>
       )}
+      <PathLine isDark={isDark} />
+    </View>
+  );
+}
+
+/**
+ * Nœud "Terminer ma journée" — à placer juste après la dernière intervention
+ * du jour, uniquement pour le jour courant, et seulement une fois la journée
+ * commencée.
+ */
+export function DayEndRow({ date }: { date: string }) {
+  const { isAdmin } = useAuth();
+  const { isDark } = useTheme();
+  const { data, isLoading } = useTodayTimeEntry();
+  const clockOut = useClockOut();
+  const [confirmEnd, setConfirmEnd] = useState(false);
+
+  if (isAdmin || isLoading || !data || date !== toISODate(new Date())) return null;
+  if (data.status === "not_started") return null;
+
+  const handleClockOut = async () => {
+    setConfirmEnd(false);
+    try {
+      await clockOut.mutateAsync();
+      toast.success("Journée terminée", "À demain !");
+    } catch (e: any) {
+      toast.error("Erreur", e?.response?.data?.detail || "Impossible de pointer.");
+    }
+  };
+
+  return (
+    <View style={{ paddingHorizontal: 4, marginTop: 10 }}>
+      <PathLine isDark={isDark} />
+      <View style={{ marginTop: 10 }}>
+        {data.status === "in_progress" ? (
+          <Pressable
+            onPress={() => setConfirmEnd(true)}
+            disabled={clockOut.isPending}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              height: 52,
+              borderRadius: 26,
+              backgroundColor: pressed ? "#EA580C" : "#F97316",
+              opacity: clockOut.isPending ? 0.7 : 1,
+            })}
+          >
+            {clockOut.isPending ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <>
+                <Square size={16} color="white" fill="white" />
+                <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>
+                  Terminer ma journée
+                </Text>
+              </>
+            )}
+          </Pressable>
+        ) : (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              paddingVertical: 10,
+            }}
+          >
+            <CheckCircle2 size={16} color="#10B981" />
+            <Text style={{ color: isDark ? "#94A3B8" : "#64748B", fontWeight: "600", fontSize: 13 }}>
+              Journée terminée
+              {typeof data.worked_hours === "number"
+                ? ` · ${data.worked_hours.toFixed(1)}h travaillées`
+                : ""}
+            </Text>
+          </View>
+        )}
+      </View>
 
       {confirmEnd && (
         <Dialog open onClose={() => setConfirmEnd(false)} maxWidth={300}>
