@@ -43,7 +43,7 @@ export function WeekdayHoursPicker({ value, onChange, isDark = false, disabled }
     onChange({ ...value, [activeDay]: Math.min(24, Math.max(0, num)) });
   };
 
-  const total = DAYS.reduce((sum, d) => sum + (value[d.key] || 0), 0);
+  const total = Math.round(DAYS.reduce((sum, d) => sum + (value[d.key] || 0), 0) * 100) / 100;
 
   return (
     <View style={{ gap: 12 }}>
