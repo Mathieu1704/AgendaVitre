@@ -259,7 +259,9 @@ export default function ParametresScreen() {
                       <Text className="text-muted-foreground ml-1 capitalize">
                         {profile?.role === "admin"
                           ? "Administrateur"
-                          : "Employé"}
+                          : profile?.role === "subcontractor"
+                            ? "Sous-traitant"
+                            : "Employé"}
                       </Text>
                     </View>
                   </View>
