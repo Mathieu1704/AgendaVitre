@@ -1431,7 +1431,7 @@ export default function InterventionDetailScreen() {
                     >
                       {item.label}
                     </Text>
-                    {item.on_demand && (
+                    {!isSubcontractor && item.on_demand && (
                       <View style={{ marginLeft: 6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: "rgba(139,92,246,0.1)" }}>
                         <Text style={{ fontSize: 10, fontWeight: "700", color: "#8B5CF6" }}>
                           +33%
@@ -1479,6 +1479,8 @@ export default function InterventionDetailScreen() {
               value={subcontractorNote}
               onChangeText={setSubcontractorNote}
               multiline
+              style={{ height: 90, alignItems: "flex-start", paddingVertical: 12 }}
+              inputStyle={{ height: "100%", textAlignVertical: "top" }}
             />
           )}
           <View style={{ flexDirection: "row", gap: 12 }}>
