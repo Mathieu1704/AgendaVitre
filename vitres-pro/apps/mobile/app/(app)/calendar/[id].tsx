@@ -87,6 +87,7 @@ export default function InterventionDetailScreen() {
   // 1. TOUS LES STATES
   const [menuVisible, setMenuVisible] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDeleteScopeDialog, setShowDeleteScopeDialog] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [editingPayment, setEditingPayment] = useState(false);
   const [pendingPaymentMode, setPendingPaymentMode] = useState<"cash" | "invoice" | "invoice_cash">("cash");
@@ -166,14 +167,27 @@ export default function InterventionDetailScreen() {
 
   // 3. MUTATIONS (Doivent être déclarées AVANT les returns conditionnels)
   const deleteMutation = useMutation({
-    mutationFn: async () => {
-      applyDeleteIntervention(queryClient, String(id));
-      await enqueue({
-        kind: "delete-intervention",
-        method: "DELETE",
-        url: `/api/interventions/${id}`,
-        label: "Suppression de l'intervention",
-      });
+    mutationFn: async (scope: "this" | "following" | "all" = "this") => {
+      if (scope === "this") {
+        applyDeleteIntervention(queryClient, String(id));
+        await enqueue({
+          kind: "delete-intervention",
+          method: "DELETE",
+          url: `/api/interventions/${id}`,
+          label: "Suppression de l'intervention",
+        });
+      } else {
+        await enqueue({
+          kind: "delete-intervention-scope",
+          method: "DELETE",
+          url: `/api/interventions/${id}/recurrence-scope?scope=${scope}`,
+          label:
+            scope === "all"
+              ? "Suppression de toute la série"
+              : "Suppression de cette occurrence et des suivantes",
+        });
+        queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      }
     },
     onSuccess: () => {
       toast.success(
@@ -297,13 +311,17 @@ export default function InterventionDetailScreen() {
 
   const handleDeleteRequest = () => {
     setMenuVisible(false);
+    if (intervention?.recurrence_group_id && isAdmin) {
+      setShowDeleteScopeDialog(true);
+      return;
+    }
     if (Platform.OS !== "web") {
       Alert.alert(
         "Supprimer l'intervention ?",
         "Cette action est irréversible. L'intervention sera définitivement effacée du planning.",
         [
           { text: "Annuler", style: "cancel" },
-          { text: "Supprimer", style: "destructive", onPress: () => deleteMutation.mutate() },
+          { text: "Supprimer", style: "destructive", onPress: () => deleteMutation.mutate("this") },
         ]
       );
     } else {
@@ -1053,6 +1071,36 @@ export default function InterventionDetailScreen() {
             <View className="w-full mt-4">
               <Card className="rounded-3xl">
                 <CardContent className="p-5">
+                  {/* Prestations — le sous-traitant voit la liste des services à
+                      faire, jamais les prix (ni total, ni détail, ni +33%). */}
+                  {intervType === "intervention" && isSubcontractor && (
+                    intervention.items && intervention.items.length > 0 && (
+                      <View className="mb-2">
+                        <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
+                          Prestations à réaliser
+                        </Text>
+                        <View className="gap-3">
+                          {intervention.items.map((item: any, idx: number) => (
+                            <View
+                              key={idx}
+                              className="pb-2 border-b border-border dark:border-slate-800 last:border-0"
+                            >
+                              <Text
+                                className={`font-medium ${
+                                  item.done === false
+                                    ? "text-muted-foreground line-through"
+                                    : "text-foreground dark:text-white"
+                                }`}
+                              >
+                                {item.label}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )
+                  )}
+
                   {/* Prix — uniquement pour les interventions, jamais pour un sous-traitant */}
                   {!isSubcontractor && intervType === "intervention" && (
                     <>
@@ -1298,9 +1346,55 @@ export default function InterventionDetailScreen() {
         onCancel={() => setShowDeleteConfirm(false)}
         onConfirm={() => {
           setShowDeleteConfirm(false);
-          deleteMutation.mutate();
+          deleteMutation.mutate("this");
         }}
       />
+
+      {/* Suppression d'un RDV récurrent : quelle portée ? */}
+      <Dialog
+        open={showDeleteScopeDialog}
+        onClose={() => setShowDeleteScopeDialog(false)}
+        position="center"
+      >
+        <View style={{ padding: 20, gap: 12 }}>
+          <Text style={{ fontSize: 17, fontWeight: "700", textAlign: "center", color: isDark ? "#F8FAFC" : "#09090B" }}>
+            Supprimer ce rendez-vous récurrent
+          </Text>
+          <Text style={{ fontSize: 13, textAlign: "center", color: isDark ? "#94A3B8" : "#64748B" }}>
+            Action irréversible.
+          </Text>
+          <Button
+            variant="destructive"
+            onPress={() => {
+              setShowDeleteScopeDialog(false);
+              deleteMutation.mutate("this");
+            }}
+          >
+            Uniquement ce rendez-vous
+          </Button>
+          <Button
+            variant="destructive"
+            onPress={() => {
+              setShowDeleteScopeDialog(false);
+              deleteMutation.mutate("following");
+            }}
+          >
+            Celui-ci et les suivants
+          </Button>
+          <Button
+            variant="destructive"
+            onPress={() => {
+              setShowDeleteScopeDialog(false);
+              deleteMutation.mutate("all");
+            }}
+          >
+            Toutes les occurrences
+          </Button>
+          <Button variant="outline" onPress={() => setShowDeleteScopeDialog(false)}>
+            Annuler
+          </Button>
+        </View>
+      </Dialog>
 
       {/* Clôture d'intervention : confirmation "tous les services faits ?" */}
       <ConfirmModal
