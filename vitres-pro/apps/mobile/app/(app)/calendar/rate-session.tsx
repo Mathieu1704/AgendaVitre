@@ -22,6 +22,7 @@ import {
   useRouter,
   useLocalSearchParams,
   useFocusEffect,
+  Redirect,
 } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -40,6 +41,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { useInterventions } from "../../../src/hooks/useInterventions";
+import { useAuth } from "../../../src/hooks/useAuth";
 import {
   useHourlyRates,
   useCreateHourlyRate,
@@ -132,6 +134,7 @@ export default function RateSessionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
+  const { isSubcontractor } = useAuth();
   const qc = useQueryClient();
   const { date, zone } = useLocalSearchParams<{
     date: string;
@@ -338,6 +341,10 @@ export default function RateSessionScreen() {
     borderColor: isDark ? "#334155" : "#E2E8F0",
     color: isDark ? "#F1F5F9" : "#09090B",
   };
+
+  if (isSubcontractor) {
+    return <Redirect href="/(app)/calendar" />;
+  }
 
   if (isLoading) {
     return (

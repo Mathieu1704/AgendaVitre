@@ -13,7 +13,14 @@ import { toast } from "../../../src/ui/toast";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { ColorPicker } from "../../../src/ui/components/ColorPicker";
 import { WeekdayHoursPicker } from "../../../src/ui/components/WeekdayHoursPicker";
+import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
 import { useEmployees } from "../../../src/hooks/useEmployees";
+
+const ROLE_OPTIONS = [
+  { id: "employee", label: "Employé" },
+  { id: "subcontractor", label: "Sous-traitant" },
+  { id: "admin", label: "Admin" },
+];
 
 export default function CreateEmployeeScreen() {
   const router = useRouter();
@@ -26,7 +33,7 @@ export default function CreateEmployeeScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("Bienvenue2026!");
   const [selectedColor, setSelectedColor] = useState("#3B82F6");
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<"admin" | "employee" | "subcontractor">("employee");
   const DEFAULT_HOURS: Record<string, number> = {
     "1": 7.6,
     "2": 7.6,
@@ -76,7 +83,7 @@ export default function CreateEmployeeScreen() {
       email,
       password: password || undefined, // vide => généré automatiquement côté serveur
       color: selectedColor,
-      role: isAdmin ? "admin" : "employee",
+      role,
       hours_per_weekday: hoursPerWeekday,
     });
   };
@@ -185,20 +192,26 @@ export default function CreateEmployeeScreen() {
               />
             </View>
 
-            {/* Switch Admin */}
-            <View className="flex-row items-center justify-between pt-2 border-t border-border dark:border-slate-800">
-              <View className="flex-1 pr-4">
-                <Text className="text-base font-medium text-foreground dark:text-white">
-                  Accès Administrateur
-                </Text>
-                <Text className="text-xs text-muted-foreground mt-0.5">
-                  Peut modifier le planning de tous
-                </Text>
-              </View>
-              <Switch
-                value={isAdmin}
-                onValueChange={setIsAdmin}
-                trackColor={{ false: "#767577", true: "#22C55E" }}
+            {/* Rôle */}
+            <View className="pt-2 border-t border-border dark:border-slate-800">
+              <Text className="text-base font-medium text-foreground dark:text-white mb-1">
+                Rôle
+              </Text>
+              <Text className="text-xs text-muted-foreground mb-3">
+                {role === "admin"
+                  ? "Peut modifier le planning de tous"
+                  : role === "subcontractor"
+                    ? "Voit ses interventions (adresse, horaires) sans aucun prix, ne peut ni reprendre de RDV ni déplacer un RDV"
+                    : "Voit et gère ses propres interventions"}
+              </Text>
+              <SlidingPillSelector
+                options={ROLE_OPTIONS}
+                selected={role}
+                onSelect={(id) => setRole(id as "admin" | "employee" | "subcontractor")}
+                pillColor="#3B82F6"
+                bgColor={isDark ? "#1E293B" : "#F1F5F9"}
+                activeTextColor="#FFFFFF"
+                inactiveTextColor={isDark ? "#94A3B8" : "#64748B"}
               />
             </View>
           </CardContent>

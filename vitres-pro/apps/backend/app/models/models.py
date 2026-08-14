@@ -79,7 +79,7 @@ class Employee(Base):
     id = Column(UUID(as_uuid=True), primary_key=True) # Pas de default, on prend celui de Supabase
     email = Column(String, unique=True, nullable=False)
     full_name = Column(String, nullable=True)
-    role = Column(String, default="employee") # 'admin' ou 'employee'
+    role = Column(String, default="employee") # 'admin', 'employee' ou 'subcontractor'
     color = Column(String, default="#3B82F6") # Couleur pour le planning admin
     phone = Column(String, nullable=True) # Téléphone de l'employé
 

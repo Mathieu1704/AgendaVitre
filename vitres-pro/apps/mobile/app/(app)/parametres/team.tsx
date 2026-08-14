@@ -101,6 +101,7 @@ export default function TeamManagementScreen() {
   const roleItems = [
     { id: "admin", label: "Administrateur" },
     { id: "employee", label: "Employé" },
+    { id: "subcontractor", label: "Sous-traitant" },
   ];
 
   const updateMutation = useMutation({
@@ -305,12 +306,12 @@ export default function TeamManagementScreen() {
                     >
                       {/* Badge rôle */}
                       <View
-                        className={`px-2 py-0.5 rounded-full ${emp.role === "admin" ? "bg-purple-100 dark:bg-purple-900/30" : "bg-gray-100 dark:bg-slate-800"}`}
+                        className={`px-2 py-0.5 rounded-full ${emp.role === "admin" ? "bg-purple-100 dark:bg-purple-900/30" : emp.role === "subcontractor" ? "bg-amber-100 dark:bg-amber-900/30" : "bg-gray-100 dark:bg-slate-800"}`}
                       >
                         <Text
-                          className={`text-xs font-bold uppercase ${emp.role === "admin" ? "text-purple-700 dark:text-purple-400" : "text-gray-600 dark:text-slate-400"}`}
+                          className={`text-xs font-bold uppercase ${emp.role === "admin" ? "text-purple-700 dark:text-purple-400" : emp.role === "subcontractor" ? "text-amber-700 dark:text-amber-400" : "text-gray-600 dark:text-slate-400"}`}
                         >
-                          {emp.role === "admin" ? "Admin" : "Employé"}
+                          {emp.role === "admin" ? "Admin" : emp.role === "subcontractor" ? "Sous-traitant" : "Employé"}
                         </Text>
                       </View>
                       {/* Badge zone */}

@@ -17,10 +17,12 @@ import {
   Switch,
   InteractionManager,
 } from "react-native";
-import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect, Redirect } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../src/lib/api";
 import { onDemandPrice } from "../../../src/lib/price";
+import { newUuidV4 } from "../../../src/lib/uuid";
+import { formatRecurrenceLabel } from "../../../src/lib/recurrence";
 import { enqueue } from "../../../src/lib/offline/outbox";
 import { isOnlineNow } from "../../../src/lib/offline/network";
 import { newTempId } from "../../../src/lib/offline/idMap";
@@ -50,6 +52,7 @@ import {
   AlertTriangle,
   Banknote,
   Wallet,
+  Repeat,
 } from "lucide-react-native";
 import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
 import { Input } from "../../../src/ui/components/Input";
@@ -252,15 +255,20 @@ function generateDates(
   startStr: string,
   durationHours: number,
   rec: Recurrence,
+  // Duplication + récurrence : la date affichée sert juste de référence (jour
+  // de semaine) pour le calcul du motif, pas une occurrence à recréer — la
+  // source existe déjà ce jour-là. On saute donc la première date générée.
+  skipFirst: boolean = false,
 ): { start: Date; end: Date }[] {
   const base = parseBrusselsDateTimeString(startStr);
   if (!base) return [];
   const dur = durationHours * 3600000;
   if (rec.freq === "none")
-    return [{ start: base, end: new Date(base.getTime() + dur) }];
+    return skipFirst ? [] : [{ start: base, end: new Date(base.getTime() + dur) }];
   const MAX = 365;
   const targetCount =
-    rec.endType === "count" ? Math.max(1, Math.min(rec.count, MAX)) : MAX;
+    (rec.endType === "count" ? Math.max(1, Math.min(rec.count, MAX)) : MAX) +
+    (skipFirst ? 1 : 0);
   const endDate =
     rec.endType === "date" && rec.endDate
       ? new Date(rec.endDate + "T23:59:59")
@@ -279,7 +287,7 @@ function generateDates(
       cur = new Date(cur);
       cur.setDate(cur.getDate() + 1);
     }
-    return dates;
+    return skipFirst ? dates.slice(1) : dates;
   }
   for (let i = 0; i < targetCount; i++) {
     const s = new Date(base);
@@ -301,7 +309,7 @@ function generateDates(
     if (endDate && s > endDate) break;
     dates.push({ start: s, end: new Date(s.getTime() + dur) });
   }
-  return dates;
+  return skipFirst ? dates.slice(1) : dates;
 }
 
 export default function AddInterventionScreen() {
@@ -323,7 +331,7 @@ export default function AddInterventionScreen() {
   const isDuplicateMode = !!duplicate_of;
   const repriseSourceId = reprise_of || duplicate_of;
 
-  const { isAdmin, userZone } = useAuth();
+  const { isAdmin, isSubcontractor, userZone } = useAuth();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
@@ -943,9 +951,10 @@ export default function AddInterventionScreen() {
       const origStart = new Date(repriseSource.start_time);
       const origEnd = new Date(repriseSource.end_time);
       const nextDate = new Date(origStart);
-      // Reprise = +1 semaine par défaut (RDV suivant) ; duplication = +1 jour
-      // (typiquement un chantier étalé sur plusieurs jours consécutifs).
-      nextDate.setDate(nextDate.getDate() + (isDuplicateMode ? 1 : 7));
+      // Reprise = +1 semaine par défaut (RDV suivant) ; duplication = même
+      // jour que la source (sert de base à une récurrence sur le même jour
+      // de semaine — modifiable ensuite si besoin d'un autre jour ponctuel).
+      nextDate.setDate(nextDate.getDate() + (isDuplicateMode ? 0 : 7));
       const nextEnd = new Date(nextDate.getTime() + (origEnd.getTime() - origStart.getTime()));
       setStartDateStr(toBrusselsDateTimeString(nextDate));
       setEndDateStr(toBrusselsDateTimeString(nextEnd));
@@ -1158,8 +1167,11 @@ export default function AddInterventionScreen() {
 
   // --- Mutation principale (création / édition) ---
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showRecurrenceScopeDialog, setShowRecurrenceScopeDialog] = useState(false);
+  const isRecurringSeries =
+    isAdmin && isEditMode && !!interventionData?.recurrence_group_id;
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (scope: "this" | "following" | "all" = "this") => {
     if (!title) return toast.error("Titre", "Titre requis.");
     const datePart = startDateStr.split("T")[0];
     let startParsed: Date, endParsed: Date, dur: number;
@@ -1228,6 +1240,21 @@ export default function AddInterventionScreen() {
           body: editPayload,
           label: "Modification de l'intervention",
         });
+        if (scope !== "this") {
+          // Propage tout sauf les horaires (chaque occurrence garde sa propre
+          // date/heure) aux autres lignes de la série — résolues côté serveur
+          // via recurrence_group_id, donc passable par la file hors-ligne.
+          await enqueue({
+            kind: "edit-intervention-scope",
+            method: "PATCH",
+            url: `/api/interventions/${id}/recurrence-scope`,
+            body: { scope, fields: basePayload },
+            label:
+              scope === "all"
+                ? "Modification de toute la série"
+                : "Modification de cette occurrence et des suivantes",
+          });
+        }
         toast.success(
           "Succès",
           isOnlineNow()
@@ -1254,12 +1281,17 @@ export default function AddInterventionScreen() {
         const endUtc = new Date(startUtc.getTime() + dur * 3600000);
         occurrences = [{ start: startUtc, end: endUtc }];
       } else {
-        occurrences = generateDates(startDateStr, dur, recurrence);
+        occurrences = generateDates(
+          startDateStr,
+          dur,
+          recurrence,
+          isDuplicateMode && recurrence.freq !== "none",
+        );
       }
       if (occurrences.length === 0)
         return toast.error("Date", "Vérifie la date.");
 
-      const groupId = occurrences.length > 1 ? crypto.randomUUID() : undefined;
+      const groupId = occurrences.length > 1 ? newUuidV4() : undefined;
 
       // Chaque occurrence part comme une entrée distincte, avec sa propre clé
       // d'idempotence : un rejeu ne peut pas dupliquer une occurrence isolée.
@@ -1416,6 +1448,10 @@ export default function AddInterventionScreen() {
     );
   }
 
+  if (isSubcontractor) {
+    return <Redirect href="/(app)/calendar" />;
+  }
+
   const typeNeedsClient = NEEDS_CLIENT.includes(intervType);
   const typeNeedsItems = NEEDS_ITEMS.includes(intervType);
 
@@ -1462,6 +1498,30 @@ export default function AddInterventionScreen() {
                 : "Nouvelle intervention"}
         </Text>
       </View>
+
+      {isRecurringSeries && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            paddingHorizontal: 16,
+            paddingBottom: 8,
+          }}
+        >
+          <Repeat size={13} color="#8B5CF6" />
+          <Text style={{ fontSize: 12, fontWeight: "600", color: "#8B5CF6" }}>
+            Fait partie d'une série
+            {(() => {
+              const label = formatRecurrenceLabel(
+                interventionData?.recurrence_rule,
+                interventionData?.start_time,
+              );
+              return label ? ` — ${label}` : "";
+            })()}
+          </Text>
+        </View>
+      )}
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -2713,7 +2773,10 @@ export default function AddInterventionScreen() {
                 </View>
                 <View style={{ flex: 1, marginRight: isWeb ? 0 : 16 }}>
                   <Button
-                    onPress={handleSubmit}
+                    onPress={() => {
+                      if (isRecurringSeries) setShowRecurrenceScopeDialog(true);
+                      else handleSubmit("this");
+                    }}
                     disabled={isSubmitting}
                     className="w-full"
                     style={{ borderRadius: 20 }}
@@ -2734,6 +2797,45 @@ export default function AddInterventionScreen() {
           </Card>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* MODAL PORTÉE D'ÉDITION (RDV récurrent) */}
+      <Dialog
+        open={showRecurrenceScopeDialog}
+        onClose={() => setShowRecurrenceScopeDialog(false)}
+        position="bottom"
+      >
+        <View style={{ padding: 20, gap: 12 }}>
+          <Text style={{ fontSize: 17, fontWeight: "700", textAlign: "center" }}>
+            Modifier ce rendez-vous récurrent
+          </Text>
+          <Button
+            onPress={() => {
+              setShowRecurrenceScopeDialog(false);
+              handleSubmit("this");
+            }}
+          >
+            Uniquement ce rendez-vous
+          </Button>
+          <Button
+            variant="outline"
+            onPress={() => {
+              setShowRecurrenceScopeDialog(false);
+              handleSubmit("following");
+            }}
+          >
+            Celui-ci et les suivants
+          </Button>
+          <Button
+            variant="outline"
+            onPress={() => {
+              setShowRecurrenceScopeDialog(false);
+              handleSubmit("all");
+            }}
+          >
+            Toutes les occurrences
+          </Button>
+        </View>
+      </Dialog>
 
       {/* MODAL RÉCURRENCE PERSONNALISÉE */}
       <Dialog

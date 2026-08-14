@@ -3,7 +3,7 @@ export interface Employee {
   email: string;
   full_name?: string;
   color: string; // Ex: "#3B82F6"
-  role: "admin" | "employee";
+  role: "admin" | "employee" | "subcontractor";
   phone?: string;
   zone: "hainaut" | "ardennes";
   weekly_hours: number;

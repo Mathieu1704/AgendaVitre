@@ -36,6 +36,7 @@ import {
   FileText,
   X,
   Check,
+  Repeat,
 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -48,8 +49,10 @@ import {
   applyItemsDone,
   applyDeleteIntervention,
   applyEditIntervention,
+  applyMarkDone,
 } from "../../../src/lib/offline/optimistic";
 import { formatPrice, onDemandPrice } from "../../../src/lib/price";
+import { formatRecurrenceLabel } from "../../../src/lib/recurrence";
 import { toast } from "../../../src/ui/toast";
 import { Button } from "../../../src/ui/components/Button";
 import { Card, CardContent } from "../../../src/ui/components/Card";
@@ -79,7 +82,7 @@ export default function InterventionDetailScreen() {
 
   const isDesktop = width >= 768;
   const insets = useSafeAreaInsets();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSubcontractor } = useAuth();
 
   // 1. TOUS LES STATES
   const [menuVisible, setMenuVisible] = useState(false);
@@ -375,6 +378,56 @@ export default function InterventionDetailScreen() {
     onError: () => toast.error("Erreur", "Impossible d'enregistrer les prestations."),
   });
 
+  // Clôture simplifiée pour les sous-traitants : pas de checklist par item, pas
+  // de reprise de RDV — juste un statut global, et une notification à l'admin
+  // en cas de problème (réutilise l'endpoint /no-reprise, déjà fait pour ça).
+  const [showSubcontractorNotDone, setShowSubcontractorNotDone] = useState(false);
+  const [subcontractorNote, setSubcontractorNote] = useState("");
+
+  const subcontractorDoneMutation = useMutation({
+    mutationFn: async () => {
+      applyEditIntervention(queryClient, String(id), { status: "done" });
+      await enqueue({
+        kind: "edit-intervention",
+        method: "PATCH",
+        url: `/api/interventions/${id}`,
+        body: { status: "done" },
+        label: "Clôture de l'intervention",
+      });
+    },
+    onSuccess: () => {
+      toast.success(
+        "Terminée",
+        isOnlineNow() ? "Intervention clôturée." : "Sera synchronisée au retour du réseau.",
+      );
+    },
+    onError: () => toast.error("Erreur", "Impossible de clôturer l'intervention."),
+  });
+
+  const subcontractorNotDoneMutation = useMutation({
+    mutationFn: async (note: string) => {
+      applyMarkDone(queryClient, String(id), { repriseTaken: false, note });
+      await enqueue({
+        kind: "no-reprise",
+        method: "POST",
+        url: `/api/interventions/${id}/no-reprise`,
+        body: { note },
+        label: "Clôture sans reprise",
+      });
+    },
+    onSuccess: () => {
+      setShowSubcontractorNotDone(false);
+      setSubcontractorNote("");
+      toast.success(
+        "Enregistré",
+        isOnlineNow()
+          ? "L'admin a été notifié."
+          : "Sera synchronisé au retour du réseau.",
+      );
+    },
+    onError: () => toast.error("Erreur", "Impossible d'enregistrer."),
+  });
+
   const [showTimeEdit, setShowTimeEdit] = useState(false);
   const [editStartStr, setEditStartStr] = useState("");
   const [editEndStr, setEditEndStr] = useState("");
@@ -581,8 +634,33 @@ export default function InterventionDetailScreen() {
               }}
             />
 
-            {/* Bloc paiement — tappable pour modifier */}
-            {intervType === "intervention" && (() => {
+            {intervention.recurrence_group_id && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  marginBottom: 12,
+                  marginTop: -6,
+                }}
+              >
+                <Repeat size={13} color="#8B5CF6" />
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#8B5CF6" }}>
+                  Fait partie d'une série
+                  {(() => {
+                    const label = formatRecurrenceLabel(
+                      intervention.recurrence_rule,
+                      intervention.start_time,
+                    );
+                    return label ? ` — ${label}` : "";
+                  })()}
+                </Text>
+              </View>
+            )}
+
+            {/* Bloc paiement — tappable pour modifier. Jamais affiché à un
+                sous-traitant : il ne doit voir aucun prix/montant. */}
+            {!isSubcontractor && intervType === "intervention" && (() => {
               const mode = intervention.payment_mode || (intervention.is_invoice ? "invoice" : "cash");
               const cfg = {
                 cash:         { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FCA5A5" : "#DC2626" },
@@ -975,8 +1053,8 @@ export default function InterventionDetailScreen() {
             <View className="w-full mt-4">
               <Card className="rounded-3xl">
                 <CardContent className="p-5">
-                  {/* Prix — uniquement pour les interventions */}
-                  {intervType === "intervention" && (
+                  {/* Prix — uniquement pour les interventions, jamais pour un sous-traitant */}
+                  {!isSubcontractor && intervType === "intervention" && (
                     <>
                       <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
                         Détail de la prestation
@@ -1074,7 +1152,29 @@ export default function InterventionDetailScreen() {
         className="absolute bottom-0 left-0 right-0 px-4 pt-4"
         style={{ paddingBottom: Math.max(insets.bottom, 16) }}
       >
-        {(intervention.status === "planned" || intervention.status === "in_progress") && (
+        {(intervention.status === "planned" || intervention.status === "in_progress") && isSubcontractor && (
+          <View className="flex-row" style={{ gap: 10 }}>
+            <Button
+              onPress={() => setShowSubcontractorNotDone(true)}
+              disabled={subcontractorDoneMutation.isPending}
+              className="flex-1 h-14 bg-red-500 hover:bg-red-600 rounded-full"
+            >
+              <Text className="text-white font-bold text-base">Pas terminée</Text>
+            </Button>
+            <Button
+              onPress={() => subcontractorDoneMutation.mutate()}
+              loading={subcontractorDoneMutation.isPending}
+              className="flex-1 h-14 bg-blue-500 hover:bg-blue-600 rounded-full"
+            >
+              <View className="flex-row items-center">
+                <CheckCircle2 size={20} color="white" strokeWidth={2.5} />
+                <Text className="text-white font-bold text-base ml-2">Terminée</Text>
+              </View>
+            </Button>
+          </View>
+        )}
+
+        {(intervention.status === "planned" || intervention.status === "in_progress") && !isSubcontractor && (
           <Button
             onPress={() => {
               if (!intervention.items || intervention.items.length === 0) {
@@ -1107,6 +1207,48 @@ export default function InterventionDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* Sous-traitant : intervention pas terminée — note optionnelle, notifie l'admin */}
+      <Dialog
+        open={showSubcontractorNotDone}
+        onClose={() => setShowSubcontractorNotDone(false)}
+        position="center"
+      >
+        <View style={{ padding: 16, gap: 16 }}>
+          <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", textAlign: "center" }}>
+            Intervention pas terminée
+          </Text>
+          <Text style={{ fontSize: 13, color: isDark ? "#94A3B8" : "#64748B", textAlign: "center" }}>
+            L'admin sera notifié pour organiser la suite.
+          </Text>
+          <Input
+            label="Note (optionnelle)"
+            placeholder="Ex: client absent, matériel manquant..."
+            value={subcontractorNote}
+            onChangeText={setSubcontractorNote}
+            multiline
+          />
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <Pressable
+              onPress={() => setShowSubcontractorNotDone(false)}
+              style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: isDark ? "#1E293B" : "#F1F5F9" }}
+            >
+              <Text style={{ fontWeight: "600", color: isDark ? "#F8FAFC" : "#09090B" }}>
+                Annuler
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => subcontractorNotDoneMutation.mutate(subcontractorNote.trim())}
+              disabled={subcontractorNotDoneMutation.isPending}
+              style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: "#3B82F6", opacity: subcontractorNotDoneMutation.isPending ? 0.6 : 1 }}
+            >
+              <Text style={{ fontWeight: "700", color: "#fff" }}>
+                Envoyer
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Dialog>
 
       {/* 1. LE MENU 3 POINTS */}
       <OptionsModal

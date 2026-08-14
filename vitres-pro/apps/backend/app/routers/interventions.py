@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import func, or_
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 from datetime import datetime, date
 import math
@@ -43,6 +43,15 @@ class BulkAssignBody(BaseModel):
 def is_admin(user_id: str, db: Session) -> bool:
     emp = db.query(Employee).filter(Employee.id == user_id).first()
     return emp.role == 'admin' if emp else False
+
+def _strip_prices(interventions: List[Intervention]) -> None:
+    """Neutralise les prix en mémoire (non commité) pour les sous-traitants,
+    qui ne doivent jamais voir de montants."""
+    for iv in interventions:
+        iv.price_estimated = None
+        iv.hourly_rate = None
+        for item in iv.items:
+            item.price = 0
 
 def _load_intervention(intervention_id: UUID, db: Session) -> Intervention:
     return db.query(Intervention).options(
@@ -144,7 +153,10 @@ def read_interventions(
             query = query.filter(Intervention.start_time <= datetime.fromisoformat(end.replace("Z", "+00:00")))
         except ValueError:
             pass
-    return query.order_by(Intervention.start_time.asc()).all()
+    results = query.order_by(Intervention.start_time.asc()).all()
+    if current_user.role == 'subcontractor':
+        _strip_prices(results)
+    return results
 
 
 @router.get("/search", response_model=List[InterventionOut])
@@ -189,7 +201,10 @@ def search_interventions(
             Intervention.zone == current_user.zone,
             Intervention.employees.any(id=current_user.id),
         )
-    return query.order_by(Intervention.start_time.desc()).limit(200).all()
+    results = query.order_by(Intervention.start_time.desc()).limit(200).all()
+    if current_user.role == 'subcontractor':
+        _strip_prices(results)
+    return results
 
 
 # --- INTERVENTION SERVICES (catalogue de prestations pour une intervention
@@ -201,6 +216,8 @@ def get_intervention_services(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
+    if current_user.role == 'subcontractor':
+        raise HTTPException(status_code=403, detail="Réservé aux admins et employés.")
     return (
         db.query(InterventionService)
         .filter(InterventionService.reprise_chain_id == reprise_chain_id)
@@ -215,6 +232,8 @@ def create_intervention_service(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
+    if current_user.role == 'subcontractor':
+        raise HTTPException(status_code=403, detail="Réservé aux admins et employés.")
     seen = already_processed(db, payload.client_operation_id)
     if seen is not None and seen.result_id:
         existing = db.query(InterventionService).filter(InterventionService.id == seen.result_id).first()
@@ -244,6 +263,8 @@ def update_intervention_service(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
+    if current_user.role == 'subcontractor':
+        raise HTTPException(status_code=403, detail="Réservé aux admins et employés.")
     service = db.query(InterventionService).filter(InterventionService.id == service_id).first()
     if not service:
         raise HTTPException(status_code=404, detail="Service introuvable")
@@ -260,6 +281,8 @@ def delete_intervention_service(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
+    if current_user.role == 'subcontractor':
+        raise HTTPException(status_code=403, detail="Réservé aux admins et employés.")
     service = db.query(InterventionService).filter(InterventionService.id == service_id).first()
     if not service:
         return
@@ -276,6 +299,8 @@ def read_intervention(
     intervention = _load_intervention(intervention_id, db)
     if not intervention:
         raise HTTPException(status_code=404, detail="Non trouvé")
+    if current_user.role == 'subcontractor':
+        _strip_prices([intervention])
     return intervention
 
 
@@ -285,6 +310,8 @@ def create_intervention(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
+    if current_user.role == 'subcontractor':
+        raise HTTPException(status_code=403, detail="Réservé aux admins et employés.")
     # Rejeu d'une operation hors-connexion deja traitee : on renvoie l'existante
     # au lieu d'en creer une seconde.
     seen = already_processed(db, intervention.client_operation_id)
@@ -442,8 +469,13 @@ def update_intervention(
             db, db_intervention, db_intervention.reprise_chain_id,
         )
 
-    # Filtrage des champs autorisés pour les non-admins
-    if current_user.role != 'admin':
+    # Filtrage des champs autorisés pour les non-admins. Un sous-traitant ne
+    # touche jamais aux horaires/prix/reprise — seulement le statut et les
+    # heures réelles de passage.
+    if current_user.role == 'subcontractor':
+        SUBCONTRACTOR_ALLOWED = {"status", "real_start_time", "real_end_time"}
+        intervention_update = {k: v for k, v in intervention_update.items() if k in SUBCONTRACTOR_ALLOWED}
+    elif current_user.role != 'admin':
         EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time", "payment_mode", "is_invoice"}
         intervention_update = {k: v for k, v in intervention_update.items() if k in EMPLOYEE_ALLOWED}
 
@@ -501,7 +533,74 @@ def update_intervention(
 
     db.commit()
     db.refresh(db_intervention)
+    if current_user.role == 'subcontractor':
+        _strip_prices([db_intervention])
     return db_intervention
+
+
+class RecurrenceScopeBody(BaseModel):
+    scope: Literal["following", "all"]
+    fields: dict  # sous-ensemble de champs à propager (jamais start_time/end_time/time_tbd)
+
+
+# Champs ignorés même s'ils sont présents dans le body : chaque occurrence
+# garde sa propre date/heure et son propre statut/historique.
+RECURRENCE_SCOPE_FORBIDDEN_KEYS = {
+    "start_time", "end_time", "time_tbd", "status",
+    "reprise_taken", "reprise_note", "recurrence_rule", "recurrence_group_id",
+}
+
+
+@router.patch("/{intervention_id}/recurrence-scope")
+def update_intervention_recurrence_scope(
+    intervention_id: UUID,
+    body: RecurrenceScopeBody,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Propage un changement (hors horaires) à toute une série récurrente, ou
+    à cette occurrence et celles qui suivent — voir `update_intervention` pour
+    l'édition d'une seule occurrence."""
+    if current_user.role != 'admin':
+        raise HTTPException(status_code=403, detail="Réservé aux admins.")
+    anchor = db.query(Intervention).filter(Intervention.id == intervention_id).first()
+    if not anchor or not anchor.recurrence_group_id:
+        raise HTTPException(status_code=404, detail="Intervention introuvable ou hors série")
+
+    fields = {k: v for k, v in body.fields.items() if k not in RECURRENCE_SCOPE_FORBIDDEN_KEYS}
+
+    query = db.query(Intervention).filter(Intervention.recurrence_group_id == anchor.recurrence_group_id)
+    if body.scope == "following":
+        query = query.filter(Intervention.start_time >= anchor.start_time)
+    targets = query.all()
+
+    updated = 0
+    for target in targets:
+        for key, value in fields.items():
+            if key == "employee_ids":
+                target.employees = db.query(Employee).filter(Employee.id.in_(value)).all()
+            elif key == "items":
+                db.query(InterventionItem).filter(InterventionItem.intervention_id == target.id).delete()
+                for item_data in value:
+                    db.add(InterventionItem(
+                        intervention_id=target.id,
+                        label=item_data["label"],
+                        price=item_data["price"],
+                        client_service_id=item_data.get("client_service_id"),
+                        intervention_service_id=item_data.get("intervention_service_id"),
+                        on_demand=item_data.get("on_demand", False),
+                    ))
+            elif hasattr(target, key):
+                setattr(target, key, value)
+        updated += 1
+
+    _add_audit(
+        db, "modified", current_user.id, intervention_id,
+        f"Modifiée en série ({'toutes' if body.scope == 'all' else 'celle-ci et les suivantes'}) : {updated} occurrence(s)",
+        {"scope": body.scope, "fields": list(fields.keys()), "count": updated},
+    )
+    db.commit()
+    return {"ok": True, "updated": updated}
 
 
 class ItemsDoneBody(BaseModel):
@@ -517,6 +616,8 @@ def update_items_done(
 ):
     """Marque certaines prestations comme non faites lors de la clôture d'une
     intervention, et recalcule price_estimated en conséquence."""
+    if current_user.role == 'subcontractor':
+        raise HTTPException(status_code=403, detail="Réservé aux admins et employés.")
     db_intervention = _load_intervention(intervention_id, db)
     if not db_intervention:
         raise HTTPException(status_code=404, detail="Introuvable")

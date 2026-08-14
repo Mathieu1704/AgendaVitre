@@ -254,7 +254,7 @@ export default function CalendarScreen() {
   const params = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const { isDark } = useTheme();
-  const { isAdmin, userZone } = useAuth();
+  const { isAdmin, isSubcontractor, userZone } = useAuth();
   const queryClient = useQueryClient();
 
   const insets = useSafeAreaInsets();
@@ -764,14 +764,14 @@ export default function CalendarScreen() {
               weekStart={startOfWeek(cursorDate, 1)}
               interventions={calendarInterventions}
               isDark={isDark}
-              onEventUpdate={handleEventUpdate}
+              onEventUpdate={isSubcontractor ? undefined : handleEventUpdate}
             />
           ) : (
             <CalendarDayView
               date={toISODate(cursorDate)}
               interventions={calendarInterventions}
               isDark={isDark}
-              onEventUpdate={handleEventUpdate}
+              onEventUpdate={isSubcontractor ? undefined : handleEventUpdate}
             />
           )}
         </View>

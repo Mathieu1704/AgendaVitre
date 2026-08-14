@@ -18,6 +18,9 @@ export const useAuth = () => {
   const initial = readProfileSync(); // synchrone sur web uniquement
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(initial?.role === "admin");
+  const [isSubcontractor, setIsSubcontractor] = useState(
+    initial?.role === "subcontractor",
+  );
   const [userZone, setUserZone] = useState<"hainaut" | "ardennes">(
     initial?.zone ?? "hainaut",
   );
@@ -38,6 +41,7 @@ export const useAuth = () => {
     }) => {
       if (cancelled) return;
       setIsAdmin(p.role === "admin");
+      setIsSubcontractor(p.role === "subcontractor");
       setUserZone(p.zone);
       setUserName(p.fullName);
     };
@@ -72,7 +76,10 @@ export const useAuth = () => {
         // Hors réseau, on conserve le profil en cache : le remettre à zéro
         // ferait perdre à l'ouvrier son rôle et sa zone alors qu'ils sont
         // connus. On ne retombe sur "employee" que sans cache du tout.
-        if (!cached && !cancelled) setIsAdmin(false);
+        if (!cached && !cancelled) {
+          setIsAdmin(false);
+          setIsSubcontractor(false);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -81,6 +88,7 @@ export const useAuth = () => {
     const signOutLocal = async () => {
       setSession(null);
       setIsAdmin(false);
+      setIsSubcontractor(false);
       setLoading(false);
       await clearProfile();
       await clearOutbox();
@@ -127,6 +135,7 @@ export const useAuth = () => {
       if (session?.user) checkRole();
       else {
         setIsAdmin(false);
+        setIsSubcontractor(false);
         setLoading(false);
       }
     });
@@ -149,5 +158,5 @@ export const useAuth = () => {
     };
   }, []);
 
-  return { session, isAdmin, userZone, userName, loading };
+  return { session, isAdmin, isSubcontractor, userZone, userName, loading };
 };

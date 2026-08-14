@@ -69,6 +69,9 @@ def create_employee(
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Accès refusé. Admin requis.")
 
+    if emp_data.role not in ("admin", "employee", "subcontractor"):
+        raise HTTPException(status_code=400, detail="Rôle invalide.")
+
     # 2. Création dans Supabase Auth
     password = emp_data.password or secrets.token_urlsafe(12)
     try:
@@ -151,6 +154,9 @@ def update_employee(
         raise HTTPException(status_code=404, detail="Employé non trouvé")
 
     update_data = obj_in.model_dump(exclude_unset=True)
+
+    if "role" in update_data and update_data["role"] not in ("admin", "employee", "subcontractor"):
+        raise HTTPException(status_code=400, detail="Rôle invalide.")
 
     # Si on change les heures par jour, on recalcule weekly_hours et daily_capacity depuis leur somme
     if update_data.get("hours_per_weekday"):
