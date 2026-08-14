@@ -29,6 +29,7 @@ import { newTempId } from "../../../src/lib/offline/idMap";
 import {
   applyCreateReprise,
   applyEditIntervention,
+  applyItemsDone,
   applyMarkDone,
   applyServiceCreate,
   applyServiceRename,
@@ -118,9 +119,14 @@ const PENDING_CHAIN_PREFIX = "__pending__:";
 const pendingChainId = (label: string) => `${PENDING_CHAIN_PREFIX}${label}`;
 const isPendingChainId = (id: string) => id.startsWith(PENDING_CHAIN_PREFIX);
 
-function pendingChainServices(source: any, startAt: number): ClientService[] {
+function pendingChainServices(
+  source: any,
+  startAt: number,
+  excludeAdjustments: boolean = false,
+): ClientService[] {
   return (source?.items ?? [])
     .filter((item: any) => !item.client_service_id && !item.intervention_service_id)
+    .filter((item: any) => !excludeAdjustments || !item.is_adjustment)
     .map((item: any, i: number) => ({
       id: pendingChainId(item.label),
       label: item.label,
@@ -314,13 +320,27 @@ function generateDates(
 
 export default function AddInterventionScreen() {
   const router = useRouter();
-  const { id, reprise_of, duplicate_of, from_view, from_date, from_zone } = useLocalSearchParams<{
+  const {
+    id,
+    reprise_of,
+    duplicate_of,
+    from_view,
+    from_date,
+    from_zone,
+    pending_not_done,
+    pending_adjustments,
+  } = useLocalSearchParams<{
     id?: string;
     reprise_of?: string;
     duplicate_of?: string;
     from_view?: string;
     from_date?: string;
     from_zone?: string;
+    // Checklist de clôture pas encore enregistrée : transmise depuis la fiche
+    // intervention, à n'appliquer que si cette reprise (ou "pas de reprise")
+    // est réellement confirmée ici — voir handleSubmit / handleNoReprise.
+    pending_not_done?: string;
+    pending_adjustments?: string;
   }>();
   const isEditMode = !!id && !reprise_of && !duplicate_of;
   const isRepriseMode = !!reprise_of;
@@ -330,6 +350,27 @@ export default function AddInterventionScreen() {
   // pour un chantier étalé sur plusieurs jours, ex: 3 jours x 8h).
   const isDuplicateMode = !!duplicate_of;
   const repriseSourceId = reprise_of || duplicate_of;
+
+  const pendingNotDoneIds: string[] = useMemo(() => {
+    if (!pending_not_done) return [];
+    try {
+      const parsed = JSON.parse(pending_not_done);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, [pending_not_done]);
+  const pendingAdjustmentItems: { label: string; price: number }[] = useMemo(() => {
+    if (!pending_adjustments) return [];
+    try {
+      const parsed = JSON.parse(pending_adjustments);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, [pending_adjustments]);
+  const hasPendingChecklist =
+    pendingNotDoneIds.length > 0 || pendingAdjustmentItems.length > 0;
 
   const { isAdmin, isSubcontractor, userZone } = useAuth();
   const queryClient = useQueryClient();
@@ -639,7 +680,11 @@ export default function AddInterventionScreen() {
     const real = servicesAttachedToIntervention(source, "intervention_service_id");
     // Encore ad-hoc côté serveur, mais affichées dès maintenant comme des
     // cases cochées : le backend les rattachera par libellé à la sauvegarde.
-    const pending = pendingChainServices(source, real.length);
+    const pending = pendingChainServices(
+      source,
+      real.length,
+      isRepriseMode || isDuplicateMode,
+    );
     return [...real, ...pending];
   }, [isEditMode, isRepriseMode, isDuplicateMode, interventionData, repriseSource]);
 
@@ -995,8 +1040,12 @@ export default function AddInterventionScreen() {
         const resolveId = (i: any) =>
           i.client_service_id || i.intervention_service_id ||
           (!repriseClientId ? pendingChainId(i.label) : null);
-        const withId = repriseSource.items.filter((i: any) => resolveId(i));
-        const withoutId = repriseSource.items.filter((i: any) => !resolveId(i));
+        // Les corrections de prix ajoutées à la clôture (déduction partielle,
+        // supplément imprévu) ne sont pas des prestations récurrentes : elles
+        // ne doivent pas se retrouver précochées sur la reprise suivante.
+        const repriseItems = repriseSource.items.filter((i: any) => !i.is_adjustment);
+        const withId = repriseItems.filter((i: any) => resolveId(i));
+        const withoutId = repriseItems.filter((i: any) => !resolveId(i));
         setCheckedServiceIds(new Set(withId.map((i: any) => String(resolveId(i)))));
         const overrides: Record<string, string> = {};
         withId.forEach((i: any) => {
@@ -1379,6 +1428,18 @@ export default function AddInterventionScreen() {
           body: { status: "done", reprise_taken: true },
           label: "Clôture de l'intervention",
         });
+        // Checklist de clôture préparée sur la fiche d'origine, appliquée
+        // seulement maintenant que la reprise est réellement confirmée.
+        if (hasPendingChecklist) {
+          applyItemsDone(queryClient, String(reprise_of), pendingNotDoneIds, pendingAdjustmentItems);
+          await enqueue({
+            kind: "items-done",
+            method: "PATCH",
+            url: `/api/interventions/${reprise_of}/items-done`,
+            body: { not_done_item_ids: pendingNotDoneIds, new_items: pendingAdjustmentItems },
+            label: "Prestations réalisées",
+          });
+        }
       }
 
       const msg =
@@ -1439,6 +1500,18 @@ export default function AddInterventionScreen() {
         body: { note },
         label: "Clôture sans reprise",
       });
+      // Checklist de clôture préparée sur la fiche d'origine, appliquée
+      // seulement maintenant que "pas de reprise" est réellement confirmé.
+      if (hasPendingChecklist) {
+        applyItemsDone(queryClient, String(reprise_of), pendingNotDoneIds, pendingAdjustmentItems);
+        await enqueue({
+          kind: "items-done",
+          method: "PATCH",
+          url: `/api/interventions/${reprise_of}/items-done`,
+          body: { not_done_item_ids: pendingNotDoneIds, new_items: pendingAdjustmentItems },
+          label: "Prestations réalisées",
+        });
+      }
       toast.success(
         "Enregistré",
         isOnlineNow()
