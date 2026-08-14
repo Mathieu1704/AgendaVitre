@@ -132,6 +132,10 @@ export default function InterventionDetailScreen() {
     // un retour ultérieur au focus la réconciliera si nécessaire.
     staleTime: 30 * 1000,
     refetchOnMount: true,
+    // Pas de push temps réel : sans ça, un admin qui garde cet écran ouvert
+    // ne voit jamais un employé/sous-traitant clôturer l'intervention en
+    // direct depuis un autre appareil — il faut ressortir puis revenir.
+    refetchInterval: 20 * 1000,
   });
 
   const { data: companySettings } = useQuery({
