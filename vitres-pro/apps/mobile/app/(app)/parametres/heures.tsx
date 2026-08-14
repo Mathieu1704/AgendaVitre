@@ -5,7 +5,6 @@ import {
   Text,
   Pressable,
   ActivityIndicator,
-  Platform,
   RefreshControl,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
@@ -56,7 +55,6 @@ export default function HeuresEncaissementScreen() {
   const { isDark } = useTheme();
   const queryClient = useQueryClient();
   const router = useRouter();
-  const isWeb = Platform.OS === "web";
 
   const { data: summary, isLoading, error, refetch, isRefetching } = useWeeklySummary();
   const { data: companySettings } = useQuery({
@@ -146,27 +144,24 @@ export default function HeuresEncaissementScreen() {
     >
       <Stack.Screen options={{ headerShown: false }} />
 
-      <View
-        className="px-4 pb-4 flex-row items-center"
-        style={{ paddingTop: isWeb ? 24 : 10 }}
-      >
-        <Button
-          variant="ghost"
-          size="icon"
-          onPress={() => router.push("/(app)/parametres")}
-        >
-          <ChevronLeft size={24} color={isDark ? "white" : "black"} />
-        </Button>
-        <View style={{ marginLeft: 4 }}>
-          <Text className="text-2xl font-bold text-foreground dark:text-slate-50">
+      <View className="px-4 pt-4 pb-2 border-b border-border dark:border-slate-800">
+        <View className="flex-row items-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            onPress={() => router.push("/(app)/parametres")}
+          >
+            <ChevronLeft size={24} color={isDark ? "white" : "black"} />
+          </Button>
+          <Text className="text-xl font-bold text-foreground dark:text-white ml-2">
             Heures & Encaissement
           </Text>
-          {summary && (
-            <Text className="text-sm text-muted-foreground mt-1">
-              Semaine du {summary.week_start} au {summary.week_end}
-            </Text>
-          )}
         </View>
+        {summary && (
+          <Text className="text-sm text-muted-foreground mt-1 ml-14">
+            Semaine du {summary.week_start} au {summary.week_end}
+          </Text>
+        )}
       </View>
 
       {isLoading ? (

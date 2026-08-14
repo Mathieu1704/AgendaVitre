@@ -97,8 +97,8 @@ export default function CreateEmployeeScreen() {
         backgroundColor: isDark ? "#020817" : "#FFFFFF",
       }}
     >
-      {/* Header Simple (Aligné sur Add Client) */}
-      <View className="px-4 pt-4 pb-2 flex-row items-center">
+      {/* Header */}
+      <View className="px-4 pt-4 pb-2 flex-row items-center border-b border-border dark:border-slate-800">
         <Button
           variant="ghost"
           size="icon"

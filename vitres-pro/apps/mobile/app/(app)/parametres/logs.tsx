@@ -9,6 +9,7 @@ import {
   ArrowRightLeft, RefreshCw, AlertTriangle, History,
 } from "lucide-react-native";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
+import { Button } from "../../../src/ui/components/Button";
 import { useLogs, type AuditLog } from "../../../src/hooks/useLogs";
 
 type Filter = "all" | "created" | "deleted" | "modified" | "status_change" | "no_reprise";
@@ -220,14 +221,14 @@ export default function LogsScreen() {
       style={{ paddingTop: insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
     >
       {/* Header */}
-      <View className="px-4 pt-4 pb-3 flex-row items-center border-b border-border dark:border-slate-800">
-        <Pressable
+      <View className="px-4 pt-4 pb-2 flex-row items-center border-b border-border dark:border-slate-800">
+        <Button
+          variant="ghost"
+          size="icon"
           onPress={() => router.push("/(app)/parametres")}
-          className="p-2 rounded-full active:bg-muted mr-1"
         >
           <ChevronLeft size={24} color={isDark ? "white" : "black"} />
-        </Pressable>
-        <History size={20} color="#3B82F6" />
+        </Button>
         <Text className="text-xl font-bold text-foreground dark:text-white ml-2 flex-1">
           Historique
         </Text>

@@ -24,6 +24,7 @@ import {
   MapPin,
   Clock,
   EyeOff,
+  Wallet,
 } from "lucide-react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
 import Constants from "expo-constants";
@@ -414,6 +415,36 @@ export default function ParametresScreen() {
                           </Text>
                           <Text className="text-sm text-muted-foreground leading-tight">
                             Gérer les tarifs €/h
+                          </Text>
+                        </View>
+                      </View>
+                      <ChevronRight
+                        size={20}
+                        color={isDark ? "white" : "black"}
+                      />
+                    </CardContent>
+                  </Card>
+                </Pressable>
+                {/* Heures & Encaissement */}
+                <Pressable
+                  onPress={() => router.push("/(app)/parametres/heures" as any)}
+                  className="mb-3"
+                >
+                  <Card
+                    className="rounded-[32px] bg-teal-500/5 border-teal-200 dark:border-teal-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(20,184,166,0.05)" }}
+                  >
+                    <CardContent className="p-4 flex-row items-center justify-between">
+                      <View className="flex-row items-center gap-4 flex-1">
+                        <View className="bg-teal-500 rounded-full w-12 h-12 items-center justify-center">
+                          <Wallet size={24} color="white" />
+                        </View>
+                        <View className="flex-1 justify-center">
+                          <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                            Heures & Encaissement
+                          </Text>
+                          <Text className="text-sm text-muted-foreground leading-tight">
+                            Pointages, heures sup, cash à remettre
                           </Text>
                         </View>
                       </View>

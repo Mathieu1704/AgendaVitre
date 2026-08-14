@@ -117,23 +117,15 @@ export default function TarifsScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Header */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          gap: 12,
-        }}
-      >
-        <Pressable
+      <View className="px-4 pt-4 pb-2 flex-row items-center border-b border-border dark:border-slate-800">
+        <Button
+          variant="ghost"
+          size="icon"
           onPress={() => router.push("/(app)/parametres")}
-          className="w-10 h-10 rounded-full items-center justify-center active:opacity-60"
-          style={{ backgroundColor: isDark ? "#1E293B" : "#F1F5F9" }}
         >
-          <ChevronLeft size={22} color={isDark ? "white" : "#09090B"} />
-        </Pressable>
-        <Text className="text-2xl font-bold text-foreground dark:text-white flex-1">
+          <ChevronLeft size={24} color={isDark ? "white" : "black"} />
+        </Button>
+        <Text className="text-xl font-bold text-foreground dark:text-white ml-2">
           Taux horaires
         </Text>
       </View>
