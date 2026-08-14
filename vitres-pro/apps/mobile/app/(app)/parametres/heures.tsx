@@ -170,39 +170,6 @@ export default function HeuresEncaissementScreen() {
             Semaine du {summary.week_start} au {summary.week_end}
           </Text>
         )}
-        <Pressable
-          onPress={() => setIncludeCurrentWeek((v) => !v)}
-          style={{
-            marginLeft: 56,
-            marginTop: 10,
-            alignSelf: "flex-start",
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 6,
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: includeCurrentWeek ? "#3B82F6" : (isDark ? "#334155" : "#E2E8F0"),
-            backgroundColor: includeCurrentWeek ? "rgba(59,130,246,0.1)" : "transparent",
-          }}
-        >
-          <Calculator size={13} color={includeCurrentWeek ? "#3B82F6" : "#94A3B8"} />
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "700",
-              color: includeCurrentWeek ? "#3B82F6" : "#94A3B8",
-            }}
-          >
-            Calculer avec la semaine en cours
-          </Text>
-        </Pressable>
-        {includeCurrentWeek && (
-          <Text style={{ marginLeft: 56, marginTop: 4, fontSize: 11, color: "#94A3B8" }}>
-            Solde provisoire — la semaine n'est pas encore terminée.
-          </Text>
-        )}
       </View>
 
       {isLoading ? (
@@ -232,6 +199,37 @@ export default function HeuresEncaissementScreen() {
             <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3B82F6" />
           }
         >
+          <Pressable
+            onPress={() => setIncludeCurrentWeek((v) => !v)}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              height: 56,
+              borderRadius: 20,
+              borderWidth: 1.5,
+              borderColor: includeCurrentWeek ? "#3B82F6" : (isDark ? "#334155" : "#E2E8F0"),
+              backgroundColor: includeCurrentWeek ? "rgba(59,130,246,0.1)" : (isDark ? "#0F172A" : "#F8FAFC"),
+            }}
+          >
+            <Calculator size={20} color={includeCurrentWeek ? "#3B82F6" : "#94A3B8"} />
+            <Text
+              style={{
+                fontSize: 15,
+                fontWeight: "700",
+                color: includeCurrentWeek ? "#3B82F6" : (isDark ? "#F1F5F9" : "#0F172A"),
+              }}
+            >
+              Calculer avec la semaine en cours
+            </Text>
+          </Pressable>
+          {includeCurrentWeek && (
+            <Text style={{ marginTop: -8, fontSize: 12, color: "#94A3B8", textAlign: "center" }}>
+              Solde provisoire — la semaine n'est pas encore terminée.
+            </Text>
+          )}
+
           {(summary?.employees ?? []).length === 0 && (
             <Text className="text-center text-muted-foreground mt-10">
               Aucun employé.
@@ -357,9 +355,9 @@ export default function HeuresEncaissementScreen() {
                 </Pressable>
               </View>
 
-              {/* Grille des 7 jours */}
+              {/* Grille des jours ouvrés (lun-ven) */}
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                {emp.daily_entries.map((day, i) => {
+                {emp.daily_entries.slice(0, 5).map((day, i) => {
                   const punched = !!(day.clock_in_at && day.clock_out_at);
                   const ok = punched || day.is_absence;
                   return (
