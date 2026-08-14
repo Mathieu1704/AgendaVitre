@@ -37,6 +37,7 @@ import {
   X,
   Check,
   Repeat,
+  Trash2,
 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -94,6 +95,27 @@ export default function InterventionDetailScreen() {
   const [showAllDoneConfirm, setShowAllDoneConfirm] = useState(false);
   const [showItemsChecklist, setShowItemsChecklist] = useState(false);
   const [notDoneIds, setNotDoneIds] = useState<Set<string>>(new Set());
+  // Ajustements ad-hoc à la clôture : déduction partielle sur une prestation
+  // décochée, ou supplément imprévu. `price` est ce qui compte réellement
+  // dans le Total (positif dans les deux cas : le crédit pour la part faite
+  // d'une prestation partielle, ou le montant du supplément) ; `displayAmount`
+  // /`displaySign` ne servent qu'à l'affichage ("-10 €" = 10€ non faits, même
+  // si le crédit réellement ajouté au total est price = prixItem - 10).
+  const [adjustments, setAdjustments] = useState<
+    {
+      label: string;
+      price: number;
+      forItemId?: string;
+      displayAmount: number;
+      displaySign: "+" | "-";
+    }[]
+  >([]);
+  const [adjustmentDraft, setAdjustmentDraft] = useState<null | {
+    forItemId?: string;
+    label: string;
+    amountText: string;
+    sign: "+" | "-";
+  }>(null);
   const [editingField, setEditingField] = useState<null | {
     field: "address" | "phone" | "email";
     label: string;
@@ -377,27 +399,6 @@ export default function InterventionDetailScreen() {
       );
     },
     onError: () => toast.error("Erreur", "Impossible de modifier le paiement."),
-  });
-
-  const itemsDoneMutation = useMutation({
-    mutationFn: async (notDoneItemIds: string[]) => {
-      applyItemsDone(queryClient, String(id), notDoneItemIds);
-      await enqueue({
-        kind: "items-done",
-        method: "PATCH",
-        url: `/api/interventions/${id}/items-done`,
-        body: { not_done_item_ids: notDoneItemIds },
-        label: "Prestations réalisées",
-      });
-    },
-    onSuccess: () => {
-      setShowItemsChecklist(false);
-      router.push({
-        pathname: "/(app)/calendar/add",
-        params: { reprise_of: id, from_view, from_date, from_zone },
-      });
-    },
-    onError: () => toast.error("Erreur", "Impossible d'enregistrer les prestations."),
   });
 
   // Clôture pour les sous-traitants : même checklist par prestation que pour
@@ -1136,52 +1137,95 @@ export default function InterventionDetailScreen() {
                       </Text>
                       {intervention.items && intervention.items.length > 0 ? (
                         <View className="gap-3 mb-4">
-                          {intervention.items.map((item: any, idx: number) => (
-                            <View
-                              key={idx}
-                              className="flex-row justify-between items-center pb-2 border-b border-border dark:border-slate-800 last:border-0"
-                            >
-                              <View className="flex-row items-center flex-1 mr-4">
-                                <Text
-                                  className={`font-medium ${
-                                    item.done === false
-                                      ? "text-muted-foreground line-through"
-                                      : "text-foreground dark:text-white"
-                                  }`}
-                                >
-                                  {item.label}
-                                </Text>
-                                {item.on_demand && (
-                                  <View className="ml-2 px-1.5 py-0.5 rounded-md bg-violet-500/10">
-                                    <Text className="text-[10px] font-bold text-violet-500">
-                                      +33%
-                                    </Text>
+                          {(() => {
+                            const allItems = intervention.items as any[];
+                            // Une déduction partielle ("Label (partiel)", is_adjustment)
+                            // se rattache à la prestation décochée du même nom : les
+                            // deux se fusionnent en une seule ligne (prix barré ->
+                            // nouveau prix), au lieu d'apparaître comme deux lignes.
+                            const partialByTarget = new Map<string, any>();
+                            allItems.forEach((it) => {
+                              if (it.is_adjustment && typeof it.label === "string" && it.label.endsWith(" (partiel)")) {
+                                partialByTarget.set(it.label.slice(0, -" (partiel)".length), it);
+                              }
+                            });
+                            const consumedIds = new Set(
+                              Array.from(partialByTarget.values()).map((a) => a.id),
+                            );
+                            return allItems
+                              .filter((it) => !consumedIds.has(it.id))
+                              .map((item: any, idx: number) => {
+                                const partial =
+                                  item.done === false ? partialByTarget.get(item.label) : undefined;
+                                const isSupplement = item.is_adjustment && !partial;
+                                const showStrike = !!partial || (item.on_demand && !partial);
+                                const strikePrice = item.price;
+                                const displayPrice = partial
+                                  ? partial.price
+                                  : item.on_demand
+                                    ? onDemandPrice(Number(item.price))
+                                    : item.price;
+                                return (
+                                  <View
+                                    key={item.id ?? idx}
+                                    className="flex-row justify-between items-center pb-2 border-b border-border dark:border-slate-800 last:border-0"
+                                  >
+                                    <View className="flex-row items-center flex-1 mr-4">
+                                      <Text
+                                        className={`font-medium ${
+                                          item.done === false && !partial
+                                            ? "text-muted-foreground line-through"
+                                            : "text-foreground dark:text-white"
+                                        }`}
+                                      >
+                                        {item.label}
+                                      </Text>
+                                      {item.on_demand && !partial && (
+                                        <View className="ml-2 px-1.5 py-0.5 rounded-md bg-violet-500/10">
+                                          <Text className="text-[10px] font-bold text-violet-500">
+                                            +33%
+                                          </Text>
+                                        </View>
+                                      )}
+                                      {partial && (
+                                        <View className="ml-2 px-1.5 py-0.5 rounded-md bg-red-500/10">
+                                          <Text className="text-[10px] font-bold text-red-500">
+                                            partiel
+                                          </Text>
+                                        </View>
+                                      )}
+                                      {isSupplement && (
+                                        <View className="ml-2 px-1.5 py-0.5 rounded-md bg-emerald-500/10">
+                                          <Text className="text-[10px] font-bold text-emerald-500">
+                                            supplément
+                                          </Text>
+                                        </View>
+                                      )}
+                                    </View>
+                                    <View className="flex-row items-center">
+                                      {showStrike && (
+                                        <Text className="text-sm text-muted-foreground line-through mr-2">
+                                          {formatPrice(strikePrice, "0 €")}
+                                        </Text>
+                                      )}
+                                      <Text
+                                        className={`font-bold ${
+                                          item.done === false && !partial
+                                            ? "text-muted-foreground line-through"
+                                            : partial
+                                              ? "text-red-500"
+                                              : item.on_demand
+                                                ? "text-violet-500"
+                                                : "text-foreground dark:text-white"
+                                        }`}
+                                      >
+                                        {formatPrice(displayPrice, "0 €")}
+                                      </Text>
+                                    </View>
                                   </View>
-                                )}
-                              </View>
-                              <View className="flex-row items-center">
-                                {item.on_demand && (
-                                  <Text className="text-sm text-muted-foreground line-through mr-2">
-                                    {formatPrice(item.price, "0 €")}
-                                  </Text>
-                                )}
-                                <Text
-                                  className={`font-bold ${
-                                    item.done === false
-                                      ? "text-muted-foreground line-through"
-                                      : item.on_demand
-                                        ? "text-violet-500"
-                                        : "text-foreground dark:text-white"
-                                  }`}
-                                >
-                                  {formatPrice(
-                                    item.on_demand ? onDemandPrice(Number(item.price)) : item.price,
-                                    "0 €",
-                                  )}
-                                </Text>
-                              </View>
-                            </View>
-                          ))}
+                                );
+                              });
+                          })()}
                           <View className="flex-row justify-between items-center pt-2 mt-1">
                             <Text className="text-lg font-bold text-foreground dark:text-white">
                               Total
@@ -1389,7 +1433,14 @@ export default function InterventionDetailScreen() {
       />
 
       {/* Clôture d'intervention : checklist des prestations réalisées */}
-      <Dialog open={showItemsChecklist} onClose={() => setShowItemsChecklist(false)}>
+      <Dialog
+        open={showItemsChecklist}
+        onClose={() => {
+          setShowItemsChecklist(false);
+          setAdjustments([]);
+          setAdjustmentDraft(null);
+        }}
+      >
         <View style={{ padding: 20, gap: 16 }}>
           <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", textAlign: "center" }}>
             Quelles prestations ont été faites ?
@@ -1397,81 +1448,238 @@ export default function InterventionDetailScreen() {
           <View style={{ gap: 10 }}>
             {(intervention?.items || []).map((item: any) => {
               const checked = !notDoneIds.has(item.id);
+              const itemAdjustments = adjustments.filter((a) => a.forItemId === item.id);
               return (
-                <Pressable
-                  key={item.id}
-                  onPress={() =>
-                    setNotDoneIds((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(item.id)) next.delete(item.id);
-                      else next.add(item.id);
-                      return next;
-                    })
-                  }
-                  style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
-                >
-                  <View
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 6,
-                      borderWidth: 2,
-                      borderColor: checked ? "#3B82F6" : "#CBD5E1",
-                      backgroundColor: checked ? "#3B82F6" : "transparent",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
+                <View key={item.id} style={{ gap: 6 }}>
+                  <Pressable
+                    onPress={() =>
+                      setNotDoneIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(item.id)) next.delete(item.id);
+                        else next.add(item.id);
+                        return next;
+                      })
+                    }
+                    style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
                   >
-                    {checked && <Check size={13} color="#fff" />}
-                  </View>
-                  <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
-                    <Text
+                    <View
                       style={{
-                        color: isDark ? "#F8FAFC" : "#09090B",
-                        textDecorationLine: checked ? "none" : "line-through",
-                        opacity: checked ? 1 : 0.5,
+                        width: 22,
+                        height: 22,
+                        borderRadius: 6,
+                        borderWidth: 2,
+                        borderColor: checked ? "#3B82F6" : "#CBD5E1",
+                        backgroundColor: checked ? "#3B82F6" : "transparent",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
                       }}
                     >
-                      {item.label}
-                    </Text>
-                    {!isSubcontractor && item.on_demand && (
-                      <View style={{ marginLeft: 6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: "rgba(139,92,246,0.1)" }}>
-                        <Text style={{ fontSize: 10, fontWeight: "700", color: "#8B5CF6" }}>
-                          +33%
+                      {checked && <Check size={13} color="#fff" />}
+                    </View>
+                    <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+                      <Text
+                        style={{
+                          color: isDark ? "#F8FAFC" : "#09090B",
+                          textDecorationLine: checked ? "none" : "line-through",
+                          opacity: checked ? 1 : 0.5,
+                        }}
+                      >
+                        {item.label}
+                      </Text>
+                      {!isSubcontractor && item.on_demand && (
+                        <View style={{ marginLeft: 6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: "rgba(139,92,246,0.1)" }}>
+                          <Text style={{ fontSize: 10, fontWeight: "700", color: "#8B5CF6" }}>
+                            +33%
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    {!isSubcontractor && (
+                      <View style={{ flexDirection: "row", alignItems: "center" }}>
+                        {item.on_demand && (
+                          <Text style={{ fontSize: 13, color: isDark ? "#64748B" : "#94A3B8", textDecorationLine: "line-through", marginRight: 6 }}>
+                            {formatPrice(item.price, "0 €")}
+                          </Text>
+                        )}
+                        <Text style={{ fontWeight: "700", color: item.on_demand ? "#8B5CF6" : isDark ? "#F8FAFC" : "#09090B" }}>
+                          {formatPrice(item.on_demand ? onDemandPrice(Number(item.price)) : item.price, "0 €")}
                         </Text>
                       </View>
                     )}
-                  </View>
-                  {!isSubcontractor && (
-                    <View style={{ flexDirection: "row", alignItems: "center" }}>
-                      {item.on_demand && (
-                        <Text style={{ fontSize: 13, color: isDark ? "#64748B" : "#94A3B8", textDecorationLine: "line-through", marginRight: 6 }}>
-                          {formatPrice(item.price, "0 €")}
-                        </Text>
+                  </Pressable>
+
+                  {/* Prestation décochée : déduction partielle (fait en partie) */}
+                  {!isSubcontractor && !checked && (
+                    <View style={{ marginLeft: 32, gap: 4 }}>
+                      {itemAdjustments.map((adj, idx) => {
+                        const globalIdx = adjustments.indexOf(adj);
+                        return (
+                          <View key={idx} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                            <Text style={{ fontSize: 13, color: "#EF4444" }}>
+                              -{formatPrice(adj.displayAmount, "0 €")} · {adj.label}
+                            </Text>
+                            <Pressable
+                              onPress={() => setAdjustments((prev) => prev.filter((_, i) => i !== globalIdx))}
+                              hitSlop={8}
+                            >
+                              <Trash2 size={14} color="#EF4444" />
+                            </Pressable>
+                          </View>
+                        );
+                      })}
+                      {itemAdjustments.length === 0 && (
+                        <Pressable
+                          onPress={() =>
+                            setAdjustmentDraft({
+                              forItemId: item.id,
+                              label: `${item.label} (partiel)`,
+                              amountText: "",
+                              sign: "-",
+                            })
+                          }
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: "600", color: "#EF4444" }}>
+                            − Ajouter un montant partiel fait
+                          </Text>
+                        </Pressable>
                       )}
-                      <Text style={{ fontWeight: "700", color: item.on_demand ? "#8B5CF6" : isDark ? "#F8FAFC" : "#09090B" }}>
-                        {formatPrice(item.on_demand ? onDemandPrice(Number(item.price)) : item.price, "0 €")}
-                      </Text>
                     </View>
                   )}
-                </Pressable>
+                </View>
               );
             })}
           </View>
+
+          {/* Suppléments imprévus (pas liés à une prestation précise) */}
+          {!isSubcontractor && (
+            <View style={{ gap: 6 }}>
+              {adjustments
+                .filter((a) => !a.forItemId)
+                .map((adj, idx) => {
+                  const globalIdx = adjustments.indexOf(adj);
+                  return (
+                    <View key={idx} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: "#10B981" }}>
+                        +{formatPrice(adj.displayAmount, "0 €")} · {adj.label}
+                      </Text>
+                      <Pressable
+                        onPress={() => setAdjustments((prev) => prev.filter((_, i) => i !== globalIdx))}
+                        hitSlop={8}
+                      >
+                        <Trash2 size={14} color="#EF4444" />
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              <Pressable
+                onPress={() =>
+                  setAdjustmentDraft({ label: "", amountText: "", sign: "+" })
+                }
+              >
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#10B981" }}>
+                  + Ajouter un supplément
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* Mini-formulaire d'ajout d'ajustement (partiel ou supplément) */}
+          {adjustmentDraft && (
+            <View
+              style={{
+                gap: 10,
+                padding: 12,
+                borderRadius: 12,
+                backgroundColor: isDark ? "#1E293B" : "#F1F5F9",
+              }}
+            >
+              <Input
+                label="Libellé"
+                value={adjustmentDraft.label}
+                onChangeText={(t) =>
+                  setAdjustmentDraft((prev) => (prev ? { ...prev, label: t } : prev))
+                }
+              />
+              <Input
+                label={adjustmentDraft.sign === "-" ? "Montant à déduire (€)" : "Montant à ajouter (€)"}
+                keyboardType="decimal-pad"
+                value={adjustmentDraft.amountText}
+                onChangeText={(t) =>
+                  setAdjustmentDraft((prev) => (prev ? { ...prev, amountText: t } : prev))
+                }
+              />
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <Pressable
+                  onPress={() => setAdjustmentDraft(null)}
+                  style={{ flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: "center", backgroundColor: isDark ? "#0F172A" : "#E2E8F0" }}
+                >
+                  <Text style={{ fontWeight: "600", color: isDark ? "#F8FAFC" : "#09090B" }}>
+                    Annuler
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    const amount = parseFloat(adjustmentDraft.amountText.replace(",", "."));
+                    if (!Number.isFinite(amount) || amount <= 0 || !adjustmentDraft.label.trim()) {
+                      toast.error("Ajustement", "Libellé et montant valides requis.");
+                      return;
+                    }
+                    // Partiel : le montant tapé est ce qui N'A PAS été fait —
+                    // le crédit réellement ajouté au Total est le prix de la
+                    // prestation (majoré si à la demande) moins ce montant,
+                    // pas le montant lui-même (sinon on soustrairait deux fois :
+                    // une fois en décochant la ligne, une fois via l'ajustement).
+                    let price = amount;
+                    if (adjustmentDraft.sign === "-" && adjustmentDraft.forItemId) {
+                      const sourceItem = (intervention?.items || []).find(
+                        (it: any) => it.id === adjustmentDraft.forItemId,
+                      );
+                      const effectivePrice = sourceItem
+                        ? sourceItem.on_demand
+                          ? onDemandPrice(Number(sourceItem.price))
+                          : Number(sourceItem.price)
+                        : 0;
+                      price = effectivePrice - amount;
+                    } else if (adjustmentDraft.sign === "-") {
+                      price = -amount;
+                    }
+                    setAdjustments((prev) => [
+                      ...prev,
+                      {
+                        label: adjustmentDraft.label.trim(),
+                        price,
+                        forItemId: adjustmentDraft.forItemId,
+                        displayAmount: amount,
+                        displaySign: adjustmentDraft.sign,
+                      },
+                    ]);
+                    setAdjustmentDraft(null);
+                  }}
+                  style={{ flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: "center", backgroundColor: "#3B82F6" }}
+                >
+                  <Text style={{ fontWeight: "700", color: "#fff" }}>
+                    Ajouter
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
           {!isSubcontractor && (
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTopWidth: 1, borderTopColor: isDark ? "#1E293B" : "#E2E8F0" }}>
               <Text style={{ fontWeight: "700", fontSize: 16, color: isDark ? "#F8FAFC" : "#09090B" }}>
                 Total
               </Text>
               <Text style={{ fontWeight: "800", fontSize: 18, color: "#3B82F6" }}>
-                {(intervention?.items || [])
-                  .filter((item: any) => !notDoneIds.has(item.id))
-                  .reduce((sum: number, item: any) => {
-                    const base = Number(item.price);
-                    return sum + (item.on_demand ? onDemandPrice(base) : base);
-                  }, 0)
-                  .toFixed(2)}{" "}
+                {(
+                  (intervention?.items || [])
+                    .filter((item: any) => !notDoneIds.has(item.id))
+                    .reduce((sum: number, item: any) => {
+                      const base = Number(item.price);
+                      return sum + (item.on_demand ? onDemandPrice(base) : base);
+                    }, 0) + adjustments.reduce((sum, a) => sum + a.price, 0)
+                ).toFixed(2)}{" "}
                 €
               </Text>
             </View>
@@ -1489,7 +1697,11 @@ export default function InterventionDetailScreen() {
           )}
           <View style={{ flexDirection: "row", gap: 12 }}>
             <Pressable
-              onPress={() => setShowItemsChecklist(false)}
+              onPress={() => {
+                setShowItemsChecklist(false);
+                setAdjustments([]);
+                setAdjustmentDraft(null);
+              }}
               style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: isDark ? "#1E293B" : "#F1F5F9" }}
             >
               <Text style={{ fontWeight: "600", color: isDark ? "#F8FAFC" : "#09090B" }}>
@@ -1497,13 +1709,36 @@ export default function InterventionDetailScreen() {
               </Text>
             </Pressable>
             <Pressable
-              onPress={() =>
-                isSubcontractor
-                  ? subcontractorChecklistMutation.mutate(Array.from(notDoneIds))
-                  : itemsDoneMutation.mutate(Array.from(notDoneIds))
-              }
-              disabled={isSubcontractor ? subcontractorChecklistMutation.isPending : itemsDoneMutation.isPending}
-              style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: "#3B82F6", opacity: (isSubcontractor ? subcontractorChecklistMutation.isPending : itemsDoneMutation.isPending) ? 0.6 : 1 }}
+              onPress={() => {
+                if (isSubcontractor) {
+                  subcontractorChecklistMutation.mutate(Array.from(notDoneIds));
+                  return;
+                }
+                // Rien n'est sauvegardé ici : la checklist n'est que la
+                // préparation de la clôture. L'état (coché/décoché + ajustements)
+                // part avec l'écran de reprise, et n'est réellement enregistré
+                // que si la reprise (ou "pas de reprise") y est confirmée — si
+                // l'utilisateur en sort sans valider, tout est perdu et
+                // l'intervention reste inchangée, comme si rien ne s'était passé.
+                setShowItemsChecklist(false);
+                router.push({
+                  pathname: "/(app)/calendar/add",
+                  params: {
+                    reprise_of: id,
+                    from_view,
+                    from_date,
+                    from_zone,
+                    pending_not_done: JSON.stringify(Array.from(notDoneIds)),
+                    pending_adjustments: JSON.stringify(
+                      adjustments.map(({ label, price }) => ({ label, price })),
+                    ),
+                  },
+                });
+                setAdjustments([]);
+                setAdjustmentDraft(null);
+              }}
+              disabled={isSubcontractor ? subcontractorChecklistMutation.isPending : false}
+              style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: "#3B82F6", opacity: isSubcontractor && subcontractorChecklistMutation.isPending ? 0.6 : 1 }}
             >
               <Text style={{ fontWeight: "700", color: "#fff" }}>
                 Valider
