@@ -153,19 +153,24 @@ def _overtime_balance(db: Session, emp: Employee) -> tuple[float, date, date]:
         period_start = first_entry.work_date if first_entry else current_week_start
         period_start, _ = _week_bounds(period_start)
 
-    if period_start > current_week_end:
-        return 0.0, period_start, current_week_end
+    # On ne juge que les semaines complètes : la semaine en cours n'est comptée
+    # qu'une fois terminée (dimanche passé), sinon un employé qui n'a pas encore
+    # fini sa semaine afficherait un solde négatif artificiel (0h réelles jusqu'ici
+    # - 37h de plancher) avant même d'avoir eu la chance de pointer ses heures.
+    last_complete_week_end = current_week_start - timedelta(days=1)
+
+    if period_start > last_complete_week_end:
+        return 0.0, period_start, last_complete_week_end
 
     total_delta = 0.0
     week_cursor = period_start
-    while week_cursor <= current_week_end:
+    while week_cursor <= last_complete_week_end:
         w_start, w_end = _week_bounds(week_cursor)
-        w_end = min(w_end, current_week_end)
         actual = _weekly_actual_hours(db, emp, w_start, w_end)
         total_delta += weekly_delta_hours(actual)
         week_cursor = w_end + timedelta(days=1)
 
-    return round(total_delta, 2), period_start, current_week_end
+    return round(total_delta, 2), period_start, last_complete_week_end
 
 
 def _weekly_cash_amount(db: Session, emp: Employee, week_start: date, week_end: date) -> float:
