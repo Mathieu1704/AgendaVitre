@@ -435,7 +435,9 @@ def select_draft_stop(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
-    """La coche hebdomadaire de l'admin : l'equivalent du point au crayon."""
+    """La coche hebdomadaire de l'admin (l'equivalent du point au crayon), et
+    le choix de la variante de la semaine quand le commerce en propose
+    plusieurs (ex: "2 F" une fois, "1 F" la fois suivante)."""
     _admin(current_user)
     run = _load_run(db, run_id, for_update=True)
     if run.publication_status != "draft":
@@ -443,11 +445,20 @@ def select_draft_stop(
     stop = next((item for item in run.stops if item.id == stop_id), None)
     if not stop:
         raise HTTPException(status_code=404, detail="Commerce introuvable.")
+    if payload.selected and stop.services:
+        if payload.service_id is None:
+            raise HTTPException(status_code=422, detail="Choisissez la variante de la semaine pour ce commerce.")
+        service = next((item for item in stop.services if item.id == payload.service_id), None)
+        if not service:
+            raise HTTPException(status_code=422, detail="Cette variante ne fait pas partie de ce commerce.")
+        stop.selected_service_id = service.id
+    elif not payload.selected:
+        stop.selected_service_id = None
     stop.selected = payload.selected
     stop.status = "pending"
     stop.exception_reason = None
     run.intervention.price_estimated = sum(
-        (Decimal(service.price_ht) for run_stop in run.stops if run_stop.selected for service in run_stop.services),
+        (Decimal(run_stop.selected_service.price_ht) for run_stop in run.stops if run_stop.selected and run_stop.selected_service),
         Decimal("0"),
     )
     db.commit()
@@ -490,6 +501,9 @@ def publish_run(
     selected_stops = [stop for stop in run.stops if stop.selected]
     if not selected_stops:
         raise HTTPException(status_code=422, detail="Selectionnez au moins un commerce avant publication.")
+    missing_variant = [stop.name for stop in selected_stops if stop.services and not stop.selected_service_id]
+    if missing_variant:
+        raise HTTPException(status_code=422, detail=f"Choisissez la variante de la semaine pour: {', '.join(missing_variant)}")
     if not payload.employee_ids:
         raise HTTPException(status_code=422, detail="Assignez au moins un employe avant publication.")
     employees = db.query(Employee).filter(Employee.id.in_(payload.employee_ids)).all()
@@ -545,44 +559,14 @@ def resolve_run_stop(
     stop = next((item for item in run.stops if item.id == stop_id and item.selected), None)
     if not stop:
         raise HTTPException(status_code=404, detail="Commerce selectionne introuvable.")
-    services = list(stop.services)
-    not_done_ids = set(payload.not_done_service_ids)
     now = datetime.now(timezone.utc)
     if payload.status == "not_visited":
         reason = (payload.reason or "").strip()
         if not reason:
             raise HTTPException(status_code=422, detail="Une justification est obligatoire pour un commerce non visite.")
-        for service in services:
-            service.status = "not_done"
-            service.exception_reason = reason
-            service.performed_at = None
         stop.status = "not_visited"
         stop.exception_reason = reason
-    elif payload.status == "partial":
-        if not not_done_ids or len(not_done_ids) >= len(services):
-            raise HTTPException(status_code=422, detail="Une tournee partielle doit contenir au moins une prestation faite et une non faite.")
-        unknown = not_done_ids - {service.id for service in services}
-        if unknown:
-            raise HTTPException(status_code=422, detail="Une prestation ne fait pas partie de ce commerce.")
-        for service in services:
-            if service.id in not_done_ids:
-                reason = (payload.service_reasons.get(str(service.id)) or payload.reason or "").strip()
-                if not reason:
-                    raise HTTPException(status_code=422, detail=f"Justification manquante pour {service.label}.")
-                service.status = "not_done"
-                service.exception_reason = reason
-                service.performed_at = None
-            else:
-                service.status = "done"
-                service.exception_reason = None
-                service.performed_at = now
-        stop.status = "partial"
-        stop.exception_reason = (payload.reason or "").strip() or None
     else:
-        for service in services:
-            service.status = "done"
-            service.exception_reason = None
-            service.performed_at = now
         stop.status = "done"
         stop.exception_reason = None
     stop.completed_at = now
@@ -678,15 +662,10 @@ def _billing_rows(db: Session, zone: str, period_start: date) -> Tuple[List[date
     for run in runs:
         bucket = _bucket_for(run.scheduled_date, month_start)
         for stop in run.stops:
-            if not stop.selected:
-                continue
-            done_services = [service for service in stop.services if service.status == "done"]
-            if not done_services:
+            if not stop.selected or stop.status != "done" or not stop.selected_service:
                 continue
             row = rows.setdefault(stop.name, {"payment_text": stop.payment_text, "amounts": {}})
-            row["amounts"][bucket] = row["amounts"].get(bucket, Decimal("0")) + sum(
-                (Decimal(service.price_ht) for service in done_services), Decimal("0"),
-            )
+            row["amounts"][bucket] = row["amounts"].get(bucket, Decimal("0")) + Decimal(stop.selected_service.price_ht)
     return buckets, rows
 
 

@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { onlineManager, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Check, CheckCircle2, ChevronLeft, Circle, RotateCcw, Square, XCircle } from "lucide-react-native";
+import { AlertCircle, Check, ChevronLeft, RotateCcw, X } from "lucide-react-native";
 
 import { useAuth } from "../../../../../src/hooks/useAuth";
 import { api } from "../../../../../src/lib/api";
@@ -11,40 +11,22 @@ import { enqueue } from "../../../../../src/lib/offline/outbox";
 import { hasPendingWrites } from "../../../../../src/lib/offline/outbox";
 import { formatEuro, TourRun, TourRunStop } from "../../../../../src/lib/tours";
 import { useTheme } from "../../../../../src/ui/components/ThemeToggle";
-import { Card } from "../../../../../src/ui/components/Card";
 import { Button } from "../../../../../src/ui/components/Button";
 import { ConfirmModal } from "../../../../../src/ui/components/ConfirmModal";
 import { toast } from "../../../../../src/ui/toast";
 
-type StopDraft = {
-  notDoneIds: string[];
-  reasons: Record<string, string>;
-  generalReason: string;
-};
+type Colors = { text: string; muted: string; border: string; header: string; input: string };
+
+const COLS = { name: 180, variant: 140, payment: 110, status: 100, actions: 150 };
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "À faire",
   done: "Réalisé",
-  partial: "Partiel",
   not_visited: "Non visité",
 };
 
-function optimisticResolve(run: TourRun, stopId: string, status: "done" | "partial" | "not_visited", draft: StopDraft): TourRun {
-  const stops = run.stops.map((stop) => {
-    if (stop.id !== stopId) return stop;
-    const notDone = status === "not_visited" ? stop.services.map((service) => service.id) : draft.notDoneIds;
-    const services = stop.services.map((service) => ({
-      ...service,
-      status: notDone.includes(service.id) ? "not_done" as const : "done" as const,
-      exception_reason: notDone.includes(service.id) ? (draft.reasons[service.id] || draft.generalReason) : null,
-    }));
-    return {
-      ...stop,
-      status,
-      exception_reason: status === "not_visited" ? draft.generalReason : null,
-      services,
-    };
-  });
+function optimisticResolve(run: TourRun, stopId: string, status: "done" | "not_visited", reason: string | null): TourRun {
+  const stops = run.stops.map((stop) => stop.id === stopId ? { ...stop, status, exception_reason: reason } : stop);
   const selected = stops.filter((stop) => stop.selected);
   const resolved = selected.filter((stop) => stop.status !== "pending");
   return {
@@ -61,18 +43,19 @@ export default function TourRunScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const { isAdmin } = useAuth();
   const { isDark } = useTheme();
-  const wide = width >= 820;
-  const [drafts, setDrafts] = useState<Record<string, StopDraft>>({});
   const [busyStop, setBusyStop] = useState<string | null>(null);
+  const [reasonFor, setReasonFor] = useState<string | null>(null);
+  const [reasonDrafts, setReasonDrafts] = useState<Record<string, string>>({});
   const [showCancel, setShowCancel] = useState(false);
-  const text = isDark ? "#F8FAFC" : "#0F172A";
-  const muted = isDark ? "#94A3B8" : "#64748B";
-  const border = isDark ? "#1E293B" : "#E4E4E7";
-  const soft = isDark ? "#1E293B" : "#F1F5F9";
-  const input = isDark ? "#0B1220" : "#F8FAFC";
+  const colors: Colors = {
+    text: isDark ? "#F8FAFC" : "#0F172A",
+    muted: isDark ? "#94A3B8" : "#64748B",
+    border: isDark ? "#1E293B" : "#E4E4E7",
+    header: isDark ? "#111C30" : "#EFF6FF",
+    input: isDark ? "#0B1220" : "#F8FAFC",
+  };
 
   const runQuery = useQuery<TourRun>({
     queryKey: ["tour-run", id],
@@ -82,38 +65,24 @@ export default function TourRunScreen() {
   });
   const run = runQuery.data;
 
-  const getDraft = (stop: TourRunStop): StopDraft => drafts[stop.id] ?? {
-    notDoneIds: stop.services.filter((service) => service.status === "not_done").map((service) => service.id),
-    reasons: Object.fromEntries(stop.services.filter((service) => service.exception_reason).map((service) => [service.id, service.exception_reason ?? ""])),
-    generalReason: stop.exception_reason ?? "",
-  };
-  const updateDraft = (stop: TourRunStop, patch: Partial<StopDraft>) => setDrafts((old) => ({ ...old, [stop.id]: { ...getDraft(stop), ...patch } }));
-
-  const resolveStop = async (stop: TourRunStop, status: "done" | "partial" | "not_visited") => {
-    const draft = getDraft(stop);
-    const notDoneIds = status === "partial" ? draft.notDoneIds : status === "not_visited" ? stop.services.map((service) => service.id) : [];
-    if (status === "partial") {
-      if (!notDoneIds.length || notDoneIds.length >= stop.services.length) return toast.error("Sélection invalide", "Un passage partiel exige au moins une prestation faite et une non faite.");
-      const missing = notDoneIds.find((serviceId) => !(draft.reasons[serviceId] || draft.generalReason).trim());
-      if (missing) return toast.error("Justification requise", "Indiquez pourquoi chaque prestation décochée n'a pas été faite.");
+  const resolveStop = async (stop: TourRunStop, status: "done" | "not_visited") => {
+    const reason = (reasonDrafts[stop.id] ?? "").trim();
+    if (status === "not_visited" && !reason) {
+      setReasonFor(stop.id);
+      return toast.error("Justification requise", "Indiquez pourquoi le commerce n'a pas été visité.");
     }
-    if (status === "not_visited" && !draft.generalReason.trim()) return toast.error("Justification requise", "Indiquez pourquoi le commerce n'a pas été visité.");
     setBusyStop(stop.id);
-    queryClient.setQueryData<TourRun>(["tour-run", id], (old) => old ? optimisticResolve(old, stop.id, status, draft) : old);
+    setReasonFor(null);
+    queryClient.setQueryData<TourRun>(["tour-run", id], (old) => old ? optimisticResolve(old, stop.id, status, status === "not_visited" ? reason : null) : old);
     try {
       await enqueue({
         kind: "tour-stop-resolve",
         method: "POST",
         url: `/api/tours/runs/${id}/stops/${stop.id}/resolve`,
-        body: {
-          status,
-          reason: draft.generalReason.trim() || null,
-          not_done_service_ids: notDoneIds,
-          service_reasons: draft.reasons,
-        },
+        body: { status, reason: status === "not_visited" ? reason : null },
         label: `${stop.name} · ${STATUS_LABELS[status]}`,
       });
-      setDrafts((old) => { const next = { ...old }; delete next[stop.id]; return next; });
+      setReasonDrafts((old) => { const next = { ...old }; delete next[stop.id]; return next; });
       if (onlineManager.isOnline()) setTimeout(() => queryClient.invalidateQueries({ queryKey: ["tour-run", id] }), 900);
     } catch (error: any) {
       queryClient.invalidateQueries({ queryKey: ["tour-run", id] });
@@ -162,6 +131,7 @@ export default function TourRunScreen() {
     return [...map.entries()];
   }, [run]);
   const canClose = Boolean(run && run.stops.filter((stop) => stop.selected).every((stop) => stop.status !== "pending"));
+  const tableWidth = COLS.name + COLS.variant + COLS.payment + COLS.status + COLS.actions;
 
   const backToCalendar = () => router.replace("/(app)/calendar" as any);
 
@@ -170,8 +140,8 @@ export default function TourRunScreen() {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: isDark ? "#020817" : "#FFFFFF", padding: 20, gap: 12 }}>
         <AlertCircle size={28} color="#EF4444" />
-        <Text style={{ color: text, textAlign: "center" }}>Cette tournée n'est pas disponible hors ligne ou vous n'y avez pas accès.</Text>
-        <Pressable onPress={backToCalendar} style={{ paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12, backgroundColor: soft }}><Text style={{ color: text, fontWeight: "700" }}>Retour au planning</Text></Pressable>
+        <Text style={{ color: colors.text, textAlign: "center" }}>Cette tournée n'est pas disponible hors ligne ou vous n'y avez pas accès.</Text>
+        <Pressable onPress={backToCalendar} style={{ paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12, backgroundColor: colors.header }}><Text style={{ color: colors.text, fontWeight: "700" }}>Retour au planning</Text></Pressable>
       </View>
     );
   }
@@ -192,87 +162,79 @@ export default function TourRunScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 16, paddingBottom: 80, maxWidth: 1450, width: "100%", alignSelf: "center" }}>
-        <View style={{ marginBottom: 16 }}>
-          <Text style={{ color: muted, marginBottom: 8 }}>{new Date(`${run.scheduled_date}T12:00:00`).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })} · {run.employees.map((employee) => employee.full_name ?? employee.email).join(", ")}</Text>
-          <View style={{ height: 8, borderRadius: 999, backgroundColor: border, overflow: "hidden", marginBottom: 6 }}><View style={{ width: `${run.progress.percent}%`, height: "100%", backgroundColor: run.progress.percent === 100 ? "#16A34A" : "#F97316" }} /></View>
-          <Text style={{ color: muted, textAlign: "right" }}>{run.progress.resolved}/{run.progress.total} commerces résolus</Text>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 16, paddingBottom: 80 }}>
+        <View style={{ marginBottom: 16, maxWidth: 1200, width: "100%", alignSelf: "center" }}>
+          <Text style={{ color: colors.muted, marginBottom: 8 }}>{new Date(`${run.scheduled_date}T12:00:00`).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })} · {run.employees.map((employee) => employee.full_name ?? employee.email).join(", ")}</Text>
+          <View style={{ height: 8, borderRadius: 999, backgroundColor: colors.border, overflow: "hidden", marginBottom: 6 }}><View style={{ width: `${run.progress.percent}%`, height: "100%", backgroundColor: run.progress.percent === 100 ? "#16A34A" : "#F97316" }} /></View>
+          <Text style={{ color: colors.muted, textAlign: "right" }}>{run.progress.resolved}/{run.progress.total} commerces résolus</Text>
         </View>
 
         {grouped.map(([section, stops]) => (
-          <View key={section} style={{ marginBottom: 20, gap: 9 }}>
-            <Text style={{ color: text, fontSize: 17, fontWeight: "700", marginTop: 5 }}>{section}</Text>
-            {stops.map((stop) => (
-              <StopChecklist
-                key={stop.id}
-                stop={stop}
-                draft={getDraft(stop)}
-                updateDraft={(patch) => updateDraft(stop, patch)}
-                resolve={(status) => resolveStop(stop, status)}
-                disabled={finished || cancelled || busyStop === stop.id}
-                wide={wide}
-                colors={{ text, muted, border, soft, input }}
-              />
-            ))}
+          <View key={section} style={{ marginBottom: 20 }}>
+            <Text style={{ color: colors.text, fontSize: 17, fontWeight: "700", marginBottom: 8, maxWidth: 1200, width: "100%", alignSelf: "center" }}>{section}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator style={{ maxWidth: "100%" }}>
+              <View style={{ width: tableWidth }}>
+                <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingVertical: 8, borderRadius: 10, marginBottom: 4 }}>
+                  <View style={{ width: COLS.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Commerce</Text></View>
+                  <View style={{ width: COLS.variant, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Variante</Text></View>
+                  <View style={{ width: COLS.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Paiement</Text></View>
+                  <View style={{ width: COLS.status, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Statut</Text></View>
+                  <View style={{ width: COLS.actions, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Actions</Text></View>
+                </View>
+                {stops.map((stop) => {
+                  const chosen = stop.services.find((service) => service.id === stop.selected_service_id) ?? stop.services[0];
+                  const statusColor = stop.status === "done" ? "#16A34A" : stop.status === "not_visited" ? "#EF4444" : colors.muted;
+                  const disabled = finished || cancelled || busyStop === stop.id;
+                  return (
+                    <View key={stop.id}>
+                      <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 7, borderBottomWidth: 1, borderColor: colors.border }}>
+                        <View style={{ width: COLS.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{stop.name}</Text></View>
+                        <View style={{ width: COLS.variant, paddingHorizontal: 6 }}>
+                          {chosen && <><Text style={{ color: colors.text, fontSize: 13 }}>{chosen.label}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{formatEuro(chosen.price_ht)}</Text></>}
+                        </View>
+                        <View style={{ width: COLS.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.payment_text ?? ""}</Text></View>
+                        <View style={{ width: COLS.status, paddingHorizontal: 6 }}><Text style={{ color: statusColor, fontWeight: "700", fontSize: 12 }}>{STATUS_LABELS[stop.status]}</Text></View>
+                        <View style={{ width: COLS.actions, paddingHorizontal: 6, flexDirection: "row", gap: 6 }}>
+                          <Pressable disabled={disabled} onPress={() => resolveStop(stop, "done")} style={{ padding: 8, borderRadius: 9, backgroundColor: "#16A34A", opacity: disabled ? 0.5 : 1 }}><Check size={16} color="#FFFFFF" /></Pressable>
+                          <Pressable disabled={disabled} onPress={() => setReasonFor(reasonFor === stop.id ? null : stop.id)} style={{ padding: 8, borderRadius: 9, backgroundColor: "#EF4444", opacity: disabled ? 0.5 : 1 }}><X size={16} color="#FFFFFF" /></Pressable>
+                        </View>
+                      </View>
+                      {reasonFor === stop.id && (
+                        <View style={{ flexDirection: "row", gap: 8, alignItems: "center", paddingVertical: 8, paddingHorizontal: 6, backgroundColor: isDark ? "rgba(239,68,68,0.08)" : "#FEF2F2" }}>
+                          <TextInput
+                            value={reasonDrafts[stop.id] ?? ""}
+                            onChangeText={(value) => setReasonDrafts((old) => ({ ...old, [stop.id]: value }))}
+                            placeholder="Motif du non-visité"
+                            placeholderTextColor={colors.muted}
+                            style={{ flex: 1, color: colors.text, borderWidth: 1, borderColor: "#EF4444", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: colors.input }}
+                          />
+                          <Pressable onPress={() => resolveStop(stop, "not_visited")} style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 9, backgroundColor: "#EF4444" }}><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Confirmer</Text></Pressable>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
           </View>
         ))}
 
-        {(finished || cancelled) && isAdmin ? (
-          <Pressable onPress={() => reopenMutation.mutate()} style={{ alignSelf: "flex-start", flexDirection: "row", gap: 8, alignItems: "center", backgroundColor: "#F97316", paddingHorizontal: 17, paddingVertical: 12, borderRadius: 12 }}>
-            <RotateCcw size={18} color="#FFFFFF" /><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Réouvrir la tournée</Text>
-          </Pressable>
-        ) : !finished && !cancelled && (
-          <View style={{ flexDirection: wide ? "row" : "column", justifyContent: "flex-end", gap: 9 }}>
-            {isAdmin && <Pressable onPress={() => setShowCancel(true)} style={{ alignItems: "center", borderWidth: 1, borderColor: "#EF4444", paddingHorizontal: 18, paddingVertical: 13, borderRadius: 12 }}><Text style={{ color: "#EF4444", fontWeight: "700" }}>Annuler l'occurrence</Text></Pressable>}
-            <Pressable disabled={!canClose || closeMutation.isPending} onPress={() => closeMutation.mutate()} style={{ alignItems: "center", backgroundColor: "#16A34A", opacity: canClose ? 1 : 0.4, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 }}>
-              <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700" }}>{canClose ? "Clôturer la tournée" : "Résolvez tous les commerces"}</Text>
+        <View style={{ maxWidth: 1200, width: "100%", alignSelf: "center" }}>
+          {(finished || cancelled) && isAdmin ? (
+            <Pressable onPress={() => reopenMutation.mutate()} style={{ alignSelf: "flex-start", flexDirection: "row", gap: 8, alignItems: "center", backgroundColor: "#F97316", paddingHorizontal: 17, paddingVertical: 12, borderRadius: 12 }}>
+              <RotateCcw size={18} color="#FFFFFF" /><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Réouvrir la tournée</Text>
             </Pressable>
-          </View>
-        )}
+          ) : !finished && !cancelled && (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 9 }}>
+              {isAdmin && <Pressable onPress={() => setShowCancel(true)} style={{ alignItems: "center", borderWidth: 1, borderColor: "#EF4444", paddingHorizontal: 18, paddingVertical: 13, borderRadius: 12 }}><Text style={{ color: "#EF4444", fontWeight: "700" }}>Annuler l'occurrence</Text></Pressable>}
+              <Pressable disabled={!canClose || closeMutation.isPending} onPress={() => closeMutation.mutate()} style={{ alignItems: "center", backgroundColor: "#16A34A", opacity: canClose ? 1 : 0.4, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 }}>
+                <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700" }}>{canClose ? "Clôturer la tournée" : "Résolvez tous les commerces"}</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
       </ScrollView>
       <ConfirmModal visible={showCancel} title="Annuler cette occurrence ?" message="Elle restera dans le planning et l'historique, avec le statut annulé." confirmText="Annuler l'occurrence" cancelText="Retour" isDestructive onCancel={() => setShowCancel(false)} onConfirm={() => cancelMutation.mutate()} />
     </View>
-  );
-}
-
-function StopChecklist({ stop, draft, updateDraft, resolve, disabled, wide, colors }: { stop: TourRunStop; draft: StopDraft; updateDraft: (patch: Partial<StopDraft>) => void; resolve: (status: "done" | "partial" | "not_visited") => void; disabled: boolean; wide: boolean; colors: { text: string; muted: string; border: string; soft: string; input: string } }) {
-  const statusColor = stop.status === "done" ? "#16A34A" : stop.status === "partial" ? "#F97316" : stop.status === "not_visited" ? "#EF4444" : colors.muted;
-  return (
-    <Card style={{ borderColor: stop.status === "pending" ? undefined : statusColor }}>
-      <View style={{ padding: 14, flexDirection: wide ? "row" : "column", gap: 14 }}>
-        <View style={{ width: wide ? 236 : undefined }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-            <Text style={{ flex: 1, color: colors.text, fontWeight: "700", fontSize: 16 }}>{stop.name}</Text>
-            {stop.status === "done" ? <CheckCircle2 size={19} color={statusColor} /> : stop.status === "not_visited" ? <XCircle size={19} color={statusColor} /> : <Circle size={19} color={statusColor} />}
-          </View>
-          <Text style={{ color: statusColor, fontWeight: "700", fontSize: 12, marginTop: 3 }}>{STATUS_LABELS[stop.status]}</Text>
-          {stop.payment_text && <Text style={{ color: colors.muted, fontSize: 12, marginTop: 7 }}>Paiement : {stop.payment_text}</Text>}
-          {stop.note && <Text style={{ color: colors.muted, fontSize: 12, marginTop: 4, fontStyle: "italic" }}>{stop.note}</Text>}
-        </View>
-        <View style={{ flex: 1, gap: 7 }}>
-          {stop.services.map((service) => {
-            const notDone = draft.notDoneIds.includes(service.id);
-            return (
-              <View key={service.id} style={{ gap: 5 }}>
-                <Pressable disabled={disabled} onPress={() => updateDraft({ notDoneIds: notDone ? draft.notDoneIds.filter((item) => item !== service.id) : [...draft.notDoneIds, service.id] })} style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4 }}>
-                  {notDone ? <Square size={19} color="#EF4444" /> : <Check size={19} color="#16A34A" />}
-                  <Text style={{ flex: 1, color: colors.text, textDecorationLine: notDone ? "line-through" : "none" }}>{service.label}</Text>
-                  <Text style={{ color: colors.text, fontWeight: "600" }}>{formatEuro(service.price_ht)}</Text>
-                </Pressable>
-                {notDone && <TextInput value={draft.reasons[service.id] ?? ""} onChangeText={(value) => updateDraft({ reasons: { ...draft.reasons, [service.id]: value } })} placeholder="Justification obligatoire" placeholderTextColor={colors.muted} style={{ marginLeft: 27, color: colors.text, borderWidth: 1, borderColor: "#EF4444", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: colors.input }} />}
-              </View>
-            );
-          })}
-        </View>
-        <View style={{ width: wide ? 276 : undefined, gap: 8 }}>
-          <TextInput value={draft.generalReason} onChangeText={(value) => updateDraft({ generalReason: value })} placeholder="Motif général (obligatoire si non visité)" placeholderTextColor={colors.muted} multiline style={{ minHeight: 56, color: colors.text, backgroundColor: colors.input, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 9, textAlignVertical: "top" }} />
-          <Pressable disabled={disabled} onPress={() => resolve("done")} style={{ padding: 10, borderRadius: 10, backgroundColor: "#16A34A", opacity: disabled ? 0.5 : 1, alignItems: "center" }}><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Tout réalisé</Text></Pressable>
-          <View style={{ flexDirection: "row", gap: 7 }}>
-            <Pressable disabled={disabled || draft.notDoneIds.length === 0} onPress={() => resolve("partial")} style={{ flex: 1, padding: 10, borderRadius: 10, backgroundColor: "#F97316", opacity: disabled || !draft.notDoneIds.length ? 0.4 : 1, alignItems: "center" }}><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Partiel</Text></Pressable>
-            <Pressable disabled={disabled} onPress={() => resolve("not_visited")} style={{ flex: 1, padding: 10, borderRadius: 10, backgroundColor: "#EF4444", opacity: disabled ? 0.5 : 1, alignItems: "center" }}><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Non visité</Text></Pressable>
-          </View>
-        </View>
-      </View>
-    </Card>
   );
 }

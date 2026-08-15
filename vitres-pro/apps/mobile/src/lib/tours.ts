@@ -54,8 +54,6 @@ export type TourRunService = {
   label: string;
   price_ht: number;
   position: number;
-  status: "pending" | "done" | "not_done";
-  exception_reason?: string | null;
 };
 
 export type TourRunStop = {
@@ -68,7 +66,8 @@ export type TourRunStop = {
   estimated_minutes?: number | null;
   position: number;
   selected: boolean;
-  status: "pending" | "done" | "partial" | "not_visited";
+  selected_service_id?: string | null;
+  status: "pending" | "done" | "not_visited";
   exception_reason?: string | null;
   services: TourRunService[];
 };

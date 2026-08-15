@@ -3,36 +3,53 @@ import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View, useWin
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Plus, Save, Trash2 } from "lucide-react-native";
+import { ArrowDown, ArrowUp, ChevronLeft, Plus, Save, Trash2 } from "lucide-react-native";
 
 import { useAuth } from "../../../../../src/hooks/useAuth";
 import { api } from "../../../../../src/lib/api";
-import { TourService, TourStop, TourTemplate, WEEKDAY_LABELS, emptyTourTemplate } from "../../../../../src/lib/tours";
+import { TourStop, TourTemplate, WEEKDAY_LABELS, emptyTourTemplate } from "../../../../../src/lib/tours";
 import { useTheme } from "../../../../../src/ui/components/ThemeToggle";
 import { Card, CardContent } from "../../../../../src/ui/components/Card";
 import { Button } from "../../../../../src/ui/components/Button";
 import { toast } from "../../../../../src/ui/toast";
 
-type Colors = { text: string; muted: string; border: string; soft: string; input: string };
+type Colors = { text: string; muted: string; border: string; soft: string; input: string; header: string };
+
+const COLS = {
+  name: 170,
+  face: 84,
+  price: 68,
+  minutes: 58,
+  payment: 110,
+  frequency: 120,
+  note: 130,
+  actions: 76,
+};
 
 function cloneTemplate(value: TourTemplate): TourTemplate {
   return JSON.parse(JSON.stringify(value));
 }
 
-function TextField({ label, value, onChangeText, colors, multiline = false, keyboardType }: { label: string; value: string | null | undefined; onChangeText: (value: string) => void; colors: Colors; multiline?: boolean; keyboardType?: any }) {
+function Cell({ width, children }: { width: number; children: React.ReactNode }) {
+  return <View style={{ width, paddingHorizontal: 4, justifyContent: "center" }}>{children}</View>;
+}
+
+function CellInput({ width, value, onChangeText, colors, keyboardType, bold }: { width: number; value: string; onChangeText: (v: string) => void; colors: Colors; keyboardType?: any; bold?: boolean }) {
   return (
-    <View style={{ gap: 5, flex: 1, minWidth: 130 }}>
-      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>{label}</Text>
+    <Cell width={width}>
       <TextInput
-        value={value ?? ""}
+        value={value}
         onChangeText={onChangeText}
-        multiline={multiline}
         keyboardType={keyboardType}
         placeholderTextColor={colors.muted}
-        style={{ minHeight: multiline ? 72 : 43, color: colors.text, backgroundColor: colors.input, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, textAlignVertical: multiline ? "top" : "center" }}
+        style={{ color: colors.text, fontWeight: bold ? "700" : "400", fontSize: 13, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 7, backgroundColor: colors.input }}
       />
-    </View>
+    </Cell>
   );
+}
+
+function HeaderCell({ width, label, colors }: { width: number; label: string; colors: Colors }) {
+  return <Cell width={width}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>{label}</Text></Cell>;
 }
 
 function Choice({ selected, label, onPress, colors }: { selected: boolean; label: string; onPress: () => void; colors: Colors }) {
@@ -48,21 +65,20 @@ export default function TourTemplateEditor() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const { isAdmin, loading } = useAuth();
   const { isDark } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
   const isNew = id === "new";
-  const wide = width >= 900;
+  const wide = screenWidth >= 900;
   const [draft, setDraft] = useState<TourTemplate>(() => emptyTourTemplate());
   const [hydratedId, setHydratedId] = useState<string | null>(null);
-  const [openSections, setOpenSections] = useState<Set<number>>(new Set());
-  const [openStops, setOpenStops] = useState<Set<string>>(new Set());
   const colors: Colors = {
     text: isDark ? "#F8FAFC" : "#0F172A",
     muted: isDark ? "#94A3B8" : "#64748B",
     border: isDark ? "#1E293B" : "#E4E4E7",
     soft: isDark ? "#1E293B" : "#F1F5F9",
     input: isDark ? "#0B1220" : "#F8FAFC",
+    header: isDark ? "#111C30" : "#EFF6FF",
   };
 
   const templateQuery = useQuery<TourTemplate>({
@@ -109,16 +125,13 @@ export default function TourTemplateEditor() {
 
   const addSection = () => mutate((next) => {
     next.sections.push({ label: "Nouvelle section", position: next.sections.length, stops: [] });
-    setOpenSections((old) => new Set([...old, next.sections.length - 1]));
   });
   const addStop = (sectionIndex: number) => mutate((next) => {
-    next.sections[sectionIndex].stops.push({ name: "Nouveau commerce", position: next.sections[sectionIndex].stops.length, active: true, services: [] });
-  });
-  const addService = (sectionIndex: number, stopIndex: number) => mutate((next) => {
-    next.sections[sectionIndex].stops[stopIndex].services.push({ label: "Nouvelle prestation", price_ht: 0, position: next.sections[sectionIndex].stops[stopIndex].services.length, active: true });
+    next.sections[sectionIndex].stops.push({ name: "Nouveau commerce", position: next.sections[sectionIndex].stops.length, active: true, services: [{ label: "", price_ht: 0, position: 0, active: true }] });
   });
 
   const totalStops = useMemo(() => draft.sections.reduce((sum, section) => sum + section.stops.length, 0), [draft]);
+  const tableWidth = COLS.name + COLS.face * 2 + COLS.price * 2 + COLS.minutes + COLS.payment + COLS.frequency + COLS.note + COLS.actions;
 
   if (loading || (!isNew && templateQuery.isLoading)) return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: isDark ? "#020817" : "#FFFFFF" }}><ActivityIndicator color="#3B82F6" /></View>;
   if (!isAdmin) return <Redirect href="/(app)/calendar" />;
@@ -134,21 +147,30 @@ export default function TourTemplateEditor() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 16, paddingBottom: 80, maxWidth: 1300, width: "100%", alignSelf: "center" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 16, paddingBottom: 80 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, maxWidth: 1300, width: "100%", alignSelf: "center" }}>
           <Text style={{ color: colors.muted, flex: 1 }}>{totalStops} commerce(s) · chaque sauvegarde s'applique aux futurs brouillons.</Text>
           <Pressable disabled={saveMutation.isPending} onPress={() => saveMutation.mutate()} style={{ flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "#3B82F6", paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12, opacity: saveMutation.isPending ? 0.6 : 1 }}>
             <Save size={18} color="#FFFFFF" /><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>{saveMutation.isPending ? "Enregistrement…" : "Enregistrer"}</Text>
           </Pressable>
         </View>
 
-        <Card style={{ marginBottom: 18 }}>
+        <Card style={{ marginBottom: 18, maxWidth: 1300, width: "100%", alignSelf: "center" }}>
           <CardContent style={{ padding: 18, gap: 14 }}>
             <Text style={{ color: colors.text, fontSize: 17, fontWeight: "700" }}>Paramètres généraux</Text>
             <View style={{ flexDirection: wide ? "row" : "column", gap: 10 }}>
-              <TextField label="Nom de la tournée" value={draft.name} onChangeText={(value) => mutate((next) => { next.name = value; })} colors={colors} />
-              <TextField label="Début" value={draft.default_start_time.slice(0, 5)} onChangeText={(value) => mutate((next) => { next.default_start_time = `${value}:00`; })} colors={colors} />
-              <TextField label="Fin" value={draft.default_end_time.slice(0, 5)} onChangeText={(value) => mutate((next) => { next.default_end_time = `${value}:00`; })} colors={colors} />
+              <View style={{ flex: 1, gap: 5 }}>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>Nom de la tournée</Text>
+                <TextInput value={draft.name} onChangeText={(value) => mutate((next) => { next.name = value; })} style={{ color: colors.text, backgroundColor: colors.input, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 }} />
+              </View>
+              <View style={{ gap: 5 }}>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>Début</Text>
+                <TextInput value={draft.default_start_time.slice(0, 5)} onChangeText={(value) => mutate((next) => { next.default_start_time = `${value}:00`; })} style={{ color: colors.text, backgroundColor: colors.input, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, minWidth: 90 }} />
+              </View>
+              <View style={{ gap: 5 }}>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>Fin</Text>
+                <TextInput value={draft.default_end_time.slice(0, 5)} onChangeText={(value) => mutate((next) => { next.default_end_time = `${value}:00`; })} style={{ color: colors.text, backgroundColor: colors.input, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, minWidth: 90 }} />
+              </View>
             </View>
             <View style={{ gap: 7 }}>
               <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>Zone</Text>
@@ -163,101 +185,96 @@ export default function TourTemplateEditor() {
                 {Object.entries(WEEKDAY_LABELS).slice(0, 5).map(([day, label]) => <Choice key={day} selected={draft.weekday === Number(day)} label={label} onPress={() => mutate((next) => { next.weekday = Number(day); })} colors={colors} />)}
               </View>
             </View>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              <Choice selected={draft.active} label={draft.active ? "Modèle actif" : "Modèle inactif"} onPress={() => mutate((next) => { next.active = !next.active; })} colors={colors} />
-            </View>
+            <Choice selected={draft.active} label={draft.active ? "Modèle actif" : "Modèle inactif"} onPress={() => mutate((next) => { next.active = !next.active; })} colors={colors} />
           </CardContent>
         </Card>
 
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10, maxWidth: 1300, width: "100%", alignSelf: "center" }}>
           <Text style={{ color: colors.text, fontSize: 19, fontWeight: "700" }}>Sections et commerces</Text>
           <Pressable onPress={addSection} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#16A34A", paddingHorizontal: 13, paddingVertical: 9, borderRadius: 12 }}><Plus size={17} color="#FFFFFF" /><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Section</Text></Pressable>
         </View>
 
-        {draft.sections.map((section, sectionIndex) => {
-          const sectionOpen = openSections.has(sectionIndex);
-          return (
-            <Card key={`${section.id ?? "section"}-${sectionIndex}`} style={{ marginBottom: 11 }}>
-              <Pressable onPress={() => setOpenSections((old) => { const next = new Set(old); next.has(sectionIndex) ? next.delete(sectionIndex) : next.add(sectionIndex); return next; })} style={{ padding: 14, flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: isDark ? "#111C30" : "#EFF6FF", borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
-                {sectionOpen ? <ChevronDown size={18} color={colors.text} /> : <ChevronRight size={18} color={colors.text} />}
-                <TextInput value={section.label} onChangeText={(value) => mutate((next) => { next.sections[sectionIndex].label = value; })} onPressIn={(event) => event.stopPropagation()} style={{ flex: 1, fontSize: 16, fontWeight: "700", color: colors.text, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: 4 }} />
-                <Text style={{ color: colors.muted, fontSize: 12 }}>{section.stops.length} commerces</Text>
-                <Pressable disabled={sectionIndex === 0} onPress={(event) => { event.stopPropagation(); mutate((next) => move(next.sections, sectionIndex, -1)); }}><ArrowUp size={17} color={sectionIndex === 0 ? colors.border : colors.muted} /></Pressable>
-                <Pressable disabled={sectionIndex === draft.sections.length - 1} onPress={(event) => { event.stopPropagation(); mutate((next) => move(next.sections, sectionIndex, 1)); }}><ArrowDown size={17} color={sectionIndex === draft.sections.length - 1 ? colors.border : colors.muted} /></Pressable>
-                <Pressable onPress={(event) => { event.stopPropagation(); mutate((next) => { next.sections.splice(sectionIndex, 1); }); }}><Trash2 size={17} color="#EF4444" /></Pressable>
-              </Pressable>
-              {sectionOpen && (
-                <CardContent style={{ padding: 12, gap: 10 }}>
-                  {section.stops.map((stop, stopIndex) => {
-                    const stopKey = `${sectionIndex}-${stopIndex}`;
-                    const stopOpen = openStops.has(stopKey);
-                    return (
-                      <View key={`${stop.id ?? "stop"}-${stopIndex}`} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 13, overflow: "hidden" }}>
-                        <Pressable onPress={() => setOpenStops((old) => { const next = new Set(old); next.has(stopKey) ? next.delete(stopKey) : next.add(stopKey); return next; })} style={{ padding: 12, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.input }}>
-                          {stopOpen ? <ChevronDown size={17} color={colors.text} /> : <ChevronRight size={17} color={colors.text} />}
-                          <Text style={{ flex: 1, color: colors.text, fontWeight: "700" }}>{stop.name}</Text>
-                          <Text style={{ color: colors.muted, fontSize: 11 }}>{stop.services.length} prestations</Text>
-                          <Pressable disabled={stopIndex === 0} onPress={(event) => { event.stopPropagation(); mutate((next) => move(next.sections[sectionIndex].stops, stopIndex, -1)); }}><ArrowUp size={16} color={stopIndex === 0 ? colors.border : colors.muted} /></Pressable>
-                          <Pressable disabled={stopIndex === section.stops.length - 1} onPress={(event) => { event.stopPropagation(); mutate((next) => move(next.sections[sectionIndex].stops, stopIndex, 1)); }}><ArrowDown size={16} color={stopIndex === section.stops.length - 1 ? colors.border : colors.muted} /></Pressable>
-                          <Pressable onPress={(event) => { event.stopPropagation(); mutate((next) => { next.sections[sectionIndex].stops.splice(stopIndex, 1); }); }}><Trash2 size={16} color="#EF4444" /></Pressable>
-                        </Pressable>
-                        {stopOpen && <StopEditor stop={stop} sectionIndex={sectionIndex} stopIndex={stopIndex} mutate={mutate} addService={addService} colors={colors} wide={wide} />}
-                      </View>
-                    );
-                  })}
-                  <Pressable onPress={() => addStop(sectionIndex)} style={{ alignSelf: "flex-start", flexDirection: "row", gap: 5, padding: 9 }}><Plus size={17} color="#3B82F6" /><Text style={{ color: "#3B82F6", fontWeight: "700" }}>Ajouter un commerce</Text></Pressable>
-                </CardContent>
-              )}
-            </Card>
-          );
-        })}
+        {draft.sections.map((section, sectionIndex) => (
+          <View key={`${section.id ?? "section"}-${sectionIndex}`} style={{ marginBottom: 22 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 8, maxWidth: 1300, width: "100%", alignSelf: "center" }}>
+              <TextInput value={section.label} onChangeText={(value) => mutate((next) => { next.sections[sectionIndex].label = value; })} style={{ flex: 1, fontSize: 16, fontWeight: "700", color: colors.text, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: 4 }} />
+              <Text style={{ color: colors.muted, fontSize: 12 }}>{section.stops.length} commerces</Text>
+              <Pressable disabled={sectionIndex === 0} onPress={() => mutate((next) => move(next.sections, sectionIndex, -1))}><ArrowUp size={17} color={sectionIndex === 0 ? colors.border : colors.muted} /></Pressable>
+              <Pressable disabled={sectionIndex === draft.sections.length - 1} onPress={() => mutate((next) => move(next.sections, sectionIndex, 1))}><ArrowDown size={17} color={sectionIndex === draft.sections.length - 1 ? colors.border : colors.muted} /></Pressable>
+              <Pressable onPress={() => mutate((next) => { next.sections.splice(sectionIndex, 1); })}><Trash2 size={17} color="#EF4444" /></Pressable>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator style={{ maxWidth: "100%" }}>
+              <View style={{ width: tableWidth }}>
+                <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingVertical: 8, borderRadius: 10, marginBottom: 4 }}>
+                  <HeaderCell width={COLS.name} label="Commerce" colors={colors} />
+                  <HeaderCell width={COLS.face} label="Face 1" colors={colors} />
+                  <HeaderCell width={COLS.price} label="Prix 1" colors={colors} />
+                  <HeaderCell width={COLS.face} label="Face 2" colors={colors} />
+                  <HeaderCell width={COLS.price} label="Prix 2" colors={colors} />
+                  <HeaderCell width={COLS.minutes} label="Temps" colors={colors} />
+                  <HeaderCell width={COLS.payment} label="Paiement" colors={colors} />
+                  <HeaderCell width={COLS.frequency} label="Fréquence" colors={colors} />
+                  <HeaderCell width={COLS.note} label="Note" colors={colors} />
+                  <HeaderCell width={COLS.actions} label="" colors={colors} />
+                </View>
+                {section.stops.map((stop, stopIndex) => (
+                  <StopRow key={`${stop.id ?? "stop"}-${stopIndex}`} stop={stop} sectionIndex={sectionIndex} stopIndex={stopIndex} stopCount={section.stops.length} mutate={mutate} colors={colors} />
+                ))}
+              </View>
+            </ScrollView>
+            <Pressable onPress={() => addStop(sectionIndex)} style={{ alignSelf: "flex-start", flexDirection: "row", gap: 5, padding: 9, marginTop: 4 }}><Plus size={17} color="#3B82F6" /><Text style={{ color: "#3B82F6", fontWeight: "700" }}>Ajouter un commerce</Text></Pressable>
+          </View>
+        ))}
       </ScrollView>
     </View>
   );
 }
 
-function StopEditor({ stop, sectionIndex, stopIndex, mutate, addService, colors, wide }: { stop: TourStop; sectionIndex: number; stopIndex: number; mutate: (fn: (next: TourTemplate) => void) => void; addService: (s: number, st: number) => void; colors: Colors; wide: boolean }) {
+function StopRow({ stop, sectionIndex, stopIndex, stopCount, mutate, colors }: { stop: TourStop; sectionIndex: number; stopIndex: number; stopCount: number; mutate: (fn: (next: TourTemplate) => void) => void; colors: Colors }) {
   const setStop = (fn: (value: TourStop) => void) => mutate((next: TourTemplate) => fn(next.sections[sectionIndex].stops[stopIndex]));
+  const face1 = stop.services[0];
+  const face2 = stop.services[1];
+
+  const setFace1Label = (value: string) => setStop((next) => {
+    if (!next.services[0]) next.services[0] = { label: "", price_ht: 0, position: 0, active: true };
+    next.services[0].label = value;
+  });
+  const setFace1Price = (value: string) => setStop((next) => {
+    if (!next.services[0]) next.services[0] = { label: "", price_ht: 0, position: 0, active: true };
+    next.services[0].price_ht = Number(value.replace(",", ".")) || 0;
+  });
+  const setFace2Label = (value: string) => setStop((next) => {
+    if (value.trim() === "" && next.services[1] && !next.services[1].price_ht) {
+      next.services.splice(1, 1);
+      return;
+    }
+    if (!next.services[1]) next.services[1] = { label: "", price_ht: 0, position: 1, active: true };
+    next.services[1].label = value;
+  });
+  const setFace2Price = (value: string) => setStop((next) => {
+    if (!next.services[1]) next.services[1] = { label: "", price_ht: 0, position: 1, active: true };
+    next.services[1].price_ht = Number(value.replace(",", ".")) || 0;
+  });
+
   return (
-    <View style={{ padding: 13, gap: 12 }}>
-      <View style={{ flexDirection: wide ? "row" : "column", gap: 9 }}>
-        <TextField label="Nom du commerce" value={stop.name} onChangeText={(value) => setStop((next) => { next.name = value; })} colors={colors} />
-        <TextField label="Durée (min)" value={stop.estimated_minutes == null ? "" : String(stop.estimated_minutes)} keyboardType="number-pad" onChangeText={(value) => setStop((next) => { next.estimated_minutes = value ? Number(value) : null; })} colors={colors} />
-      </View>
-      <View style={{ flexDirection: wide ? "row" : "column", gap: 9 }}>
-        <TextField label="Paiement (ex: F -> mens., N, NF)" value={stop.payment_text} onChangeText={(value) => setStop((next) => { next.payment_text = value || null; })} colors={colors} />
-        <TextField label="Fréquence (informatif)" value={stop.frequency_text} onChangeText={(value) => setStop((next) => { next.frequency_text = value || null; })} colors={colors} />
-      </View>
-      <TextField label="Note / créneau" value={stop.note} multiline onChangeText={(value) => setStop((next) => { next.note = value || null; })} colors={colors} />
-      <Choice selected={stop.active} label={stop.active ? "Commerce actif" : "Commerce inactif"} onPress={() => setStop((next) => { next.active = !next.active; })} colors={colors} />
-      <Text style={{ color: colors.text, fontSize: 15, fontWeight: "700" }}>Prestations</Text>
-      {stop.services.map((service: TourService, serviceIndex: number) => <ServiceEditor key={`${service.id ?? "service"}-${serviceIndex}`} service={service} serviceIndex={serviceIndex} serviceCount={stop.services.length} sectionIndex={sectionIndex} stopIndex={stopIndex} mutate={mutate} colors={colors} wide={wide} />)}
-      <Pressable onPress={() => addService(sectionIndex, stopIndex)} style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 5, padding: 8 }}><Plus size={17} color="#16A34A" /><Text style={{ color: "#16A34A", fontWeight: "700" }}>Ajouter une prestation</Text></Pressable>
+    <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 3, borderBottomWidth: 1, borderColor: colors.border }}>
+      <CellInput width={COLS.name} value={stop.name} onChangeText={(value) => setStop((next) => { next.name = value; })} colors={colors} bold />
+      <CellInput width={COLS.face} value={face1?.label ?? ""} onChangeText={setFace1Label} colors={colors} />
+      <CellInput width={COLS.price} value={face1 ? String(face1.price_ht) : ""} onChangeText={setFace1Price} colors={colors} keyboardType="decimal-pad" />
+      <CellInput width={COLS.face} value={face2?.label ?? ""} onChangeText={setFace2Label} colors={colors} />
+      <CellInput width={COLS.price} value={face2 ? String(face2.price_ht) : ""} onChangeText={setFace2Price} colors={colors} keyboardType="decimal-pad" />
+      <CellInput width={COLS.minutes} value={stop.estimated_minutes == null ? "" : String(stop.estimated_minutes)} onChangeText={(value) => setStop((next) => { next.estimated_minutes = value ? Number(value) : null; })} colors={colors} keyboardType="number-pad" />
+      <CellInput width={COLS.payment} value={stop.payment_text ?? ""} onChangeText={(value) => setStop((next) => { next.payment_text = value || null; })} colors={colors} />
+      <CellInput width={COLS.frequency} value={stop.frequency_text ?? ""} onChangeText={(value) => setStop((next) => { next.frequency_text = value || null; })} colors={colors} />
+      <CellInput width={COLS.note} value={stop.note ?? ""} onChangeText={(value) => setStop((next) => { next.note = value || null; })} colors={colors} />
+      <Cell width={COLS.actions}>
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          <Pressable disabled={stopIndex === 0} onPress={() => mutate((next) => { const items = next.sections[sectionIndex].stops; const target = stopIndex - 1; if (target < 0) return; [items[stopIndex], items[target]] = [items[target], items[stopIndex]]; items.forEach((item, position) => { item.position = position; }); })}><ArrowUp size={16} color={stopIndex === 0 ? colors.border : colors.muted} /></Pressable>
+          <Pressable disabled={stopIndex === stopCount - 1} onPress={() => mutate((next) => { const items = next.sections[sectionIndex].stops; const target = stopIndex + 1; if (target >= items.length) return; [items[stopIndex], items[target]] = [items[target], items[stopIndex]]; items.forEach((item, position) => { item.position = position; }); })}><ArrowDown size={16} color={stopIndex === stopCount - 1 ? colors.border : colors.muted} /></Pressable>
+          <Pressable onPress={() => mutate((next) => { next.sections[sectionIndex].stops.splice(stopIndex, 1); })}><Trash2 size={16} color="#EF4444" /></Pressable>
+        </View>
+      </Cell>
     </View>
   );
-}
-
-function ServiceEditor({ service, serviceIndex, serviceCount, sectionIndex, stopIndex, mutate, colors, wide }: { service: TourService; serviceIndex: number; serviceCount: number; sectionIndex: number; stopIndex: number; mutate: (fn: (next: TourTemplate) => void) => void; colors: Colors; wide: boolean }) {
-  const setService = (fn: (value: TourService) => void) => mutate((next: TourTemplate) => fn(next.sections[sectionIndex].stops[stopIndex].services[serviceIndex]));
-  const remove = () => mutate((next: TourTemplate) => { next.sections[sectionIndex].stops[stopIndex].services.splice(serviceIndex, 1); });
-  return (
-    <View style={{ padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.input, gap: 10 }}>
-      <View style={{ flexDirection: wide ? "row" : "column", gap: 8 }}>
-        <TextField label="Libellé (ex: 2 F, 1 F)" value={service.label} onChangeText={(value) => setService((next) => { next.label = value; })} colors={colors} />
-        <TextField label="Prix HT (€)" value={String(service.price_ht)} keyboardType="decimal-pad" onChangeText={(value) => setService((next) => { next.price_ht = Number(value.replace(",", ".")) || 0; })} colors={colors} />
-      </View>
-      <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
-        <Pressable disabled={serviceIndex === 0} onPress={() => mutate((next: TourTemplate) => moveItems(next.sections[sectionIndex].stops[stopIndex].services, serviceIndex, -1))} style={{ padding: 11, borderRadius: 10, backgroundColor: colors.soft }}><ArrowUp size={18} color={serviceIndex === 0 ? colors.border : colors.muted} /></Pressable>
-        <Pressable disabled={serviceIndex === serviceCount - 1} onPress={() => mutate((next: TourTemplate) => moveItems(next.sections[sectionIndex].stops[stopIndex].services, serviceIndex, 1))} style={{ padding: 11, borderRadius: 10, backgroundColor: colors.soft }}><ArrowDown size={18} color={serviceIndex === serviceCount - 1 ? colors.border : colors.muted} /></Pressable>
-        <Pressable onPress={remove} style={{ padding: 11, borderRadius: 10, backgroundColor: colors.soft }}><Trash2 size={18} color="#EF4444" /></Pressable>
-      </View>
-    </View>
-  );
-}
-
-function moveItems(items: Array<{ position: number }>, index: number, direction: -1 | 1) {
-  const target = index + direction;
-  if (target < 0 || target >= items.length) return;
-  [items[index], items[target]] = [items[target], items[index]];
-  items.forEach((item, position) => { item.position = position; });
 }

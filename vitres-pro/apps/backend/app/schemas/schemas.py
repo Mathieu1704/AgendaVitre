@@ -510,9 +510,6 @@ class TourRunServiceOut(BaseModel):
     label: str
     price_ht: float
     position: float
-    status: Literal["pending", "done", "not_done"]
-    exception_reason: Optional[str] = None
-    performed_at: Optional[datetime] = None
     class Config:
         from_attributes = True
 
@@ -528,7 +525,8 @@ class TourRunStopOut(BaseModel):
     estimated_minutes: Optional[int] = None
     position: float
     selected: bool
-    status: Literal["pending", "done", "partial", "not_visited"]
+    selected_service_id: Optional[UUID] = None
+    status: Literal["pending", "done", "not_visited"]
     exception_reason: Optional[str] = None
     completed_at: Optional[datetime] = None
     services: List[TourRunServiceOut] = []
@@ -559,6 +557,7 @@ class TourDraftGenerateInput(BaseModel):
 
 class TourStopSelectionInput(BaseModel):
     selected: bool
+    service_id: Optional[UUID] = None
 
 
 class TourDraftScheduleInput(BaseModel):
@@ -571,8 +570,6 @@ class TourPublishInput(BaseModel):
 
 
 class TourStopResolveInput(BaseModel):
-    status: Literal["done", "partial", "not_visited"]
+    status: Literal["done", "not_visited"]
     reason: Optional[str] = None
-    not_done_service_ids: List[UUID] = []
-    service_reasons: Dict[str, str] = {}
     client_operation_id: Optional[UUID] = None

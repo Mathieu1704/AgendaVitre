@@ -539,7 +539,10 @@ class TourRunStop(Base):
     """Copie figee d'un TourStop pour une occurrence donnee.
 
     `selected` est la coche hebdomadaire de l'admin (l'ancien point papier) :
-    rien n'est preselectionne automatiquement.
+    rien n'est preselectionne automatiquement. Les colonnes face/prix du
+    papier sont des variantes alternees d'une seule visite (pas plusieurs
+    prestations a faire ensemble) : `selected_service_id` porte celle
+    choisie par l'admin pour cette occurrence.
     """
     __tablename__ = "tour_run_stops"
 
@@ -554,16 +557,22 @@ class TourRunStop(Base):
     estimated_minutes = Column(Integer, nullable=True)
     position = Column(Float, nullable=False, default=0)
     selected = Column(Boolean, default=False, nullable=False, server_default="false")
-    status = Column(String(20), nullable=False, default="pending")  # pending | done | partial | not_visited
+    selected_service_id = Column(UUID(as_uuid=True), ForeignKey("tour_run_services.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String(20), nullable=False, default="pending")  # pending | done | not_visited
     exception_reason = Column(Text, nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     run = relationship("TourRun", back_populates="stops")
-    services = relationship("TourRunService", back_populates="run_stop", cascade="all, delete-orphan", order_by="TourRunService.position")
+    services = relationship("TourRunService", back_populates="run_stop", cascade="all, delete-orphan", order_by="TourRunService.position", foreign_keys="TourRunService.run_stop_id")
+    selected_service = relationship("TourRunService", foreign_keys=[selected_service_id])
 
 
 class TourRunService(Base):
+    """Une variante possible pour le commerce (ex: '2 F' ou '1 F').
+
+    Une seule est retenue par occurrence via TourRunStop.selected_service_id.
+    """
     __tablename__ = "tour_run_services"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -572,9 +581,6 @@ class TourRunService(Base):
     label = Column(String(240), nullable=False)
     price_ht = Column(Numeric(10, 2), nullable=False, default=0)
     position = Column(Float, nullable=False, default=0)
-    status = Column(String(20), nullable=False, default="pending")  # pending | done | not_done
-    exception_reason = Column(Text, nullable=True)
-    performed_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     run_stop = relationship("TourRunStop", back_populates="services")
