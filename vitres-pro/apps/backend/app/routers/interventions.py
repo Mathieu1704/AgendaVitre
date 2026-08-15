@@ -613,6 +613,8 @@ class ItemsDoneBody(BaseModel):
     new_items: List[NewAdjustmentItem] = []
     # Motif saisi par prestation décochée, clé = id de la prestation (en str).
     not_done_notes: Dict[str, str] = {}
+    # Prestations décochées mais faites en partie (sous-traitant, sans montant).
+    partial_item_ids: List[UUID] = []
 
 
 @router.patch("/{intervention_id}/items-done", response_model=InterventionOut)
@@ -631,14 +633,17 @@ def update_items_done(
 
     valid_ids = {item.id for item in db_intervention.items}
     not_done_ids = valid_ids.intersection(set(body.not_done_item_ids))
+    partial_ids = valid_ids.intersection(set(body.partial_item_ids))
 
     for item in db_intervention.items:
         item.done = item.id not in not_done_ids
         if item.id in not_done_ids:
             note = body.not_done_notes.get(str(item.id), "").strip()
             item.note = note or None
+            item.partial = item.id in partial_ids
         else:
             item.note = None
+            item.partial = False
 
     new_rows = [
         InterventionItem(

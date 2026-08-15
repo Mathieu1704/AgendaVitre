@@ -198,6 +198,9 @@ class InterventionItem(Base):
     is_adjustment = Column(Boolean, nullable=False, default=False, server_default="false")
     # Motif saisi à la clôture quand la prestation est décochée (pas faite / partielle).
     note = Column(Text, nullable=True)
+    # Fait en partie (plutôt que pas fait du tout) — utilisé par le sous-traitant,
+    # qui n'a pas de montant à ajuster (prix masqués) contrairement à l'employé.
+    partial = Column(Boolean, nullable=False, default=False, server_default="false")
 
     intervention = relationship("Intervention", back_populates="items")
     client_service = relationship("ClientService")
