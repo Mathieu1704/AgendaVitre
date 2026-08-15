@@ -15,7 +15,6 @@ import {
   Lock,
   Save,
   LogOut,
-  UserPlus,
   ChevronRight,
   Users,
   Briefcase,
@@ -28,6 +27,7 @@ import {
   Camera,
   Image as ImageIcon,
   Trash2,
+  Route,
 } from "lucide-react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
 import Constants from "expo-constants";
@@ -437,46 +437,6 @@ export default function ParametresScreen() {
                   Administration
                 </Text>
 
-                {/* Ajouter Employé */}
-                <Pressable
-                  onPress={() =>
-                    router.push("/(app)/parametres/create-employee" as any)
-                  }
-                  className="mb-3"
-                >
-                  {/* ✅ Card arrondie */}
-                  <Card
-                    className="rounded-[32px] bg-blue-500/5 border-blue-200 dark:border-blue-900 active:scale-[0.99] transition-transform overflow-hidden"
-                    style={{ backgroundColor: "rgba(59,130,246,0.05)" }}
-                  >
-                    <CardContent className="p-4 flex-row items-center justify-between">
-                      <View className="flex-row items-center gap-4 flex-1">
-                        {/* Icône Ronde */}
-                        <View className="bg-blue-500 rounded-full w-12 h-12 items-center justify-center">
-                          <UserPlus
-                            size={24}
-                            color="white"
-                            style={{ marginLeft: 4 }}
-                          />
-                        </View>
-                        {/* Textes Centrés */}
-                        <View className="flex-1 justify-center">
-                          <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
-                            Ajouter un employé
-                          </Text>
-                          <Text className="text-sm text-muted-foreground leading-tight">
-                            Créer un nouveau compte
-                          </Text>
-                        </View>
-                      </View>
-                      <ChevronRight
-                        size={20}
-                        color={isDark ? "white" : "black"}
-                      />
-                    </CardContent>
-                  </Card>
-                </Pressable>
-
                 {/* Gérer Équipe */}
                 <Pressable
                   onPress={() => router.push("/(app)/parametres/team" as any)}
@@ -505,6 +465,33 @@ export default function ParametresScreen() {
                         size={20}
                         color={isDark ? "white" : "black"}
                       />
+                    </CardContent>
+                  </Card>
+                </Pressable>
+                {/* Zones géographiques */}
+                <Pressable
+                  onPress={() => router.push("/(app)/tournees" as any)}
+                  className="mb-3"
+                >
+                  <Card
+                    className="rounded-[32px] bg-orange-500/5 border-orange-200 dark:border-orange-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(249,115,22,0.05)" }}
+                  >
+                    <CardContent className="p-4 flex-row items-center justify-between">
+                      <View className="flex-row items-center gap-4 flex-1">
+                        <View className="bg-orange-500 rounded-full w-12 h-12 items-center justify-center">
+                          <Route size={24} color="white" />
+                        </View>
+                        <View className="flex-1 justify-center">
+                          <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                            Tournées récurrentes
+                          </Text>
+                          <Text className="text-sm text-muted-foreground leading-tight">
+                            Modèles, préparation et facturation
+                          </Text>
+                        </View>
+                      </View>
+                      <ChevronRight size={20} color={isDark ? "white" : "black"} />
                     </CardContent>
                   </Card>
                 </Pressable>

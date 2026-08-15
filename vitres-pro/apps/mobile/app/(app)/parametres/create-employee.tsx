@@ -73,7 +73,7 @@ export default function CreateEmployeeScreen() {
       queryClient.invalidateQueries({ queryKey: ["initial-stats-reprise"] });
       queryClient.invalidateQueries({ queryKey: ["timetracking", "weekly-summary"] });
       toast.success("Succès", "Employé créé !");
-      router.push("/(app)/parametres");
+      router.push("/(app)/parametres/team");
     },
     onError: (err: any) => {
       toast.error(
@@ -113,7 +113,7 @@ export default function CreateEmployeeScreen() {
         <Button
           variant="ghost"
           size="icon"
-          onPress={() => router.push("/(app)/parametres")}
+          onPress={() => router.push("/(app)/parametres/team")}
         >
           <ChevronLeft size={24} color={isDark ? "white" : "black"} />
         </Button>

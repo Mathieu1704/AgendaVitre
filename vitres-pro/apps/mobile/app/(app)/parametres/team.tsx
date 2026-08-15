@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   Clock,
   UserCog,
+  UserPlus,
   Thermometer,
   Trash2,
   Phone,
@@ -217,17 +218,26 @@ export default function TeamManagementScreen() {
       }}
     >
       {/* Header */}
-      <View className="px-4 pt-4 pb-2 flex-row items-center border-b border-border dark:border-slate-800">
-        <Button
-          variant="ghost"
-          size="icon"
-          onPress={() => router.push("/(app)/parametres")}
+      <View className="px-4 pt-4 pb-2 flex-row items-center justify-between border-b border-border dark:border-slate-800">
+        <View className="flex-row items-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            onPress={() => router.push("/(app)/parametres")}
+          >
+            <ChevronLeft size={24} color={isDark ? "white" : "black"} />
+          </Button>
+          <Text className="text-xl font-bold text-foreground dark:text-white ml-2">
+            Gestion de l'équipe
+          </Text>
+        </View>
+        <Pressable
+          onPress={() => router.push("/(app)/parametres/create-employee" as any)}
+          hitSlop={10}
+          className="rounded-full w-10 h-10 items-center justify-center active:opacity-60"
         >
-          <ChevronLeft size={24} color={isDark ? "white" : "black"} />
-        </Button>
-        <Text className="text-xl font-bold text-foreground dark:text-white ml-2">
-          Gestion de l'équipe
-        </Text>
+          <UserPlus size={20} color="#3B82F6" />
+        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
