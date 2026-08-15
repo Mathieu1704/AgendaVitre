@@ -122,9 +122,8 @@ export default function ToursAdminScreen() {
             {templatesQuery.isLoading ? <ActivityIndicator color="#3B82F6" /> : (templatesQuery.data ?? []).map((template) => {
               const stops = template.sections.reduce((sum, section) => sum + section.stops.length, 0);
               const services = template.sections.reduce((sum, section) => sum + section.stops.reduce((inner, stop) => inner + stop.services.length, 0), 0);
-              const review = template.sections.reduce((sum, section) => sum + section.stops.filter((stop) => stop.needs_review || stop.services.some((service) => service.needs_review)).length, 0);
               return (
-                <Card key={template.id} style={{ borderColor: review ? "#F59E0B" : undefined }}>
+                <Card key={template.id}>
                   <CardContent style={{ padding: 16, flexDirection: wide ? "row" : "column", gap: 12, alignItems: wide ? "center" : "stretch" }}>
                     <View style={{ width: wide ? 5 : "100%", height: wide ? 44 : 5, borderRadius: 4, backgroundColor: template.zone === "hainaut" ? "#3B82F6" : "#16A34A" }} />
                     <View style={{ flex: 1 }}>
@@ -133,7 +132,6 @@ export default function ToursAdminScreen() {
                         <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: template.active ? "rgba(22,163,74,0.15)" : soft }}>
                           <Text style={{ color: template.active ? "#16A34A" : muted, fontSize: 11, fontWeight: "700" }}>{template.active ? "ACTIF" : "INACTIF"}</Text>
                         </View>
-                        {review > 0 && <Text style={{ color: "#F59E0B", fontSize: 12, fontWeight: "700" }}>{review} à valider</Text>}
                       </View>
                       <Text style={{ color: muted, marginTop: 4 }}>{WEEKDAY_LABELS[template.weekday]} · {template.default_start_time.slice(0, 5)}–{template.default_end_time.slice(0, 5)} · {stops} commerces · {services} prestations</Text>
                     </View>
@@ -156,9 +154,9 @@ export default function ToursAdminScreen() {
           <View style={{ gap: 12 }}>
             <Text style={{ color: muted }}>Les huit prochaines semaines sont générées automatiquement.</Text>
             {draftsQuery.isLoading ? <ActivityIndicator color="#3B82F6" /> : (draftsQuery.data ?? []).length === 0 ? (
-              <Card><CardContent style={{ padding: 20 }}><Text style={{ color: muted }}>Aucun brouillon : activez d'abord un modèle entièrement validé.</Text></CardContent></Card>
+              <Card><CardContent style={{ padding: 20 }}><Text style={{ color: muted }}>Aucun brouillon : activez d'abord un modèle dans "Modèles".</Text></CardContent></Card>
             ) : (draftsQuery.data ?? []).map((run) => {
-              const selected = run.stops.reduce((sum, stop) => sum + stop.services.filter((service) => service.selected).length, 0);
+              const selected = run.stops.filter((stop) => stop.selected).length;
               const templateZone = templatesQuery.data?.find((item) => item.id === run.template_id)?.zone;
               const eligible = templateZone ? ordinaryEmployees.filter((employee) => employee.zone === templateZone) : [];
               const selectedEmployees = assignees[run.id] ?? [];
@@ -168,7 +166,7 @@ export default function ToursAdminScreen() {
                     <View style={{ flexDirection: wide ? "row" : "column", gap: 10, alignItems: wide ? "center" : "stretch" }}>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#0F172A" }}>{run.intervention.title}</Text>
-                        <Text style={{ color: muted, marginTop: 3 }}>{new Date(`${run.scheduled_date}T12:00:00`).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })} · {selected} prestation(s) suggérée(s)</Text>
+                        <Text style={{ color: muted, marginTop: 3 }}>{new Date(`${run.scheduled_date}T12:00:00`).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })} · {selected} commerce(s) coché(s)</Text>
                       </View>
                       <Pressable onPress={() => router.push(`/(app)/parametres/tournees/prepare/${run.id}` as any)} style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: soft }}>
                         <Text style={{ color: isDark ? "#F8FAFC" : "#0F172A", fontWeight: "700" }}>Vérifier le contenu</Text>

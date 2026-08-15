@@ -21,8 +21,7 @@ import json
 import os
 import re
 import sys
-from copy import deepcopy
-from datetime import date, time
+from datetime import time
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import urlparse
@@ -31,9 +30,6 @@ from zipfile import ZipFile
 
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-ALL_MONTHS = list(range(1, 13))
-WINTER_MONTHS = [1, 2, 3, 11, 12]
-NON_WINTER_MONTHS = [4, 5, 6, 7, 8, 9, 10]
 
 MANIFEST = [
     ("hainaut", 4, "Jeudi Tournée Nivelles.docx", "Tournée Nivelles"),
@@ -107,87 +103,6 @@ def money_values(value: str) -> list[float]:
     return values
 
 
-def payment_modes(raw: str) -> tuple[list[str], bool]:
-    # Les limites alphabetiques sont indispensables : le N de "mensuel" ne
-    # doit jamais etre pris pour le code cash N.
-    normalized = raw.upper().replace(".", "")
-    tokens = re.findall(r"(?<![A-Z])(NF|F\s*TRIM|FT|N|F)(?![A-Z])", normalized)
-    modes = []
-    for token in tokens:
-        if token == "NF":
-            mode = "cash_no_invoice"
-        elif token.replace(" ", "").startswith("FT"):
-            mode = "quarterly_invoice"
-        elif token == "N":
-            mode = "cash_invoiced"
-        else:
-            mode = "monthly_invoice"
-        if not modes or modes[-1] != mode:
-            modes.append(mode)
-    if not modes:
-        return ["monthly_invoice"], True
-    return modes, len(set(modes)) > 1
-
-
-def frequency_rules(raw: str) -> tuple[list[dict], bool]:
-    value = clean(raw).lower().replace("fois", "x")
-    rules: list[dict] = []
-
-    def add(kind: str, interval: int | None = None, months: list[int] | None = None, cap: int | None = None):
-        candidate = {
-            "kind": kind,
-            "anchor_date": None,
-            "interval_weeks": interval,
-            "active_months": months or ALL_MONTHS,
-            "monthly_cap": cap,
-            "position": len(rules),
-        }
-        signature = (kind, interval, tuple(candidate["active_months"]), cap)
-        if signature not in {(rule["kind"], rule["interval_weeks"], tuple(rule["active_months"]), rule["monthly_cap"]) for rule in rules}:
-            rules.append(candidate)
-
-    if "demande" in value:
-        add("on_demand")
-    if re.search(r"1\s*x?\s*/?\s*(?:1\s*)?an", value) or "annuel" in value:
-        add("annual")
-    if "trim" in value or re.search(r"1\s*x\s*/\s*3\s*mois", value):
-        add("interval", 12)
-    for amount in re.findall(r"1\s*x\s*/\s*(\d+)\s*mois", value):
-        add("interval", int(amount) * 4)
-    for amount in re.findall(r"(?:toutes?\s+les|1\s*x\s*/?)\s*(\d+)\s*(?:semaines?|sem\b)", value):
-        add("interval", int(amount))
-    for amount in re.findall(r"([124])\s*x\s*/\s*mois", value):
-        per_month = int(amount)
-        interval = {1: 4, 2: 2, 4: 1}[per_month]
-        cap = 4 if per_month == 4 and ("5" in value or "même" in value or "meme" in value) else None
-        add("interval", interval, cap=cap)
-    if not rules:
-        # Rien n'est presellectionne tant que l'admin n'a pas interprete le texte.
-        add("on_demand")
-        return rules, True
-
-    seasonal = "hiver" in value
-    if seasonal:
-        intervals = [rule for rule in rules if rule["kind"] == "interval"]
-        if len(intervals) >= 2:
-            intervals[0]["active_months"] = NON_WINTER_MONTHS
-            intervals[1]["active_months"] = WINTER_MONTHS
-        else:
-            # Le texte saisonnier n'est pas assez structure pour inventer une
-            # seconde cadence : on conserve la regle et force la validation.
-            for rule in intervals:
-                rule["active_months"] = ALL_MONTHS
-    ambiguous = seasonal or len(rules) > 1 or bool(re.search(r"\bou\b|\*", value))
-    return rules, ambiguous
-
-
-def extract_phone(name: str) -> tuple[str, str | None]:
-    match = re.search(r"(?:(?:\+|00)32\s*\(0\)?|0)\d(?:[\s./-]*\d{2}){3,4}", name)
-    if not match:
-        return name, None
-    return clean(name[:match.start()] + " " + name[match.end():]), clean(match.group(0))
-
-
 def duration_minutes(raw: str) -> int | None:
     value = clean(raw).lower()
     hours = re.search(r"(\d+)\s*h(?:\s*(\d{1,2}))?", value)
@@ -252,48 +167,24 @@ def row_columns(zone: str, row: list[str]) -> dict:
     }
 
 
-def build_services(columns: dict, row_index: int, source: str) -> tuple[list[dict], bool]:
+def build_services(columns: dict) -> list[dict]:
+    """Une prestation par colonne face/prix, fidele au tableau papier.
+
+    Paiement et frequence restent du texte libre au niveau du commerce
+    (jamais interpretes) : voir columns["payment"]/columns["frequency"].
+    """
     pairs = [(clean(face), clean(price)) for face, price in zip(columns["faces"], columns["prices"]) if clean(face) or clean(price)]
-    modes, _ = payment_modes(columns["payment"])
-    rules, frequency_ambiguous = frequency_rules(columns["frequency"])
     services = []
-    overall_ambiguous = False
     for index, (label, price_text) in enumerate(pairs):
         amounts = money_values(price_text)
         price = round(sum(amounts), 2) if amounts else 0
-        mapping_ambiguous = (
-            not label
-            or not amounts
-            or len(amounts) > 1
-            or (len(modes) > 1 and len(modes) != len(pairs))
-            or frequency_ambiguous
-            or (len(rules) > 1 and len(pairs) > 1)
-        )
-        mode = modes[index] if len(modes) == len(pairs) else modes[0]
-        service_rules = [deepcopy(rules[index])] if len(rules) == len(pairs) else deepcopy(rules)
-        for rule_position, rule in enumerate(service_rules):
-            rule["position"] = rule_position
         services.append({
             "label": label or "Prestation à confirmer",
             "price_ht": price,
-            "billing_mode": mode,
             "position": index,
-            # Une association ambigue est conservee integralement mais reste
-            # inactive tant qu'un admin ne l'a pas validee.
-            "active": not mapping_ambiguous,
-            "needs_review": mapping_ambiguous,
-            "source_data": {
-                "document": source,
-                "row": row_index,
-                "face_text": label,
-                "price_text": price_text,
-                "frequency_text": columns["frequency"],
-                "payment_text": columns["payment"],
-            },
-            "schedules": service_rules,
+            "active": True,
         })
-        overall_ambiguous = overall_ambiguous or mapping_ambiguous
-    return services, overall_ambiguous
+    return services
 
 
 def parse_document(path: Path, zone: str, weekday: int, name: str) -> dict:
@@ -312,41 +203,27 @@ def parse_document(path: Path, zone: str, weekday: int, name: str) -> dict:
             sections.append(current_section)
             previous_stop = None
             continue
-        services, ambiguous = build_services(columns, row_index, path.name)
+        services = build_services(columns)
         extra_notes = [clean(columns[key]) for key in ("marker", "appointment", "duration") if clean(columns[key])]
         if not client:
-            continuation_notes = [*extra_notes]
-            if clean(columns["frequency"]):
-                continuation_notes.append(f"Fréquence: {clean(columns['frequency'])}")
-            if clean(columns["payment"]):
-                continuation_notes.append(f"Paiement: {clean(columns['payment'])}")
-            if previous_stop and (services or continuation_notes):
+            if previous_stop and (services or extra_notes):
                 previous_stop["services"].extend({**service, "position": len(previous_stop["services"]) + offset} for offset, service in enumerate(services))
-                if continuation_notes:
-                    previous_stop["instructions"] = clean(" / ".join(filter(None, [previous_stop.get("instructions", ""), *continuation_notes])))
-                previous_stop["source_data"]["continuation_rows"].append(row_index)
+                if extra_notes:
+                    previous_stop["note"] = clean(" / ".join(filter(None, [previous_stop.get("note", ""), *extra_notes])))
             elif any(clean(value) for value in raw_row):
                 ignored_rows.append({"row": row_index, "cells": raw_row})
             continue
         if current_section is None:
             current_section = {"label": "Sans section", "position": 0, "stops": []}
             sections.append(current_section)
-        clean_name, phone = extract_phone(client)
         stop = {
-            "name": clean_name or client,
-            "export_label": clean_name or client,
-            "address": None,
-            "phone": phone,
-            "email": None,
-            "latitude": None,
-            "longitude": None,
-            "time_window": clean(columns["appointment"]) or None,
+            "name": client,
+            "note": clean(" / ".join(extra_notes)) or None,
+            "payment_text": clean(columns["payment"]) or None,
+            "frequency_text": clean(columns["frequency"]) or None,
             "estimated_minutes": duration_minutes(columns["duration"]),
-            "instructions": clean(" / ".join(extra_notes)) or None,
             "position": sum(len(section["stops"]) for section in sections),
             "active": True,
-            "needs_review": not services,
-            "source_data": {"document": path.name, "row": row_index, "cells": raw_row, "continuation_rows": []},
             "services": services,
         }
         current_section["stops"].append(stop)
@@ -361,7 +238,6 @@ def parse_document(path: Path, zone: str, weekday: int, name: str) -> dict:
         "default_end_time": "16:00:00",
         "active": False,
         "archived": False,
-        "setup_complete": False,
         "source_document": path.name,
         "sections": sections,
         "import_report": {"ignored_rows": ignored_rows},
@@ -386,8 +262,6 @@ def build_seed(hainaut_dir: Path, ardennes_dir: Path) -> dict:
         "ardennes": sum(item["zone"] == "ardennes" for item in templates),
         "stops": sum(len(section["stops"]) for item in templates for section in item["sections"]),
         "services": sum(len(stop["services"]) for item in templates for section in item["sections"] for stop in section["stops"]),
-        "ambiguous_stops": sum(stop["needs_review"] for item in templates for section in item["sections"] for stop in section["stops"]),
-        "ambiguous_services": sum(service["needs_review"] for item in templates for section in item["sections"] for stop in section["stops"] for service in stop["services"]),
     }
     return {"format": "lvm-tour-seed-v1", "stats": stats, "templates": templates}
 
@@ -397,7 +271,7 @@ def apply_local(seed: dict) -> int:
         raise RuntimeError("Definissez ALLOW_LOCAL_TOUR_IMPORT=1 pour confirmer l'ecriture locale.")
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from app.core.config import settings
-    from app.models.models import SessionLocal, TourSection, TourService, TourServiceSchedule, TourStop, TourTemplate
+    from app.models.models import SessionLocal, TourSection, TourService, TourStop, TourTemplate
 
     host = (urlparse(settings.DATABASE_URL).hostname or "").lower()
     if host not in {"localhost", "127.0.0.1", "::1", "db"}:
@@ -409,7 +283,7 @@ def apply_local(seed: dict) -> int:
             exists = db.query(TourTemplate).filter(TourTemplate.source_document == payload["source_document"]).first()
             if exists:
                 continue
-            template_values = {key: payload[key] for key in ("name", "zone", "weekday", "default_start_time", "default_end_time", "active", "archived", "setup_complete", "source_document")}
+            template_values = {key: payload[key] for key in ("name", "zone", "weekday", "default_start_time", "default_end_time", "active", "archived", "source_document")}
             template_values["default_start_time"] = time.fromisoformat(template_values["default_start_time"])
             template_values["default_end_time"] = time.fromisoformat(template_values["default_end_time"])
             template = TourTemplate(**template_values)
@@ -420,18 +294,11 @@ def apply_local(seed: dict) -> int:
                 db.add(section)
                 db.flush()
                 for stop_data in section_data["stops"]:
-                    stop = TourStop(template_id=template.id, section_id=section.id, **{key: stop_data.get(key) for key in ("name", "export_label", "address", "phone", "email", "latitude", "longitude", "time_window", "estimated_minutes", "instructions", "position", "active", "needs_review", "source_data")})
+                    stop = TourStop(template_id=template.id, section_id=section.id, **{key: stop_data.get(key) for key in ("name", "note", "payment_text", "frequency_text", "estimated_minutes", "position", "active")})
                     db.add(stop)
                     db.flush()
                     for service_data in stop_data["services"]:
-                        service = TourService(stop_id=stop.id, **{key: service_data.get(key) for key in ("label", "price_ht", "billing_mode", "position", "active", "needs_review", "source_data")})
-                        db.add(service)
-                        db.flush()
-                        for rule_data in service_data["schedules"]:
-                            rule_values = {key: rule_data.get(key) for key in ("kind", "anchor_date", "interval_weeks", "active_months", "monthly_cap", "position")}
-                            if isinstance(rule_values["anchor_date"], str):
-                                rule_values["anchor_date"] = date.fromisoformat(rule_values["anchor_date"])
-                            db.add(TourServiceSchedule(service_id=service.id, **rule_values))
+                        db.add(TourService(stop_id=stop.id, **{key: service_data.get(key) for key in ("label", "price_ht", "position", "active")}))
             created += 1
         db.commit()
         return created

@@ -412,57 +412,15 @@ class TimeEntryCorrectionIn(BaseModel):
 
 
 # --- TOURNEES RECURRENTES ---
-TourBillingMode = Literal[
-    "monthly_invoice",
-    "quarterly_invoice",
-    "cash_invoiced",
-    "cash_no_invoice",
-]
-TourScheduleKind = Literal["interval", "on_demand", "annual"]
-
-
-class TourScheduleInput(BaseModel):
-    id: Optional[UUID] = None
-    kind: TourScheduleKind = "interval"
-    anchor_date: Optional[date] = None
-    interval_weeks: Optional[int] = None
-    active_months: List[int] = list(range(1, 13))
-    monthly_cap: Optional[int] = None
-    position: float = 0
-
-    @field_validator("active_months")
-    @classmethod
-    def _valid_months(cls, value):
-        months = sorted(set(value))
-        if any(month < 1 or month > 12 for month in months):
-            raise ValueError("Les mois actifs doivent etre compris entre 1 et 12.")
-        return months
-
-    @field_validator("interval_weeks")
-    @classmethod
-    def _valid_interval(cls, value):
-        if value is not None and value <= 0:
-            raise ValueError("L'intervalle doit etre superieur a zero.")
-        return value
-
-    @field_validator("monthly_cap")
-    @classmethod
-    def _valid_monthly_cap(cls, value):
-        if value is not None and value <= 0:
-            raise ValueError("Le plafond mensuel doit etre superieur a zero.")
-        return value
-
+# Fidele au tableau papier : paiement et frequence restent du texte libre,
+# jamais interpretes/calcules par l'app.
 
 class TourServiceInput(BaseModel):
     id: Optional[UUID] = None
     label: str
     price_ht: float = 0
-    billing_mode: TourBillingMode = "monthly_invoice"
     position: float = 0
     active: bool = True
-    needs_review: bool = False
-    source_data: Optional[Dict[str, Any]] = None
-    schedules: List[TourScheduleInput] = []
 
     @field_validator("price_ht")
     @classmethod
@@ -475,34 +433,13 @@ class TourServiceInput(BaseModel):
 class TourStopInput(BaseModel):
     id: Optional[UUID] = None
     name: str
-    export_label: Optional[str] = None
-    address: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    time_window: Optional[str] = None
+    note: Optional[str] = None
+    payment_text: Optional[str] = None
+    frequency_text: Optional[str] = None
     estimated_minutes: Optional[int] = None
-    instructions: Optional[str] = None
     position: float = 0
     active: bool = True
-    needs_review: bool = False
-    source_data: Optional[Dict[str, Any]] = None
     services: List[TourServiceInput] = []
-
-    @field_validator("latitude")
-    @classmethod
-    def _valid_latitude(cls, value):
-        if value is not None and not -90 <= value <= 90:
-            raise ValueError("Latitude invalide.")
-        return value
-
-    @field_validator("longitude")
-    @classmethod
-    def _valid_longitude(cls, value):
-        if value is not None and not -180 <= value <= 180:
-            raise ValueError("Longitude invalide.")
-        return value
 
     @field_validator("estimated_minutes")
     @classmethod
@@ -527,7 +464,6 @@ class TourTemplateInput(BaseModel):
     default_end_time: time
     active: bool = False
     archived: bool = False
-    setup_complete: bool = False
     source_document: Optional[str] = None
     sections: List[TourSectionInput] = []
 
@@ -539,22 +475,14 @@ class TourTemplateInput(BaseModel):
         return value
 
 
-class TourScheduleOut(TourScheduleInput):
-    id: UUID
-    class Config:
-        from_attributes = True
-
-
 class TourServiceOut(TourServiceInput):
     id: UUID
-    schedules: List[TourScheduleOut] = []
     class Config:
         from_attributes = True
 
 
 class TourStopOut(TourStopInput):
     id: UUID
-    export_label: str
     services: List[TourServiceOut] = []
     class Config:
         from_attributes = True
@@ -569,20 +497,9 @@ class TourSectionOut(TourSectionInput):
 
 class TourTemplateOut(TourTemplateInput):
     id: UUID
-    version: int
     created_at: datetime
     updated_at: datetime
     sections: List[TourSectionOut] = []
-    class Config:
-        from_attributes = True
-
-
-class TourRunCashOut(BaseModel):
-    id: UUID
-    billing_mode: TourBillingMode
-    expected_amount: float
-    received_amount: Optional[float] = None
-    confirmed_at: Optional[datetime] = None
     class Config:
         from_attributes = True
 
@@ -592,10 +509,7 @@ class TourRunServiceOut(BaseModel):
     source_service_id: Optional[UUID] = None
     label: str
     price_ht: float
-    billing_mode: TourBillingMode
     position: float
-    suggested: bool
-    selected: bool
     status: Literal["pending", "done", "not_done"]
     exception_reason: Optional[str] = None
     performed_at: Optional[datetime] = None
@@ -608,22 +522,16 @@ class TourRunStopOut(BaseModel):
     source_stop_id: Optional[UUID] = None
     section_label: Optional[str] = None
     name: str
-    export_label: str
-    address: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    time_window: Optional[str] = None
+    note: Optional[str] = None
+    payment_text: Optional[str] = None
+    frequency_text: Optional[str] = None
     estimated_minutes: Optional[int] = None
-    instructions: Optional[str] = None
     position: float
     selected: bool
     status: Literal["pending", "done", "partial", "not_visited"]
     exception_reason: Optional[str] = None
     completed_at: Optional[datetime] = None
     services: List[TourRunServiceOut] = []
-    cash_confirmations: List[TourRunCashOut] = []
     class Config:
         from_attributes = True
 
@@ -632,7 +540,6 @@ class TourRunOut(BaseModel):
     id: UUID
     template_id: Optional[UUID] = None
     scheduled_date: date
-    template_version: int
     publication_status: Literal["draft", "published"]
     lifecycle_status: str
     progress: Dict[str, int]
@@ -650,7 +557,7 @@ class TourDraftGenerateInput(BaseModel):
     weeks: int = 8
 
 
-class TourDraftSelectionInput(BaseModel):
+class TourStopSelectionInput(BaseModel):
     selected: bool
 
 
@@ -663,42 +570,9 @@ class TourPublishInput(BaseModel):
     employee_ids: List[UUID]
 
 
-class TourServiceStatusInput(BaseModel):
-    status: Literal["pending", "done", "not_done"]
-    reason: Optional[str] = None
-
-
 class TourStopResolveInput(BaseModel):
     status: Literal["done", "partial", "not_visited"]
     reason: Optional[str] = None
     not_done_service_ids: List[UUID] = []
     service_reasons: Dict[str, str] = {}
-    cash_received: Dict[str, float] = {}
     client_operation_id: Optional[UUID] = None
-
-
-class TourCashInput(BaseModel):
-    received_amount: float
-
-
-class TourBillingReviewInput(BaseModel):
-    cadence: Literal["monthly", "quarterly"]
-    export_label: str
-    bucket_start: date
-    selected: bool = True
-    override_amount: Optional[float] = None
-
-
-class TourBillingExportInput(BaseModel):
-    zone: Literal["hainaut", "ardennes"]
-    period_start: date
-
-
-class TourBillingBatchOut(BaseModel):
-    id: UUID
-    zone: str
-    period_start: date
-    filename: str
-    created_at: datetime
-    class Config:
-        from_attributes = True

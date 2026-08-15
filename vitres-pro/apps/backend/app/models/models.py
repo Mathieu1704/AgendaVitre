@@ -418,7 +418,12 @@ class ClientOperation(Base):
 # --- TOURNEES RECURRENTES ---
 
 class TourTemplate(Base):
-    """Modele administrable d'une tournee, independant du carnet Clients."""
+    """Modele administrable d'une tournee, independant du carnet Clients.
+
+    Fidele au tableau papier : paiement et frequence restent du texte libre,
+    jamais interpretes/calcules. C'est l'admin qui decide chaque semaine quels
+    commerces sont a faire (l'ancien point au crayon), pas un moteur de regles.
+    """
     __tablename__ = "tour_templates"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -429,8 +434,6 @@ class TourTemplate(Base):
     default_end_time = Column(Time, nullable=False)
     active = Column(Boolean, default=False, nullable=False, server_default="false")
     archived = Column(Boolean, default=False, nullable=False, server_default="false")
-    setup_complete = Column(Boolean, default=False, nullable=False, server_default="false")
-    version = Column(Integer, default=1, nullable=False, server_default="1")
     source_document = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -453,25 +456,19 @@ class TourSection(Base):
 
 
 class TourStop(Base):
+    """Un commerce de la tournee : une ligne du tableau papier."""
     __tablename__ = "tour_stops"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     template_id = Column(UUID(as_uuid=True), ForeignKey("tour_templates.id", ondelete="CASCADE"), nullable=False, index=True)
     section_id = Column(UUID(as_uuid=True), ForeignKey("tour_sections.id", ondelete="SET NULL"), nullable=True)
     name = Column(String(240), nullable=False)
-    export_label = Column(String(240), nullable=False)
-    address = Column(Text, nullable=True)
-    phone = Column(String(80), nullable=True)
-    email = Column(String(240), nullable=True)
-    latitude = Column(Numeric(9, 6), nullable=True)
-    longitude = Column(Numeric(9, 6), nullable=True)
-    time_window = Column(String(120), nullable=True)
+    note = Column(Text, nullable=True)  # 1ere colonne papier (heure, consigne...)
+    payment_text = Column(String(120), nullable=True)  # texte libre, ex "F -> mens."
+    frequency_text = Column(String(120), nullable=True)  # texte libre, informatif uniquement
     estimated_minutes = Column(Integer, nullable=True)
-    instructions = Column(Text, nullable=True)
     position = Column(Float, nullable=False, default=0)
     active = Column(Boolean, default=True, nullable=False, server_default="true")
-    needs_review = Column(Boolean, default=False, nullable=False, server_default="false")
-    source_data = Column(JSONB, nullable=True)
 
     template = relationship("TourTemplate", back_populates="stops")
     section = relationship("TourSection", back_populates="stops")
@@ -479,36 +476,17 @@ class TourStop(Base):
 
 
 class TourService(Base):
+    """Une prestation du commerce (1 ou 2 par ligne papier: ex '2 F', '1 F')."""
     __tablename__ = "tour_services"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     stop_id = Column(UUID(as_uuid=True), ForeignKey("tour_stops.id", ondelete="CASCADE"), nullable=False, index=True)
     label = Column(String(240), nullable=False)
     price_ht = Column(Numeric(10, 2), nullable=False, default=0)
-    billing_mode = Column(String(30), nullable=False, default="monthly_invoice")
     position = Column(Float, nullable=False, default=0)
     active = Column(Boolean, default=True, nullable=False, server_default="true")
-    needs_review = Column(Boolean, default=False, nullable=False, server_default="false")
-    source_data = Column(JSONB, nullable=True)
 
     stop = relationship("TourStop", back_populates="services")
-    schedules = relationship("TourServiceSchedule", back_populates="service", cascade="all, delete-orphan", order_by="TourServiceSchedule.position")
-
-
-class TourServiceSchedule(Base):
-    """Une prestation peut avoir plusieurs regles (hiver/hors hiver)."""
-    __tablename__ = "tour_service_schedules"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    service_id = Column(UUID(as_uuid=True), ForeignKey("tour_services.id", ondelete="CASCADE"), nullable=False, index=True)
-    kind = Column(String(20), nullable=False, default="interval")  # interval | on_demand | annual
-    anchor_date = Column(Date, nullable=True)
-    interval_weeks = Column(Integer, nullable=True)
-    active_months = Column(JSONB, nullable=False, default=lambda: list(range(1, 13)))
-    monthly_cap = Column(Integer, nullable=True)
-    position = Column(Float, nullable=False, default=0)
-
-    service = relationship("TourService", back_populates="schedules")
 
 
 class TourRun(Base):
@@ -519,7 +497,6 @@ class TourRun(Base):
     template_id = Column(UUID(as_uuid=True), ForeignKey("tour_templates.id", ondelete="SET NULL"), nullable=True, index=True)
     intervention_id = Column(UUID(as_uuid=True), ForeignKey("interventions.id", ondelete="CASCADE"), nullable=False, unique=True)
     scheduled_date = Column(Date, nullable=False)
-    template_version = Column(Integer, nullable=False)
     publication_status = Column(String(20), nullable=False, default="draft")  # draft | published
     published_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
@@ -559,6 +536,11 @@ class TourRun(Base):
 
 
 class TourRunStop(Base):
+    """Copie figee d'un TourStop pour une occurrence donnee.
+
+    `selected` est la coche hebdomadaire de l'admin (l'ancien point papier) :
+    rien n'est preselectionne automatiquement.
+    """
     __tablename__ = "tour_run_stops"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -566,25 +548,19 @@ class TourRunStop(Base):
     source_stop_id = Column(UUID(as_uuid=True), ForeignKey("tour_stops.id", ondelete="SET NULL"), nullable=True)
     section_label = Column(String(180), nullable=True)
     name = Column(String(240), nullable=False)
-    export_label = Column(String(240), nullable=False)
-    address = Column(Text, nullable=True)
-    phone = Column(String(80), nullable=True)
-    email = Column(String(240), nullable=True)
-    latitude = Column(Numeric(9, 6), nullable=True)
-    longitude = Column(Numeric(9, 6), nullable=True)
-    time_window = Column(String(120), nullable=True)
+    note = Column(Text, nullable=True)
+    payment_text = Column(String(120), nullable=True)
+    frequency_text = Column(String(120), nullable=True)
     estimated_minutes = Column(Integer, nullable=True)
-    instructions = Column(Text, nullable=True)
     position = Column(Float, nullable=False, default=0)
     selected = Column(Boolean, default=False, nullable=False, server_default="false")
-    status = Column(String(20), nullable=False, default="pending")
+    status = Column(String(20), nullable=False, default="pending")  # pending | done | partial | not_visited
     exception_reason = Column(Text, nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     run = relationship("TourRun", back_populates="stops")
     services = relationship("TourRunService", back_populates="run_stop", cascade="all, delete-orphan", order_by="TourRunService.position")
-    cash_confirmations = relationship("TourRunCash", back_populates="run_stop", cascade="all, delete-orphan")
 
 
 class TourRunService(Base):
@@ -595,70 +571,10 @@ class TourRunService(Base):
     source_service_id = Column(UUID(as_uuid=True), ForeignKey("tour_services.id", ondelete="SET NULL"), nullable=True)
     label = Column(String(240), nullable=False)
     price_ht = Column(Numeric(10, 2), nullable=False, default=0)
-    billing_mode = Column(String(30), nullable=False)
     position = Column(Float, nullable=False, default=0)
-    suggested = Column(Boolean, default=False, nullable=False, server_default="false")
-    selected = Column(Boolean, default=False, nullable=False, server_default="false")
-    status = Column(String(20), nullable=False, default="pending")
+    status = Column(String(20), nullable=False, default="pending")  # pending | done | not_done
     exception_reason = Column(Text, nullable=True)
     performed_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     run_stop = relationship("TourRunStop", back_populates="services")
-
-
-class TourRunCash(Base):
-    __tablename__ = "tour_run_cash"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    run_stop_id = Column(UUID(as_uuid=True), ForeignKey("tour_run_stops.id", ondelete="CASCADE"), nullable=False, index=True)
-    billing_mode = Column(String(30), nullable=False)
-    expected_amount = Column(Numeric(10, 2), nullable=False, default=0)
-    received_amount = Column(Numeric(10, 2), nullable=True)
-    confirmed_at = Column(DateTime(timezone=True), nullable=True)
-    confirmed_by = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    run_stop = relationship("TourRunStop", back_populates="cash_confirmations")
-    confirmer = relationship("Employee", foreign_keys=[confirmed_by])
-
-    __table_args__ = (
-        UniqueConstraint("run_stop_id", "billing_mode", name="uq_tour_cash_stop_mode"),
-    )
-
-
-class TourBillingReview(Base):
-    """Choix comptable persiste sans modifier les donnees terrain."""
-    __tablename__ = "tour_billing_reviews"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    zone = Column(String(20), nullable=False)
-    period_start = Column(Date, nullable=False)
-    cadence = Column(String(20), nullable=False)  # monthly | quarterly
-    export_label = Column(String(240), nullable=False)
-    bucket_start = Column(Date, nullable=False)
-    selected = Column(Boolean, nullable=False, default=True, server_default="true")
-    override_amount = Column(Numeric(10, 2), nullable=True)
-    updated_by = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint("zone", "period_start", "cadence", "export_label", "bucket_start", name="uq_tour_billing_review_cell"),
-    )
-
-
-class TourBillingBatch(Base):
-    """Lot immuable: le JSON permet de regenerer exactement le XLSX."""
-    __tablename__ = "tour_billing_batches"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    zone = Column(String(20), nullable=False)
-    period_start = Column(Date, nullable=False)
-    filename = Column(String(255), nullable=False)
-    payload = Column(JSONB, nullable=False)
-    source_service_ids = Column(JSONB, nullable=False, default=list)
-    source_cash_ids = Column(JSONB, nullable=False, default=list)
-    created_by = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-
-    creator = relationship("Employee", foreign_keys=[created_by])

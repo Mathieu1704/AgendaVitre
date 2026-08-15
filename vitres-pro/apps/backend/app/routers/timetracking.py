@@ -14,9 +14,6 @@ from app.models.models import (
     ProgressiveHours,
     Intervention,
     InAppNotification,
-    TourRun,
-    TourRunStop,
-    TourRunCash,
 )
 from app.core.deps import get_current_user
 from app.routers.planning import BRUSSELS_TZ, _utc_bounds, _get_employee_hours_for_day
@@ -206,22 +203,6 @@ def _weekly_cash_amount(db: Session, emp: Employee, week_start: date, week_end: 
     for iv in interventions:
         if any(e.id == emp.id for e in iv.employees):
             total += float(iv.price_estimated or 0)
-    tour_cash = (
-        db.query(TourRunCash)
-        .join(TourRunStop, TourRunCash.run_stop_id == TourRunStop.id)
-        .join(TourRun, TourRunStop.run_id == TourRun.id)
-        .join(Intervention, TourRun.intervention_id == Intervention.id)
-        .filter(
-            Intervention.start_time >= day_start_utc,
-            Intervention.start_time < day_end_utc,
-            Intervention.status != "cancelled",
-            TourRun.publication_status == "published",
-            TourRunCash.confirmed_by == emp.id,
-            TourRunCash.confirmed_at.isnot(None),
-        )
-        .all()
-    )
-    total += sum(float(cash.received_amount or 0) for cash in tour_cash)
     return round(total, 2)
 
 
