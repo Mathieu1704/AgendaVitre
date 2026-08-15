@@ -48,6 +48,13 @@ import {
   saveProfile as saveCachedProfile,
 } from "../../../src/lib/offline/profileCache";
 
+// Le binaire natif en prod n'a pas encore ete rebuild avec expo-image-picker :
+// appeler ses fonctions natives peut faire planter l'app au niveau OS (ex.
+// permission camera/photos absente d'Info.plist), un cas qu'un try/catch JS
+// ne peut pas rattraper. On masque donc l'entree "changer la photo" tant que
+// le nouveau binaire (avec le plugin expo-image-picker) n'est pas deploye.
+const AVATAR_EDIT_ENABLED = false;
+
 // Chargement paresseux : sur un build natif publié avant l'ajout de ce module
 // (avant rebuild EAS), un `import` statique fait planter tout l'écran dès son
 // ouverture. En le différant + catchant ici, seul le tap sur "photo" échoue
@@ -353,8 +360,8 @@ export default function ParametresScreen() {
               <CardContent className="p-6 pt-0">
                 <View className="flex-row items-center mb-6">
                   <Pressable
-                    onPress={() => setShowAvatarSheet(true)}
-                    disabled={uploadingAvatar}
+                    onPress={() => AVATAR_EDIT_ENABLED && setShowAvatarSheet(true)}
+                    disabled={uploadingAvatar || !AVATAR_EDIT_ENABLED}
                     style={{ position: "relative" }}
                   >
                     <Avatar
@@ -363,27 +370,29 @@ export default function ParametresScreen() {
                       color={profile?.color}
                       imageUrl={profile?.avatar_url}
                     />
-                    <View
-                      style={{
-                        position: "absolute",
-                        bottom: -2,
-                        right: -2,
-                        width: 22,
-                        height: 22,
-                        borderRadius: 11,
-                        backgroundColor: "#3B82F6",
-                        borderWidth: 2,
-                        borderColor: isDark ? "#0F172A" : "#FFFFFF",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {uploadingAvatar ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Camera size={11} color="#fff" />
-                      )}
-                    </View>
+                    {AVATAR_EDIT_ENABLED && (
+                      <View
+                        style={{
+                          position: "absolute",
+                          bottom: -2,
+                          right: -2,
+                          width: 22,
+                          height: 22,
+                          borderRadius: 11,
+                          backgroundColor: "#3B82F6",
+                          borderWidth: 2,
+                          borderColor: isDark ? "#0F172A" : "#FFFFFF",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {uploadingAvatar ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Camera size={11} color="#fff" />
+                        )}
+                      </View>
+                    )}
                   </Pressable>
                   <View className="ml-4 flex-1">
                     <Text className="text-xl font-bold text-foreground dark:text-white">
@@ -824,7 +833,7 @@ export default function ParametresScreen() {
       )}
 
       {/* Photo de profil : prendre/choisir/supprimer */}
-      {showAvatarSheet && (
+      {AVATAR_EDIT_ENABLED && showAvatarSheet && (
         <Dialog open onClose={() => setShowAvatarSheet(false)} position="bottom">
           <View style={{ padding: 12, gap: 4 }}>
             <Pressable
