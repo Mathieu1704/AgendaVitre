@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, Switch, Platform } from "react-native";
+import { View, Text, ScrollView, Switch, Platform, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,7 +14,9 @@ import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { ColorPicker } from "../../../src/ui/components/ColorPicker";
 import { WeekdayHoursPicker } from "../../../src/ui/components/WeekdayHoursPicker";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
+import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
 import { useEmployees } from "../../../src/hooks/useEmployees";
+import { toISODate } from "../../../src/lib/date";
 
 const ROLE_OPTIONS = [
   { id: "employee", label: "Employé" },
@@ -44,6 +46,8 @@ export default function CreateEmployeeScreen() {
   const [hoursPerWeekday, setHoursPerWeekday] = useState<Record<string, number>>(DEFAULT_HOURS);
   const [noFixedHours, setNoFixedHours] = useState(false);
   const previousHoursRef = React.useRef<Record<string, number>>(DEFAULT_HOURS);
+  const [hoursValidFrom, setHoursValidFrom] = useState<string | null>(null);
+  const [hoursValidUntil, setHoursValidUntil] = useState<string | null>(null);
 
   const handleToggleNoFixedHours = (value: boolean) => {
     setNoFixedHours(value);
@@ -85,6 +89,8 @@ export default function CreateEmployeeScreen() {
       color: selectedColor,
       role,
       hours_per_weekday: hoursPerWeekday,
+      hours_valid_from: role === "subcontractor" ? hoursValidFrom : null,
+      hours_valid_until: role === "subcontractor" ? hoursValidUntil : null,
     });
   };
 
@@ -207,13 +213,71 @@ export default function CreateEmployeeScreen() {
               <SlidingPillSelector
                 options={ROLE_OPTIONS}
                 selected={role}
-                onSelect={(id) => setRole(id as "admin" | "employee" | "subcontractor")}
+                onSelect={(id) => {
+                  const newRole = id as "admin" | "employee" | "subcontractor";
+                  setRole(newRole);
+                  if (newRole !== "subcontractor") {
+                    setHoursValidFrom(null);
+                    setHoursValidUntil(null);
+                  }
+                }}
                 pillColor="#3B82F6"
                 bgColor={isDark ? "#1E293B" : "#F1F5F9"}
                 activeTextColor="#FFFFFF"
                 inactiveTextColor={isDark ? "#94A3B8" : "#64748B"}
               />
             </View>
+
+            {role === "subcontractor" && (
+              <View className="pt-2 border-t border-border dark:border-slate-800" style={{ gap: 10 }}>
+                <Text className="text-sm font-semibold text-foreground dark:text-white">
+                  Période d'activité (optionnel)
+                </Text>
+                <Text className="text-xs text-muted-foreground -mt-1 mb-1">
+                  En dehors de cette période, ce collaborateur sera automatiquement compté à 0h prévues, sans action de votre part.
+                </Text>
+
+                {hoursValidFrom ? (
+                  <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <DateTimePicker
+                        label="Actif à partir du"
+                        value={hoursValidFrom + "T00:00"}
+                        onChange={(v) => setHoursValidFrom(v.split("T")[0])}
+                        dateOnly
+                      />
+                    </View>
+                    <Pressable onPress={() => setHoursValidFrom(null)} hitSlop={8} style={{ marginBottom: 14 }}>
+                      <Text className="text-xs text-red-500 font-semibold">Retirer</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable onPress={() => setHoursValidFrom(toISODate(new Date()))}>
+                    <Text className="text-primary text-sm font-semibold">+ Définir une date de début</Text>
+                  </Pressable>
+                )}
+
+                {hoursValidUntil ? (
+                  <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <DateTimePicker
+                        label="Actif jusqu'au"
+                        value={hoursValidUntil + "T00:00"}
+                        onChange={(v) => setHoursValidUntil(v.split("T")[0])}
+                        dateOnly
+                      />
+                    </View>
+                    <Pressable onPress={() => setHoursValidUntil(null)} hitSlop={8} style={{ marginBottom: 14 }}>
+                      <Text className="text-xs text-red-500 font-semibold">Retirer</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable onPress={() => setHoursValidUntil(toISODate(new Date()))}>
+                    <Text className="text-primary text-sm font-semibold">+ Définir une date de fin</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
           </CardContent>
         </Card>
 

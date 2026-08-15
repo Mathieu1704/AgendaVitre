@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict
 from uuid import UUID
+from datetime import date
 from pydantic import BaseModel
 
 from pydantic import field_validator
@@ -27,6 +28,8 @@ class EmployeeCreateRequest(BaseModel):
     role: str = "employee"
     phone: Optional[str] = None
     hours_per_weekday: Optional[Dict[str, float]] = None
+    hours_valid_from: Optional[date] = None
+    hours_valid_until: Optional[date] = None
 
     @field_validator("hours_per_weekday")
     @classmethod
@@ -104,6 +107,8 @@ def create_employee(
         weekly_hours=weekly_hours,
         daily_capacity=daily_capacity,
         hours_per_weekday=emp_data.hours_per_weekday,
+        hours_valid_from=emp_data.hours_valid_from,
+        hours_valid_until=emp_data.hours_valid_until,
     )
     
     try:

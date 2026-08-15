@@ -39,6 +39,8 @@ class EmployeeBase(BaseModel):
     weekly_hours: float = 38.0
     daily_capacity: float = 7.6
     hours_per_weekday: Optional[Dict[str, float]] = None
+    hours_valid_from: Optional[date] = None
+    hours_valid_until: Optional[date] = None
 
     @field_validator("hours_per_weekday")
     @classmethod
@@ -59,6 +61,8 @@ class EmployeeUpdate(BaseModel):
     weekly_hours: Optional[float] = None
     daily_capacity: Optional[float] = None
     hours_per_weekday: Optional[Dict[str, float]] = None
+    hours_valid_from: Optional[date] = None
+    hours_valid_until: Optional[date] = None
 
     @field_validator("hours_per_weekday")
     @classmethod

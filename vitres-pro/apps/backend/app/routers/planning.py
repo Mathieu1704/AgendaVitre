@@ -30,11 +30,18 @@ def _get_employee_hours_for_day(emp: Employee, target_date: date, progressive: l
         if ph.employee_id == emp.id and ph.start_date <= target_date <= ph.end_date:
             return float(ph.hours_per_weekday.get(weekday_key, 0))
 
-    # 2. Heures par jour définies sur l'employé
+    # 2. Plage de validité optionnelle (ex: sous-traitant en mission temporaire).
+    #    Hors de cette plage, l'employé est traité comme ayant 0h prévues.
+    if emp.hours_valid_from and target_date < emp.hours_valid_from:
+        return 0.0
+    if emp.hours_valid_until and target_date > emp.hours_valid_until:
+        return 0.0
+
+    # 3. Heures par jour définies sur l'employé
     if emp.hours_per_weekday:
         return float(emp.hours_per_weekday.get(weekday_key, 0))
 
-    # 3. Fallback : daily_capacity (ancien comportement)
+    # 4. Fallback : daily_capacity (ancien comportement)
     return emp.daily_capacity
 
 

@@ -58,6 +58,8 @@ export default function TeamManagementScreen() {
 
   const [editingEmp, setEditingEmp] = useState<any>(null);
   const [hoursPerWeekday, setHoursPerWeekday] = useState<Record<string, number>>({});
+  const [hoursValidFrom, setHoursValidFrom] = useState<string | null>(null);
+  const [hoursValidUntil, setHoursValidUntil] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedRole, setSelectedRole] = useState<any>(null);
   const [editPhone, setEditPhone] = useState("");
@@ -173,6 +175,8 @@ export default function TeamManagementScreen() {
       const perDay = Math.round((emp.weekly_hours / 5) * 100) / 100;
       setHoursPerWeekday({ "1": perDay, "2": perDay, "3": perDay, "4": perDay, "5": perDay });
     }
+    setHoursValidFrom(emp.hours_valid_from || null);
+    setHoursValidUntil(emp.hours_valid_until || null);
     setSelectedColor(emp.color);
     setSelectedRole(roleItems.find((r) => r.id === emp.role));
     setEditPhone(emp.phone || "");
@@ -417,6 +421,55 @@ export default function TeamManagementScreen() {
                 />
               </View>
 
+              {selectedRole?.id === "subcontractor" && (
+                <View style={{ marginBottom: 16, gap: 10 }}>
+                  <Text className={labelClass}>Période d'activité (optionnel)</Text>
+                  <Text className="text-xs text-muted-foreground -mt-1 mb-1">
+                    En dehors de cette période, 0h prévues automatiquement.
+                  </Text>
+
+                  {hoursValidFrom ? (
+                    <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
+                      <View style={{ flex: 1 }}>
+                        <DateTimePicker
+                          label="Actif à partir du"
+                          value={hoursValidFrom + "T00:00"}
+                          onChange={(v) => setHoursValidFrom(v.split("T")[0])}
+                          dateOnly
+                        />
+                      </View>
+                      <Pressable onPress={() => setHoursValidFrom(null)} hitSlop={8} style={{ marginBottom: 14 }}>
+                        <Text className="text-xs text-red-500 font-semibold">Retirer</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Pressable onPress={() => setHoursValidFrom(toISODate(new Date()))}>
+                      <Text className="text-primary text-sm font-semibold">+ Définir une date de début</Text>
+                    </Pressable>
+                  )}
+
+                  {hoursValidUntil ? (
+                    <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
+                      <View style={{ flex: 1 }}>
+                        <DateTimePicker
+                          label="Actif jusqu'au"
+                          value={hoursValidUntil + "T00:00"}
+                          onChange={(v) => setHoursValidUntil(v.split("T")[0])}
+                          dateOnly
+                        />
+                      </View>
+                      <Pressable onPress={() => setHoursValidUntil(null)} hitSlop={8} style={{ marginBottom: 14 }}>
+                        <Text className="text-xs text-red-500 font-semibold">Retirer</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Pressable onPress={() => setHoursValidUntil(toISODate(new Date()))}>
+                      <Text className="text-primary text-sm font-semibold">+ Définir une date de fin</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
+
               {/* Select Rôle : On utilise la prop label pour l'alignement parfait avec Input */}
               <Select
                 label="Rôle de l'employé"
@@ -448,6 +501,8 @@ export default function TeamManagementScreen() {
                     color: selectedColor,
                     role: selectedRole.id,
                     phone: editPhone || null,
+                    hours_valid_from: selectedRole.id === "subcontractor" ? hoursValidFrom : null,
+                    hours_valid_until: selectedRole.id === "subcontractor" ? hoursValidUntil : null,
                   })
                 }
                 loading={updateMutation.isPending}

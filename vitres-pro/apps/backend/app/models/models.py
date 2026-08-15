@@ -90,6 +90,10 @@ class Employee(Base):
     daily_capacity = Column(Float, default=7.6) # Capacité journalière par défaut (38/5)
     # Heures par jour de semaine: {"1":10,"2":8,"3":8,"4":8,"5":7} (1=lun, 5=ven)
     hours_per_weekday = Column(JSONB, nullable=True)
+    # Plage de validité optionnelle de hours_per_weekday (utilisé surtout pour
+    # les sous-traitants en mission temporaire). NULL = pas de restriction.
+    hours_valid_from = Column(Date, nullable=True)
+    hours_valid_until = Column(Date, nullable=True)
 
     # Relations
     interventions = relationship("Intervention", secondary=intervention_employees, back_populates="employees")

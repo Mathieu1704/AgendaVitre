@@ -8,6 +8,8 @@ export interface Employee {
   zone: "hainaut" | "ardennes";
   weekly_hours: number;
   hours_per_weekday?: Record<string, number>; // {"1":10,"2":8,...,"5":7}
+  hours_valid_from?: string | null; // "YYYY-MM-DD" — plage de validité optionnelle (sous-traitants)
+  hours_valid_until?: string | null;
 }
 
 export interface Client {
