@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { onlineManager, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Check, ChevronLeft, RotateCcw, X } from "lucide-react-native";
+import { AlertCircle, Ban, Check, ChevronLeft, MoreVertical, RotateCcw, Trash2, X } from "lucide-react-native";
 
 import { useAuth } from "../../../../../src/hooks/useAuth";
 import { api } from "../../../../../src/lib/api";
@@ -73,6 +73,7 @@ export default function TourRunScreen() {
   const [reasonDrafts, setReasonDrafts] = useState<Record<string, string>>({});
   const [showCancel, setShowCancel] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
   const colors: Colors = {
     text: isDark ? "#F8FAFC" : "#0F172A",
     muted: isDark ? "#94A3B8" : "#64748B",
@@ -196,6 +197,11 @@ export default function TourRunScreen() {
         <View style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: finished ? "rgba(22,163,74,0.15)" : cancelled ? "rgba(239,68,68,0.15)" : run.lifecycle_status === "in_progress" ? "rgba(249,115,22,0.15)" : "rgba(59,130,246,0.15)" }}>
           <Text style={{ color: finished ? "#16A34A" : cancelled ? "#EF4444" : run.lifecycle_status === "in_progress" ? "#F97316" : "#3B82F6", fontWeight: "700", fontSize: 12 }}>{finished ? "TERMINÉE" : cancelled ? "ANNULÉE" : run.lifecycle_status === "in_progress" ? "EN COURS" : "PUBLIÉE"}</Text>
         </View>
+        {isAdmin && (
+          <Pressable onPress={() => setMenuVisible(true)} className="p-1.5 rounded-full hover:bg-muted" style={{ marginLeft: 6 }}>
+            <MoreVertical size={20} color={isDark ? "#94A3B8" : "#64748B"} />
+          </Pressable>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 16, paddingBottom: 80 }}>
@@ -255,28 +261,59 @@ export default function TourRunScreen() {
           </View>
         ))}
 
-        <View style={{ maxWidth: 1200, width: "100%", alignSelf: "center" }}>
-          {(finished || cancelled) && isAdmin ? (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9 }}>
-              <Pressable onPress={() => reopenMutation.mutate()} style={{ alignSelf: "flex-start", flexDirection: "row", gap: 8, alignItems: "center", backgroundColor: "#F97316", paddingHorizontal: 17, paddingVertical: 12, borderRadius: 12 }}>
-                <RotateCcw size={18} color="#FFFFFF" /><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Réouvrir la tournée</Text>
-              </Pressable>
-              <Pressable onPress={() => setShowDelete(true)} style={{ alignSelf: "flex-start", borderWidth: 1, borderColor: "#EF4444", paddingHorizontal: 17, paddingVertical: 12, borderRadius: 12 }}>
-                <Text style={{ color: "#EF4444", fontWeight: "700" }}>Supprimer définitivement</Text>
-              </Pressable>
-            </View>
-          ) : !finished && !cancelled && (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 9 }}>
-              {isAdmin && <Pressable onPress={() => setShowCancel(true)} style={{ alignItems: "center", borderWidth: 1, borderColor: "#EF4444", paddingHorizontal: 18, paddingVertical: 13, borderRadius: 12 }}><Text style={{ color: "#EF4444", fontWeight: "700" }}>Annuler l'occurrence</Text></Pressable>}
-              <Pressable disabled={!canClose || closeMutation.isPending} onPress={() => closeMutation.mutate()} style={{ alignItems: "center", backgroundColor: "#16A34A", opacity: canClose ? 1 : 0.4, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 }}>
-                <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700" }}>{canClose ? "Clôturer la tournée" : "Résolvez tous les commerces"}</Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
+        {!finished && !cancelled && (
+          <View style={{ maxWidth: 1200, width: "100%", alignSelf: "center", flexDirection: "row", justifyContent: "flex-end" }}>
+            <Pressable disabled={!canClose || closeMutation.isPending} onPress={() => closeMutation.mutate()} style={{ alignItems: "center", backgroundColor: "#16A34A", opacity: canClose ? 1 : 0.4, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 }}>
+              <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700" }}>{canClose ? "Clôturer la tournée" : "Résolvez tous les commerces"}</Text>
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
+      <RunOptionsMenu
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        isDark={isDark}
+        finished={finished}
+        cancelled={cancelled}
+        onReopen={() => reopenMutation.mutate()}
+        onCancel={() => setShowCancel(true)}
+        onDelete={() => setShowDelete(true)}
+      />
       <ConfirmModal visible={showCancel} title="Annuler cette occurrence ?" message="Elle restera dans le planning et l'historique, avec le statut annulé." confirmText="Annuler l'occurrence" cancelText="Retour" isDestructive onCancel={() => setShowCancel(false)} onConfirm={() => cancelMutation.mutate()} />
       <ConfirmModal visible={showDelete} title="Supprimer définitivement ?" message="Cette occurrence disparaîtra du planning et de l'historique, sans retour possible." confirmText="Supprimer" cancelText="Retour" isDestructive onCancel={() => setShowDelete(false)} onConfirm={() => deleteMutation.mutate()} />
     </View>
+  );
+}
+
+function RunOptionsMenu({ visible, onClose, isDark, finished, cancelled, onReopen, onCancel, onDelete }: { visible: boolean; onClose: () => void; isDark: boolean; finished: boolean; cancelled: boolean; onReopen: () => void; onCancel: () => void; onDelete: () => void }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
+      <Pressable className="flex-1 bg-black/20" onPress={onClose}>
+        <View
+          className="absolute right-4 bg-card dark:bg-slate-900 shadow-xl border border-border dark:border-slate-800 min-w-[220px]"
+          style={{ top: Platform.OS === "web" ? 60 : insets.top + 50, borderRadius: 20, overflow: "hidden" }}
+        >
+          {(finished || cancelled) ? (
+            <Pressable onPress={() => { onClose(); setTimeout(onReopen, 100); }} className="flex-row items-center p-4 border-b border-border dark:border-slate-800 active:bg-muted/50 hover:bg-muted/50">
+              <RotateCcw size={20} color="#F97316" style={{ marginRight: 12 }} />
+              <Text className="font-semibold" style={{ color: "#F97316" }}>Réouvrir la tournée</Text>
+            </Pressable>
+          ) : (
+            <Pressable onPress={() => { onClose(); setTimeout(onCancel, 100); }} className="flex-row items-center p-4 border-b border-border dark:border-slate-800 active:bg-orange-50 hover:bg-orange-50">
+              <Ban size={20} color="#F97316" style={{ marginRight: 12 }} />
+              <Text className="font-semibold" style={{ color: "#F97316" }}>Annuler l'occurrence</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={() => { onClose(); setTimeout(onDelete, 100); }} className="flex-row items-center p-4 active:bg-red-50 dark:active:bg-red-900/20 hover:bg-red-50">
+            <Trash2 size={20} color="#EF4444" style={{ marginRight: 12 }} />
+            <Text className="font-semibold text-red-600 dark:text-red-400">Supprimer définitivement</Text>
+          </Pressable>
+          <Pressable onPress={onClose} className="flex-row items-center p-3 justify-center bg-muted/30 active:bg-muted">
+            <Text className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Annuler</Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
   );
 }
