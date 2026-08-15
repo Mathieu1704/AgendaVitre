@@ -13,6 +13,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Keyboard,
+  RefreshControl,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import {
@@ -164,7 +165,7 @@ export default function InterventionDetailScreen() {
   }, [queryClient, id]);
 
   // 2. QUERY (Chargement données)
-  const { data: intervention, isLoading } = useQuery({
+  const { data: intervention, isLoading, refetch: refetchIntervention } = useQuery({
     queryKey: ["intervention", id],
     queryFn: async () => {
       const res = await api.get(`/api/interventions/${id}`);
@@ -201,11 +202,22 @@ export default function InterventionDetailScreen() {
     !!intervention &&
     (isAdmin || (intervention.employees || []).some((e: any) => e.id === employeeId));
 
-  const { data: notes } = useQuery({
+  const { data: notes, refetch: refetchNotes } = useQuery({
     queryKey: ["intervention-notes", id],
     queryFn: async () => (await api.get(`/api/interventions/${id}/notes`)).data,
     enabled: canSeeNotes,
+    // Fil de discussion : on veut le voir se mettre à jour vite si quelqu'un
+    // d'autre écrit pendant qu'on garde l'écran ouvert (pas de push temps réel).
+    staleTime: 5 * 1000,
+    refetchInterval: 8 * 1000,
   });
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await Promise.all([refetchIntervention(), refetchNotes()]);
+    setIsRefreshing(false);
+  }, [refetchIntervention, refetchNotes]);
 
   const [newNoteText, setNewNoteText] = useState("");
   const addNoteMutation = useMutation({
@@ -740,6 +752,9 @@ export default function InterventionDetailScreen() {
         showsVerticalScrollIndicator={false}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#3B82F6" />
+        }
       >
         {/* --- TITRE --- */}
         <View className="px-6 pt-4 pb-2">
