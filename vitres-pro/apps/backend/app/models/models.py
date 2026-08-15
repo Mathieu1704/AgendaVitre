@@ -583,4 +583,4 @@ class TourRunService(Base):
     position = Column(Float, nullable=False, default=0)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    run_stop = relationship("TourRunStop", back_populates="services")
+    run_stop = relationship("TourRunStop", back_populates="services", foreign_keys=[run_stop_id])
