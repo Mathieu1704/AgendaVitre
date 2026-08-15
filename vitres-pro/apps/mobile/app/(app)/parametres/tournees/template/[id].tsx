@@ -7,24 +7,56 @@ import { ArrowDown, ArrowUp, ChevronLeft, Plus, Save, Trash2 } from "lucide-reac
 
 import { useAuth } from "../../../../../src/hooks/useAuth";
 import { api } from "../../../../../src/lib/api";
-import { TourStop, TourTemplate, WEEKDAY_LABELS, emptyTourTemplate } from "../../../../../src/lib/tours";
+import { TourSection, TourStop, TourTemplate, WEEKDAY_LABELS, emptyTourTemplate } from "../../../../../src/lib/tours";
 import { useTheme } from "../../../../../src/ui/components/ThemeToggle";
 import { Card, CardContent } from "../../../../../src/ui/components/Card";
 import { Button } from "../../../../../src/ui/components/Button";
 import { toast } from "../../../../../src/ui/toast";
 
 type Colors = { text: string; muted: string; border: string; soft: string; input: string; header: string };
+type Cols = { name: number; face: number; price: number; minutes: number; payment: number; frequency: number; note: number; actions: number };
 
-const COLS = {
-  name: 170,
-  face: 84,
-  price: 68,
-  minutes: 58,
-  payment: 110,
-  frequency: 120,
-  note: 130,
-  actions: 76,
-};
+const CHAR_WIDTH = 7.3;
+const CELL_PADDING = 28;
+const measure = (text: string) => Math.round(text.length * CHAR_WIDTH) + CELL_PADDING;
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+// Auto-fit façon Excel : chaque colonne prend la largeur du texte le plus
+// long qu'elle contient (en-tête compris), bornée pour rester utilisable.
+function computeColumnWidths(sections: TourSection[]): Cols {
+  const widths = {
+    name: measure("Commerce"),
+    face: measure("Face 1"),
+    price: measure("Prix 1"),
+    minutes: measure("Temps"),
+    payment: measure("Paiement"),
+    frequency: measure("Fréquence"),
+    note: measure("Note"),
+  };
+  for (const section of sections) {
+    for (const stop of section.stops) {
+      widths.name = Math.max(widths.name, measure(stop.name || ""));
+      widths.minutes = Math.max(widths.minutes, measure(stop.estimated_minutes != null ? String(stop.estimated_minutes) : ""));
+      widths.payment = Math.max(widths.payment, measure(stop.payment_text ?? ""));
+      widths.frequency = Math.max(widths.frequency, measure(stop.frequency_text ?? ""));
+      widths.note = Math.max(widths.note, measure(stop.note ?? ""));
+      for (const service of stop.services.slice(0, 2)) {
+        widths.face = Math.max(widths.face, measure(service.label || ""));
+        widths.price = Math.max(widths.price, measure(String(service.price_ht ?? "")));
+      }
+    }
+  }
+  return {
+    name: clamp(widths.name, 120, 280),
+    face: clamp(widths.face, 70, 180),
+    price: clamp(widths.price, 60, 110),
+    minutes: clamp(widths.minutes, 55, 90),
+    payment: clamp(widths.payment, 90, 240),
+    frequency: clamp(widths.frequency, 90, 240),
+    note: clamp(widths.note, 90, 240),
+    actions: 76,
+  };
+}
 
 function cloneTemplate(value: TourTemplate): TourTemplate {
   return JSON.parse(JSON.stringify(value));
@@ -43,6 +75,31 @@ function CellInput({ width, value, onChangeText, colors, keyboardType, bold }: {
         keyboardType={keyboardType}
         placeholderTextColor={colors.muted}
         style={{ color: colors.text, fontWeight: bold ? "700" : "400", fontSize: 13, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 7, backgroundColor: colors.input }}
+      />
+    </Cell>
+  );
+}
+
+// Champ numérique : garde le texte brut tant que l'utilisateur tape (une
+// chaîne vide reste vide) pour ne pas retomber sur "0" à chaque frappe —
+// la valeur n'est reconvertie en nombre qu'à la perte du focus.
+function NumberCellInput({ width, value, onCommit, colors, keyboardType }: { width: number; value: number | null; onCommit: (v: number | null) => void; colors: Colors; keyboardType?: any }) {
+  const [text, setText] = useState(value == null ? "" : String(value));
+  useEffect(() => { setText(value == null ? "" : String(value)); }, [value]);
+  return (
+    <Cell width={width}>
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        onBlur={() => {
+          const trimmed = text.trim();
+          if (!trimmed) { onCommit(null); return; }
+          const parsed = Number(trimmed.replace(",", "."));
+          onCommit(Number.isFinite(parsed) ? parsed : null);
+        }}
+        keyboardType={keyboardType}
+        placeholderTextColor={colors.muted}
+        style={{ color: colors.text, fontSize: 13, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 7, backgroundColor: colors.input }}
       />
     </Cell>
   );
@@ -131,7 +188,8 @@ export default function TourTemplateEditor() {
   });
 
   const totalStops = useMemo(() => draft.sections.reduce((sum, section) => sum + section.stops.length, 0), [draft]);
-  const tableWidth = COLS.name + COLS.face * 2 + COLS.price * 2 + COLS.minutes + COLS.payment + COLS.frequency + COLS.note + COLS.actions;
+  const cols = useMemo(() => computeColumnWidths(draft.sections), [draft.sections]);
+  const tableWidth = cols.name + cols.face * 2 + cols.price * 2 + cols.minutes + cols.payment + cols.frequency + cols.note + cols.actions;
 
   if (loading || (!isNew && templateQuery.isLoading)) return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: isDark ? "#020817" : "#FFFFFF" }}><ActivityIndicator color="#3B82F6" /></View>;
   if (!isAdmin) return <Redirect href="/(app)/calendar" />;
@@ -207,19 +265,19 @@ export default function TourTemplateEditor() {
             <ScrollView horizontal showsHorizontalScrollIndicator style={{ maxWidth: "100%" }}>
               <View style={{ width: tableWidth }}>
                 <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingVertical: 8, borderRadius: 10, marginBottom: 4 }}>
-                  <HeaderCell width={COLS.name} label="Commerce" colors={colors} />
-                  <HeaderCell width={COLS.face} label="Face 1" colors={colors} />
-                  <HeaderCell width={COLS.price} label="Prix 1" colors={colors} />
-                  <HeaderCell width={COLS.face} label="Face 2" colors={colors} />
-                  <HeaderCell width={COLS.price} label="Prix 2" colors={colors} />
-                  <HeaderCell width={COLS.minutes} label="Temps" colors={colors} />
-                  <HeaderCell width={COLS.payment} label="Paiement" colors={colors} />
-                  <HeaderCell width={COLS.frequency} label="Fréquence" colors={colors} />
-                  <HeaderCell width={COLS.note} label="Note" colors={colors} />
-                  <HeaderCell width={COLS.actions} label="" colors={colors} />
+                  <HeaderCell width={cols.name} label="Commerce" colors={colors} />
+                  <HeaderCell width={cols.face} label="Face 1" colors={colors} />
+                  <HeaderCell width={cols.price} label="Prix 1" colors={colors} />
+                  <HeaderCell width={cols.face} label="Face 2" colors={colors} />
+                  <HeaderCell width={cols.price} label="Prix 2" colors={colors} />
+                  <HeaderCell width={cols.minutes} label="Temps" colors={colors} />
+                  <HeaderCell width={cols.payment} label="Paiement" colors={colors} />
+                  <HeaderCell width={cols.frequency} label="Fréquence" colors={colors} />
+                  <HeaderCell width={cols.note} label="Note" colors={colors} />
+                  <HeaderCell width={cols.actions} label="" colors={colors} />
                 </View>
                 {section.stops.map((stop, stopIndex) => (
-                  <StopRow key={`${stop.id ?? "stop"}-${stopIndex}`} stop={stop} sectionIndex={sectionIndex} stopIndex={stopIndex} stopCount={section.stops.length} mutate={mutate} colors={colors} />
+                  <StopRow key={`${stop.id ?? "stop"}-${stopIndex}`} stop={stop} sectionIndex={sectionIndex} stopIndex={stopIndex} stopCount={section.stops.length} mutate={mutate} colors={colors} cols={cols} />
                 ))}
               </View>
             </ScrollView>
@@ -231,7 +289,7 @@ export default function TourTemplateEditor() {
   );
 }
 
-function StopRow({ stop, sectionIndex, stopIndex, stopCount, mutate, colors }: { stop: TourStop; sectionIndex: number; stopIndex: number; stopCount: number; mutate: (fn: (next: TourTemplate) => void) => void; colors: Colors }) {
+function StopRow({ stop, sectionIndex, stopIndex, stopCount, mutate, colors, cols }: { stop: TourStop; sectionIndex: number; stopIndex: number; stopCount: number; mutate: (fn: (next: TourTemplate) => void) => void; colors: Colors; cols: Cols }) {
   const setStop = (fn: (value: TourStop) => void) => mutate((next: TourTemplate) => fn(next.sections[sectionIndex].stops[stopIndex]));
   const face1 = stop.services[0];
   const face2 = stop.services[1];
@@ -240,9 +298,9 @@ function StopRow({ stop, sectionIndex, stopIndex, stopCount, mutate, colors }: {
     if (!next.services[0]) next.services[0] = { label: "", price_ht: 0, position: 0, active: true };
     next.services[0].label = value;
   });
-  const setFace1Price = (value: string) => setStop((next) => {
+  const setFace1Price = (value: number | null) => setStop((next) => {
     if (!next.services[0]) next.services[0] = { label: "", price_ht: 0, position: 0, active: true };
-    next.services[0].price_ht = Number(value.replace(",", ".")) || 0;
+    next.services[0].price_ht = value ?? 0;
   });
   const setFace2Label = (value: string) => setStop((next) => {
     if (value.trim() === "" && next.services[1] && !next.services[1].price_ht) {
@@ -252,23 +310,23 @@ function StopRow({ stop, sectionIndex, stopIndex, stopCount, mutate, colors }: {
     if (!next.services[1]) next.services[1] = { label: "", price_ht: 0, position: 1, active: true };
     next.services[1].label = value;
   });
-  const setFace2Price = (value: string) => setStop((next) => {
+  const setFace2Price = (value: number | null) => setStop((next) => {
     if (!next.services[1]) next.services[1] = { label: "", price_ht: 0, position: 1, active: true };
-    next.services[1].price_ht = Number(value.replace(",", ".")) || 0;
+    next.services[1].price_ht = value ?? 0;
   });
 
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 3, borderBottomWidth: 1, borderColor: colors.border }}>
-      <CellInput width={COLS.name} value={stop.name} onChangeText={(value) => setStop((next) => { next.name = value; })} colors={colors} bold />
-      <CellInput width={COLS.face} value={face1?.label ?? ""} onChangeText={setFace1Label} colors={colors} />
-      <CellInput width={COLS.price} value={face1 ? String(face1.price_ht) : ""} onChangeText={setFace1Price} colors={colors} keyboardType="decimal-pad" />
-      <CellInput width={COLS.face} value={face2?.label ?? ""} onChangeText={setFace2Label} colors={colors} />
-      <CellInput width={COLS.price} value={face2 ? String(face2.price_ht) : ""} onChangeText={setFace2Price} colors={colors} keyboardType="decimal-pad" />
-      <CellInput width={COLS.minutes} value={stop.estimated_minutes == null ? "" : String(stop.estimated_minutes)} onChangeText={(value) => setStop((next) => { next.estimated_minutes = value ? Number(value) : null; })} colors={colors} keyboardType="number-pad" />
-      <CellInput width={COLS.payment} value={stop.payment_text ?? ""} onChangeText={(value) => setStop((next) => { next.payment_text = value || null; })} colors={colors} />
-      <CellInput width={COLS.frequency} value={stop.frequency_text ?? ""} onChangeText={(value) => setStop((next) => { next.frequency_text = value || null; })} colors={colors} />
-      <CellInput width={COLS.note} value={stop.note ?? ""} onChangeText={(value) => setStop((next) => { next.note = value || null; })} colors={colors} />
-      <Cell width={COLS.actions}>
+      <CellInput width={cols.name} value={stop.name} onChangeText={(value) => setStop((next) => { next.name = value; })} colors={colors} bold />
+      <CellInput width={cols.face} value={face1?.label ?? ""} onChangeText={setFace1Label} colors={colors} />
+      <NumberCellInput width={cols.price} value={face1 ? face1.price_ht : null} onCommit={setFace1Price} colors={colors} keyboardType="decimal-pad" />
+      <CellInput width={cols.face} value={face2?.label ?? ""} onChangeText={setFace2Label} colors={colors} />
+      <NumberCellInput width={cols.price} value={face2 ? face2.price_ht : null} onCommit={setFace2Price} colors={colors} keyboardType="decimal-pad" />
+      <NumberCellInput width={cols.minutes} value={stop.estimated_minutes ?? null} onCommit={(value) => setStop((next) => { next.estimated_minutes = value; })} colors={colors} keyboardType="number-pad" />
+      <CellInput width={cols.payment} value={stop.payment_text ?? ""} onChangeText={(value) => setStop((next) => { next.payment_text = value || null; })} colors={colors} />
+      <CellInput width={cols.frequency} value={stop.frequency_text ?? ""} onChangeText={(value) => setStop((next) => { next.frequency_text = value || null; })} colors={colors} />
+      <CellInput width={cols.note} value={stop.note ?? ""} onChangeText={(value) => setStop((next) => { next.note = value || null; })} colors={colors} />
+      <Cell width={cols.actions}>
         <View style={{ flexDirection: "row", gap: 6 }}>
           <Pressable disabled={stopIndex === 0} onPress={() => mutate((next) => { const items = next.sections[sectionIndex].stops; const target = stopIndex - 1; if (target < 0) return; [items[stopIndex], items[target]] = [items[target], items[stopIndex]]; items.forEach((item, position) => { item.position = position; }); })}><ArrowUp size={16} color={stopIndex === 0 ? colors.border : colors.muted} /></Pressable>
           <Pressable disabled={stopIndex === stopCount - 1} onPress={() => mutate((next) => { const items = next.sections[sectionIndex].stops; const target = stopIndex + 1; if (target >= items.length) return; [items[stopIndex], items[target]] = [items[target], items[stopIndex]]; items.forEach((item, position) => { item.position = position; }); })}><ArrowDown size={16} color={stopIndex === stopCount - 1 ? colors.border : colors.muted} /></Pressable>

@@ -632,6 +632,23 @@ def cancel_run(
     return _load_run(db, run_id)
 
 
+@router.delete("/runs/{run_id}")
+def delete_run(
+    run_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Suppression definitive (ex: occurrence de test) — contrairement a
+    l'annulation, rien ne subsiste dans le planning ni l'historique."""
+    _admin(current_user)
+    run = _load_run(db, run_id, for_update=True)
+    if run.publication_status == "published" and run.intervention.status not in {"done", "cancelled"}:
+        raise HTTPException(status_code=409, detail="Cloturez ou annulez la tournee avant de la supprimer.")
+    db.delete(run.intervention)
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/runs/{run_id}", response_model=TourRunOut)
 def get_run(
     run_id: UUID,

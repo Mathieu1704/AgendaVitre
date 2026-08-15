@@ -14,8 +14,34 @@ import { Button } from "../../../../../src/ui/components/Button";
 import { toast } from "../../../../../src/ui/toast";
 
 type Colors = { text: string; muted: string; border: string; header: string };
+type Cols = { name: number; face: number; minutes: number; payment: number; frequency: number };
 
-const COLS = { name: 170, face: 130, minutes: 58, payment: 110, frequency: 130 };
+const CHAR_WIDTH = 7.3;
+const CELL_PADDING = 28;
+const measure = (text: string) => Math.round(text.length * CHAR_WIDTH) + CELL_PADDING;
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+// Auto-fit façon Excel : chaque colonne prend la largeur du texte le plus
+// long qu'elle contient (en-tête compris), bornée pour rester utilisable.
+function computeColumnWidths(stops: TourRunStop[]): Cols {
+  const widths = { name: measure("Commerce"), face: measure("Face 1"), minutes: measure("Temps"), payment: measure("Paiement"), frequency: measure("Fréquence") };
+  for (const stop of stops) {
+    widths.name = Math.max(widths.name, measure(stop.name || ""));
+    widths.minutes = Math.max(widths.minutes, measure(stop.estimated_minutes != null ? String(stop.estimated_minutes) : ""));
+    widths.payment = Math.max(widths.payment, measure(stop.payment_text ?? ""));
+    widths.frequency = Math.max(widths.frequency, measure(stop.frequency_text ?? ""));
+    for (const service of stop.services.slice(0, 2)) {
+      widths.face = Math.max(widths.face, measure(`${service.label} ${formatEuro(service.price_ht)}`));
+    }
+  }
+  return {
+    name: clamp(widths.name, 120, 280),
+    face: clamp(widths.face, 90, 200),
+    minutes: clamp(widths.minutes, 55, 90),
+    payment: clamp(widths.payment, 90, 240),
+    frequency: clamp(widths.frequency, 90, 240),
+  };
+}
 
 function brusselsTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Europe/Brussels" });
@@ -101,7 +127,8 @@ export default function TourPreparationScreen() {
     }
     return [...result.entries()];
   }, [runQuery.data]);
-  const tableWidth = COLS.name + COLS.face * 2 + COLS.minutes + COLS.payment + COLS.frequency;
+  const cols = useMemo(() => computeColumnWidths(runQuery.data?.stops ?? []), [runQuery.data]);
+  const tableWidth = cols.name + cols.face * 2 + cols.minutes + cols.payment + cols.frequency;
 
   if (loading || runQuery.isLoading) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: isDark ? "#020817" : "#FFFFFF" }}><ActivityIndicator color="#3B82F6" /></View>;
   if (!isAdmin) return <Redirect href="/(app)/calendar" />;
@@ -149,28 +176,28 @@ export default function TourPreparationScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator style={{ maxWidth: "100%" }}>
               <View style={{ width: tableWidth }}>
                 <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingVertical: 8, borderRadius: 10, marginBottom: 4 }}>
-                  <View style={{ width: COLS.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Commerce</Text></View>
-                  <View style={{ width: COLS.face, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Face 1</Text></View>
-                  <View style={{ width: COLS.face, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Face 2</Text></View>
-                  <View style={{ width: COLS.minutes, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Temps</Text></View>
-                  <View style={{ width: COLS.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Paiement</Text></View>
-                  <View style={{ width: COLS.frequency, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Fréquence</Text></View>
+                  <View style={{ width: cols.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Commerce</Text></View>
+                  <View style={{ width: cols.face, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Face 1</Text></View>
+                  <View style={{ width: cols.face, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Face 2</Text></View>
+                  <View style={{ width: cols.minutes, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Temps</Text></View>
+                  <View style={{ width: cols.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Paiement</Text></View>
+                  <View style={{ width: cols.frequency, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Fréquence</Text></View>
                 </View>
                 {stops.map((stop) => {
                   const face1 = stop.services[0];
                   const face2 = stop.services[1];
                   return (
                     <View key={stop.id} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 5, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: stop.selected ? (isDark ? "rgba(59,130,246,0.08)" : "rgba(59,130,246,0.05)") : "transparent" }}>
-                      <View style={{ width: COLS.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{stop.name}</Text></View>
-                      <View style={{ width: COLS.face, paddingHorizontal: 6 }}>
+                      <View style={{ width: cols.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{stop.name}</Text></View>
+                      <View style={{ width: cols.face, paddingHorizontal: 6 }}>
                         {face1 ? <FacePill selected={stop.selected && stop.selected_service_id === face1.id} label={face1.label} price={face1.price_ht} onPress={() => toggleFace(stop, face1.id)} colors={colors} /> : null}
                       </View>
-                      <View style={{ width: COLS.face, paddingHorizontal: 6 }}>
+                      <View style={{ width: cols.face, paddingHorizontal: 6 }}>
                         {face2 ? <FacePill selected={stop.selected && stop.selected_service_id === face2.id} label={face2.label} price={face2.price_ht} onPress={() => toggleFace(stop, face2.id)} colors={colors} /> : null}
                       </View>
-                      <View style={{ width: COLS.minutes, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.estimated_minutes ?? ""}</Text></View>
-                      <View style={{ width: COLS.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.payment_text ?? ""}</Text></View>
-                      <View style={{ width: COLS.frequency, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.frequency_text ?? ""}</Text></View>
+                      <View style={{ width: cols.minutes, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.estimated_minutes ?? ""}</Text></View>
+                      <View style={{ width: cols.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.payment_text ?? ""}</Text></View>
+                      <View style={{ width: cols.frequency, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.frequency_text ?? ""}</Text></View>
                     </View>
                   );
                 })}

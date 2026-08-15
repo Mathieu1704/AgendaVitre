@@ -16,8 +16,31 @@ import { ConfirmModal } from "../../../../../src/ui/components/ConfirmModal";
 import { toast } from "../../../../../src/ui/toast";
 
 type Colors = { text: string; muted: string; border: string; header: string; input: string };
+type Cols = { name: number; variant: number; payment: number; status: number; actions: number };
 
-const COLS = { name: 180, variant: 140, payment: 110, status: 100, actions: 150 };
+const CHAR_WIDTH = 7.3;
+const CELL_PADDING = 28;
+const measure = (text: string) => Math.round(text.length * CHAR_WIDTH) + CELL_PADDING;
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+// Auto-fit façon Excel : chaque colonne prend la largeur du texte le plus
+// long qu'elle contient (en-tête compris), bornée pour rester utilisable.
+function computeColumnWidths(stops: TourRunStop[]): Cols {
+  const widths = { name: measure("Commerce"), variant: measure("Variante"), payment: measure("Paiement"), status: measure("Non visité") };
+  for (const stop of stops) {
+    widths.name = Math.max(widths.name, measure(stop.name || ""));
+    widths.payment = Math.max(widths.payment, measure(stop.payment_text ?? ""));
+    const chosen = stop.services.find((service) => service.id === stop.selected_service_id) ?? stop.services[0];
+    if (chosen) widths.variant = Math.max(widths.variant, measure(`${chosen.label} ${formatEuro(chosen.price_ht)}`));
+  }
+  return {
+    name: clamp(widths.name, 130, 280),
+    variant: clamp(widths.variant, 100, 220),
+    payment: clamp(widths.payment, 90, 240),
+    status: clamp(widths.status, 90, 140),
+    actions: 150,
+  };
+}
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "À faire",
@@ -49,6 +72,7 @@ export default function TourRunScreen() {
   const [reasonFor, setReasonFor] = useState<string | null>(null);
   const [reasonDrafts, setReasonDrafts] = useState<Record<string, string>>({});
   const [showCancel, setShowCancel] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const colors: Colors = {
     text: isDark ? "#F8FAFC" : "#0F172A",
     muted: isDark ? "#94A3B8" : "#64748B",
@@ -64,6 +88,7 @@ export default function TourRunScreen() {
     refetchInterval: () => onlineManager.isOnline() && !hasPendingWrites() ? 15_000 : false,
   });
   const run = runQuery.data;
+  const cols = useMemo(() => computeColumnWidths(run?.stops ?? []), [run]);
 
   const resolveStop = async (stop: TourRunStop, status: "done" | "not_visited") => {
     const reason = (reasonDrafts[stop.id] ?? "").trim();
@@ -121,6 +146,17 @@ export default function TourRunScreen() {
     },
     onError: (error: any) => toast.error("Annulation impossible", error?.response?.data?.detail ?? "Erreur réseau"),
   });
+  const deleteMutation = useMutation({
+    mutationFn: async () => api.delete(`/api/tours/runs/${id}`),
+    onSuccess: () => {
+      setShowDelete(false);
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      queryClient.invalidateQueries({ queryKey: ["tour-drafts"] });
+      toast.success("Occurrence supprimée", "Elle a disparu du planning.");
+      backToCalendar();
+    },
+    onError: (error: any) => toast.error("Suppression impossible", error?.response?.data?.detail ?? "Erreur réseau"),
+  });
 
   const grouped = useMemo(() => {
     const map = new Map<string, TourRunStop[]>();
@@ -131,7 +167,7 @@ export default function TourRunScreen() {
     return [...map.entries()];
   }, [run]);
   const canClose = Boolean(run && run.stops.filter((stop) => stop.selected).every((stop) => stop.status !== "pending"));
-  const tableWidth = COLS.name + COLS.variant + COLS.payment + COLS.status + COLS.actions;
+  const tableWidth = cols.name + cols.variant + cols.payment + cols.status + cols.actions;
 
   const backToCalendar = () => router.replace("/(app)/calendar" as any);
 
@@ -175,11 +211,11 @@ export default function TourRunScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator style={{ maxWidth: "100%" }}>
               <View style={{ width: tableWidth }}>
                 <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingVertical: 8, borderRadius: 10, marginBottom: 4 }}>
-                  <View style={{ width: COLS.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Commerce</Text></View>
-                  <View style={{ width: COLS.variant, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Variante</Text></View>
-                  <View style={{ width: COLS.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Paiement</Text></View>
-                  <View style={{ width: COLS.status, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Statut</Text></View>
-                  <View style={{ width: COLS.actions, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Actions</Text></View>
+                  <View style={{ width: cols.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Commerce</Text></View>
+                  <View style={{ width: cols.variant, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Variante</Text></View>
+                  <View style={{ width: cols.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Paiement</Text></View>
+                  <View style={{ width: cols.status, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Statut</Text></View>
+                  <View style={{ width: cols.actions, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Actions</Text></View>
                 </View>
                 {stops.map((stop) => {
                   const chosen = stop.services.find((service) => service.id === stop.selected_service_id) ?? stop.services[0];
@@ -188,13 +224,13 @@ export default function TourRunScreen() {
                   return (
                     <View key={stop.id}>
                       <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 7, borderBottomWidth: 1, borderColor: colors.border }}>
-                        <View style={{ width: COLS.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{stop.name}</Text></View>
-                        <View style={{ width: COLS.variant, paddingHorizontal: 6 }}>
+                        <View style={{ width: cols.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{stop.name}</Text></View>
+                        <View style={{ width: cols.variant, paddingHorizontal: 6 }}>
                           {chosen && <><Text style={{ color: colors.text, fontSize: 13 }}>{chosen.label}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{formatEuro(chosen.price_ht)}</Text></>}
                         </View>
-                        <View style={{ width: COLS.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.payment_text ?? ""}</Text></View>
-                        <View style={{ width: COLS.status, paddingHorizontal: 6 }}><Text style={{ color: statusColor, fontWeight: "700", fontSize: 12 }}>{STATUS_LABELS[stop.status]}</Text></View>
-                        <View style={{ width: COLS.actions, paddingHorizontal: 6, flexDirection: "row", gap: 6 }}>
+                        <View style={{ width: cols.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.payment_text ?? ""}</Text></View>
+                        <View style={{ width: cols.status, paddingHorizontal: 6 }}><Text style={{ color: statusColor, fontWeight: "700", fontSize: 12 }}>{STATUS_LABELS[stop.status]}</Text></View>
+                        <View style={{ width: cols.actions, paddingHorizontal: 6, flexDirection: "row", gap: 6 }}>
                           <Pressable disabled={disabled} onPress={() => resolveStop(stop, "done")} style={{ padding: 8, borderRadius: 9, backgroundColor: "#16A34A", opacity: disabled ? 0.5 : 1 }}><Check size={16} color="#FFFFFF" /></Pressable>
                           <Pressable disabled={disabled} onPress={() => setReasonFor(reasonFor === stop.id ? null : stop.id)} style={{ padding: 8, borderRadius: 9, backgroundColor: "#EF4444", opacity: disabled ? 0.5 : 1 }}><X size={16} color="#FFFFFF" /></Pressable>
                         </View>
@@ -221,9 +257,14 @@ export default function TourRunScreen() {
 
         <View style={{ maxWidth: 1200, width: "100%", alignSelf: "center" }}>
           {(finished || cancelled) && isAdmin ? (
-            <Pressable onPress={() => reopenMutation.mutate()} style={{ alignSelf: "flex-start", flexDirection: "row", gap: 8, alignItems: "center", backgroundColor: "#F97316", paddingHorizontal: 17, paddingVertical: 12, borderRadius: 12 }}>
-              <RotateCcw size={18} color="#FFFFFF" /><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Réouvrir la tournée</Text>
-            </Pressable>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9 }}>
+              <Pressable onPress={() => reopenMutation.mutate()} style={{ alignSelf: "flex-start", flexDirection: "row", gap: 8, alignItems: "center", backgroundColor: "#F97316", paddingHorizontal: 17, paddingVertical: 12, borderRadius: 12 }}>
+                <RotateCcw size={18} color="#FFFFFF" /><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Réouvrir la tournée</Text>
+              </Pressable>
+              <Pressable onPress={() => setShowDelete(true)} style={{ alignSelf: "flex-start", borderWidth: 1, borderColor: "#EF4444", paddingHorizontal: 17, paddingVertical: 12, borderRadius: 12 }}>
+                <Text style={{ color: "#EF4444", fontWeight: "700" }}>Supprimer définitivement</Text>
+              </Pressable>
+            </View>
           ) : !finished && !cancelled && (
             <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 9 }}>
               {isAdmin && <Pressable onPress={() => setShowCancel(true)} style={{ alignItems: "center", borderWidth: 1, borderColor: "#EF4444", paddingHorizontal: 18, paddingVertical: 13, borderRadius: 12 }}><Text style={{ color: "#EF4444", fontWeight: "700" }}>Annuler l'occurrence</Text></Pressable>}
@@ -235,6 +276,7 @@ export default function TourRunScreen() {
         </View>
       </ScrollView>
       <ConfirmModal visible={showCancel} title="Annuler cette occurrence ?" message="Elle restera dans le planning et l'historique, avec le statut annulé." confirmText="Annuler l'occurrence" cancelText="Retour" isDestructive onCancel={() => setShowCancel(false)} onConfirm={() => cancelMutation.mutate()} />
+      <ConfirmModal visible={showDelete} title="Supprimer définitivement ?" message="Cette occurrence disparaîtra du planning et de l'historique, sans retour possible." confirmText="Supprimer" cancelText="Retour" isDestructive onCancel={() => setShowDelete(false)} onConfirm={() => deleteMutation.mutate()} />
     </View>
   );
 }
