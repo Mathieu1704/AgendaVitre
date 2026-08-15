@@ -25,9 +25,13 @@ import {
   Clock,
   EyeOff,
   Wallet,
+  Camera,
+  Image as ImageIcon,
+  Trash2,
 } from "lucide-react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
 import Constants from "expo-constants";
+import * as ImagePicker from "expo-image-picker";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -64,6 +68,8 @@ export default function ParametresScreen() {
   const [logoutDialog, setLogoutDialog] = useState(false);
   const [privacyVisible, setPrivacyVisible] = useState(false);
   const [hideCashModal, setHideCashModal] = useState(false);
+  const [showAvatarSheet, setShowAvatarSheet] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const { data: companySettings } = useQuery({
     queryKey: ["company-settings"],
     queryFn: async () => (await api.get("/api/settings/company")).data,
@@ -173,6 +179,82 @@ export default function ParametresScreen() {
     }
   };
 
+  const applyAvatarUrl = (avatarUrl: string | null) => {
+    setProfile((p: any) => ({ ...p, avatar_url: avatarUrl }));
+    queryClient.setQueryData(["employees"], (old: any[] | undefined) =>
+      old?.map((e) => (e.id === profile?.id ? { ...e, avatar_url: avatarUrl } : e)),
+    );
+    // Garde le header (useAuth/profileCache) synchro sans redémarrage.
+    void loadCachedProfile().then((cached) => {
+      if (cached) void saveCachedProfile({ ...cached, avatarUrl });
+    });
+  };
+
+  const uploadAvatar = async (uri: string) => {
+    setUploadingAvatar(true);
+    try {
+      const form = new FormData();
+      form.append("file", { uri, name: "avatar.jpg", type: "image/jpeg" } as any);
+      const res = await api.post("/api/employees/me/avatar", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      applyAvatarUrl(res.data?.avatar_url ?? null);
+      toast.success("Photo mise à jour", "");
+    } catch {
+      toast.error("Erreur", "Impossible d'envoyer la photo. Vérifiez votre connexion.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const deleteAvatar = async () => {
+    setUploadingAvatar(true);
+    try {
+      await api.delete("/api/employees/me/avatar");
+      applyAvatarUrl(null);
+      toast.success("Photo supprimée", "");
+    } catch {
+      toast.error("Erreur", "Impossible de supprimer la photo.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    setShowAvatarSheet(false);
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      toast.error("Permission refusée", "Accès à l'appareil photo requis.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.6,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      await uploadAvatar(result.assets[0].uri);
+    }
+  };
+
+  const handlePickFromLibrary = async () => {
+    setShowAvatarSheet(false);
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      toast.error("Permission refusée", "Accès à la galerie requis.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.6,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      await uploadAvatar(result.assets[0].uri);
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.replace("/(auth)/login");
@@ -246,11 +328,39 @@ export default function ParametresScreen() {
               </CardHeader>
               <CardContent className="p-6 pt-0">
                 <View className="flex-row items-center mb-6">
-                  <Avatar
-                    name={profile?.full_name || profile?.email || "?"}
-                    size="lg"
-                    color={profile?.color}
-                  />
+                  <Pressable
+                    onPress={() => setShowAvatarSheet(true)}
+                    disabled={uploadingAvatar}
+                    style={{ position: "relative" }}
+                  >
+                    <Avatar
+                      name={profile?.full_name || profile?.email || "?"}
+                      size="lg"
+                      color={profile?.color}
+                      imageUrl={profile?.avatar_url}
+                    />
+                    <View
+                      style={{
+                        position: "absolute",
+                        bottom: -2,
+                        right: -2,
+                        width: 22,
+                        height: 22,
+                        borderRadius: 11,
+                        backgroundColor: "#3B82F6",
+                        borderWidth: 2,
+                        borderColor: isDark ? "#0F172A" : "#FFFFFF",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {uploadingAvatar ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Camera size={11} color="#fff" />
+                      )}
+                    </View>
+                  </Pressable>
                   <View className="ml-4 flex-1">
                     <Text className="text-xl font-bold text-foreground dark:text-white">
                       {profile?.full_name || "Utilisateur"}
@@ -685,6 +795,82 @@ export default function ParametresScreen() {
                 </Pressable>
               </View>
             </View>
+          </View>
+        </Dialog>
+      )}
+
+      {/* Photo de profil : prendre/choisir/supprimer */}
+      {showAvatarSheet && (
+        <Dialog open onClose={() => setShowAvatarSheet(false)} position="bottom">
+          <View style={{ padding: 12, gap: 4 }}>
+            <Pressable
+              onPress={handleTakePhoto}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+                padding: 14,
+                borderRadius: 16,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Camera size={20} color={isDark ? "#F8FAFC" : "#09090B"} />
+              <Text style={{ fontSize: 15, fontWeight: "600", color: isDark ? "#F8FAFC" : "#09090B" }}>
+                Prendre une photo
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handlePickFromLibrary}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+                padding: 14,
+                borderRadius: 16,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <ImageIcon size={20} color={isDark ? "#F8FAFC" : "#09090B"} />
+              <Text style={{ fontSize: 15, fontWeight: "600", color: isDark ? "#F8FAFC" : "#09090B" }}>
+                Choisir dans la galerie
+              </Text>
+            </Pressable>
+            {profile?.avatar_url && (
+              <Pressable
+                onPress={() => {
+                  setShowAvatarSheet(false);
+                  void deleteAvatar();
+                }}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: 14,
+                  borderRadius: 16,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <Trash2 size={20} color="#EF4444" />
+                <Text style={{ fontSize: 15, fontWeight: "600", color: "#EF4444" }}>
+                  Supprimer la photo
+                </Text>
+              </Pressable>
+            )}
+            <Pressable
+              onPress={() => setShowAvatarSheet(false)}
+              style={({ pressed }) => ({
+                padding: 14,
+                borderRadius: 16,
+                alignItems: "center",
+                marginTop: 4,
+                backgroundColor: isDark ? "#1E293B" : "#F1F5F9",
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 15, fontWeight: "600", color: isDark ? "#F8FAFC" : "#09090B" }}>
+                Annuler
+              </Text>
+            </Pressable>
           </View>
         </Dialog>
       )}

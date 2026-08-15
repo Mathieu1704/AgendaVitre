@@ -21,6 +21,7 @@ export type CachedProfile = {
   email?: string;
   color?: string | null;
   employeeId?: string;
+  avatarUrl?: string | null;
 };
 
 const isWeb = Platform.OS === "web";

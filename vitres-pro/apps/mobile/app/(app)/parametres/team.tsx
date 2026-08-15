@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "../../../src/lib/api";
 import { Card, CardContent } from "../../../src/ui/components/Card";
+import { Avatar } from "../../../src/ui/components/Avatar";
 import { Button } from "../../../src/ui/components/Button";
 import { Dialog } from "../../../src/ui/components/Dialog";
 import { Input } from "../../../src/ui/components/Input";
@@ -37,16 +38,6 @@ import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelec
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { toast } from "../../../src/ui/toast";
 import { toISODate } from "../../../src/lib/date";
-
-// Petit helper pour les initiales
-const getInitials = (name: string) => {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-};
 
 export default function TeamManagementScreen() {
   const router = useRouter();
@@ -275,9 +266,6 @@ export default function TeamManagementScreen() {
                       width: 52,
                       height: 52,
                       borderRadius: 26,
-                      backgroundColor: emp.color || "#3B82F6",
-                      alignItems: "center",
-                      justifyContent: "center",
                       shadowColor: emp.color || "#3B82F6",
                       shadowOffset: { width: 0, height: 3 },
                       shadowOpacity: 0.5,
@@ -285,9 +273,12 @@ export default function TeamManagementScreen() {
                       elevation: 4,
                     }}
                   >
-                    <Text className="text-white font-bold text-lg">
-                      {getInitials(emp.full_name || emp.email || "?")}
-                    </Text>
+                    <Avatar
+                      name={emp.full_name || emp.email || "?"}
+                      color={emp.color}
+                      imageUrl={emp.avatar_url}
+                      className="w-[52px] h-[52px]"
+                    />
                   </View>
 
                   <View className="flex-1 ml-4">

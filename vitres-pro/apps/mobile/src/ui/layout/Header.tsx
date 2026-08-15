@@ -17,8 +17,7 @@ import { useAuth } from "../../hooks/useAuth";
 export const Header = ({ onMenuPress }: { onMenuPress?: () => void }) => {
   const router = useRouter();
   const { unreadCount } = useNotifications();
-  const { isAdmin, userName } = useAuth();
-  const userInitial = userName ? userName.charAt(0).toUpperCase() : "?";
+  const { isAdmin, userName, userColor, userAvatarUrl } = useAuth();
   const insets = useSafeAreaInsets();
   const topPadding = Platform.OS !== "web" ? insets.top : 0;
 
@@ -69,7 +68,7 @@ export const Header = ({ onMenuPress }: { onMenuPress?: () => void }) => {
           onPress={() => router.push("/(app)/parametres")}
           className="flex-row items-center gap-3 border-l border-border pl-4 active:opacity-70"
         >
-          <Avatar name={userInitial} size="sm" />
+          <Avatar name={userName || "?"} color={userColor ?? undefined} imageUrl={userAvatarUrl} size="sm" />
         </Pressable>
       </View>
     </View>

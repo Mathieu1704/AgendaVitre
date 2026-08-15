@@ -41,6 +41,8 @@ class EmployeeBase(BaseModel):
     hours_per_weekday: Optional[Dict[str, float]] = None
     hours_valid_from: Optional[date] = None
     hours_valid_until: Optional[date] = None
+    # URL signée (calculée à la volée, jamais persistée) — pas une colonne DB.
+    avatar_url: Optional[str] = None
 
     @field_validator("hours_per_weekday")
     @classmethod

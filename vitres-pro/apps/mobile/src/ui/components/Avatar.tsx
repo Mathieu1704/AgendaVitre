@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, Image } from "react-native";
 import { cn } from "../cn";
 
 export function Avatar({
@@ -7,12 +7,19 @@ export function Avatar({
   size = "md",
   className,
   color,
+  imageUrl,
 }: {
   name: string | null | undefined;
   size?: "sm" | "md" | "lg";
   className?: string;
   color?: string;
+  imageUrl?: string | null;
 }) {
+  // Les URLs (signées, bucket privé) expirent — si le chargement échoue, on
+  // retombe sur les initiales plutôt que d'afficher une bulle cassée.
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => setImageFailed(false), [imageUrl]);
+
   const initials = (name || "?")
     .split(" ")
     .map((n) => n[0])
@@ -31,6 +38,21 @@ export function Avatar({
     md: "text-sm",
     lg: "text-base",
   };
+
+  if (imageUrl && !imageFailed) {
+    return (
+      <View
+        className={cn("rounded-full overflow-hidden", sizeClasses[size], className)}
+      >
+        <Image
+          source={{ uri: imageUrl }}
+          style={{ width: "100%", height: "100%" }}
+          resizeMode="cover"
+          onError={() => setImageFailed(true)}
+        />
+      </View>
+    );
+  }
 
   return (
     <View

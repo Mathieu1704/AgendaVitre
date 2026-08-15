@@ -1,11 +1,13 @@
 import secrets
+from io import BytesIO
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict
 from uuid import UUID
 from datetime import date
 from pydantic import BaseModel
+from PIL import Image, ImageOps
 
 from pydantic import field_validator
 
@@ -15,6 +17,31 @@ from app.core.deps import get_current_user
 from app.core.supabase import supabase_admin
 
 router = APIRouter()
+
+AVATAR_BUCKET = "avatars"
+AVATAR_MAX_SIZE = 512
+AVATAR_MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+
+
+def _signed_avatar_url(emp: Employee) -> Optional[str]:
+    """URL signée (bucket privé) valable 7 jours — jamais persistée, recalculée
+    à chaque lecture. Renvoie None si pas de photo ou si Storage est injoignable
+    (l'avatar retombe alors sur les initiales côté mobile)."""
+    if not emp.avatar_path:
+        return None
+    try:
+        res = supabase_admin.storage.from_(AVATAR_BUCKET).create_signed_url(
+            emp.avatar_path, 60 * 60 * 24 * 7,
+        )
+        return res.get("signedURL") or res.get("signed_url")
+    except Exception:
+        return None
+
+
+def _employee_out(emp: Employee) -> EmployeeOut:
+    out = EmployeeOut.model_validate(emp, from_attributes=True)
+    out.avatar_url = _signed_avatar_url(emp)
+    return out
 
 # --- SCHEMAS LOCAUX ---
 class EmployeeCreateRequest(BaseModel):
@@ -53,13 +80,67 @@ def read_employees(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    return db.query(Employee).all()
+    return [_employee_out(emp) for emp in db.query(Employee).all()]
 
 @router.get("/me", response_model=EmployeeOut)
 def read_me(
     current_user: Employee = Depends(get_current_user),
 ):
-    return current_user
+    return _employee_out(current_user)
+
+
+@router.post("/me/avatar", response_model=EmployeeOut)
+def upload_my_avatar(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Le fichier doit être une image.")
+
+    raw = file.file.read(AVATAR_MAX_UPLOAD_BYTES + 1)
+    if len(raw) > AVATAR_MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Image trop volumineuse (8 Mo max).")
+
+    try:
+        img = Image.open(BytesIO(raw))
+        img = ImageOps.exif_transpose(img)
+        img = img.convert("RGB")
+        img.thumbnail((AVATAR_MAX_SIZE, AVATAR_MAX_SIZE))
+        buffer = BytesIO()
+        img.save(buffer, format="JPEG", quality=80)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Fichier image invalide.")
+
+    path = f"{current_user.id}.jpg"
+    try:
+        supabase_admin.storage.from_(AVATAR_BUCKET).upload(
+            path, buffer.getvalue(),
+            file_options={"content-type": "image/jpeg", "upsert": "true"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Échec de l'upload : {str(e)}")
+
+    current_user.avatar_path = path
+    db.commit()
+    db.refresh(current_user)
+    return _employee_out(current_user)
+
+
+@router.delete("/me/avatar", response_model=EmployeeOut)
+def delete_my_avatar(
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    if current_user.avatar_path:
+        try:
+            supabase_admin.storage.from_(AVATAR_BUCKET).remove([current_user.avatar_path])
+        except Exception:
+            pass
+        current_user.avatar_path = None
+        db.commit()
+        db.refresh(current_user)
+    return _employee_out(current_user)
 
 @router.post("", response_model=EmployeeOut)
 def create_employee(

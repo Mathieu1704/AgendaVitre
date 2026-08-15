@@ -26,6 +26,7 @@ export const useAuth = () => {
   );
   const [userName, setUserName] = useState<string>(initial?.fullName ?? "");
   const [userColor, setUserColor] = useState<string | null>(initial?.color ?? null);
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(initial?.avatarUrl ?? null);
   const [employeeId, setEmployeeId] = useState<string | undefined>(initial?.employeeId);
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();
@@ -42,6 +43,7 @@ export const useAuth = () => {
       fullName: string;
       color?: string | null;
       employeeId?: string;
+      avatarUrl?: string | null;
     }) => {
       if (cancelled) return;
       setIsAdmin(p.role === "admin");
@@ -50,6 +52,7 @@ export const useAuth = () => {
       setUserName(p.fullName);
       setUserColor(p.color ?? null);
       setEmployeeId(p.employeeId);
+      setUserAvatarUrl(p.avatarUrl ?? null);
     };
 
     // Réhydratation depuis le cache : sur natif la lecture est asynchrone, donc
@@ -74,6 +77,7 @@ export const useAuth = () => {
           email: me?.email ?? session?.user?.email,
           color: me?.color ?? null,
           employeeId: me?.id ? String(me.id) : undefined,
+          avatarUrl: me?.avatar_url ?? null,
         };
         applyProfile(profile);
         await saveProfile(profile);
@@ -164,5 +168,5 @@ export const useAuth = () => {
     };
   }, []);
 
-  return { session, isAdmin, isSubcontractor, userZone, userName, userColor, employeeId, loading };
+  return { session, isAdmin, isSubcontractor, userZone, userName, userColor, userAvatarUrl, employeeId, loading };
 };

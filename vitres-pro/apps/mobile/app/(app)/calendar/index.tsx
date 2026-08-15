@@ -54,6 +54,7 @@ import {
   toBrusselsDateTimeString,
 } from "../../../src/lib/date";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
+import { Avatar } from "../../../src/ui/components/Avatar";
 import { useAuth } from "../../../src/hooks/useAuth";
 import { useSubZones } from "../../../src/hooks/useZones";
 import {
@@ -993,28 +994,12 @@ export default function CalendarScreen() {
                       borderBottomColor: isDark ? "#1E293B" : "#F8FAFC",
                     }}
                   >
-                    <View
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        backgroundColor: emp.color ?? "#3B82F6",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: "#fff",
-                          fontWeight: "800",
-                          fontSize: 14,
-                        }}
-                      >
-                        {(emp.full_name ?? emp.email ?? "?")
-                          .charAt(0)
-                          .toUpperCase()}
-                      </Text>
-                    </View>
+                    <Avatar
+                      name={emp.full_name ?? emp.email ?? "?"}
+                      color={emp.color}
+                      imageUrl={emp.avatar_url}
+                      className="w-9 h-9"
+                    />
                     <Text
                       style={{
                         flex: 1,

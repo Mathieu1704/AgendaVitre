@@ -82,6 +82,9 @@ class Employee(Base):
     role = Column(String, default="employee") # 'admin', 'employee' ou 'subcontractor'
     color = Column(String, default="#3B82F6") # Couleur pour le planning admin
     phone = Column(String, nullable=True) # Téléphone de l'employé
+    # Chemin dans le bucket Storage "avatars" (ex: "<id>.jpg"), pas une URL —
+    # le bucket est privé, l'URL servie au client est signée à la volée.
+    avatar_path = Column(String, nullable=True)
 
     zone = Column(String(20), default="hainaut", nullable=False)  # "hainaut" ou "ardennes"
 
