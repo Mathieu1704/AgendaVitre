@@ -401,9 +401,15 @@ export default function CalendarScreen() {
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await refetch();
+    // Rafraîchit aussi les totaux d'heures (planning + employés), pas seulement les interventions
+    await Promise.all([
+      refetch(),
+      queryClient.invalidateQueries({ queryKey: ["planning-range"] }),
+      queryClient.invalidateQueries({ queryKey: ["planning-stats"] }),
+      queryClient.invalidateQueries({ queryKey: ["employees"] }),
+    ]);
     setIsRefreshing(false);
-  }, [refetch]);
+  }, [refetch, queryClient]);
 
   // --- HELPERS ---
   const dayKeyFromDateTime = useCallback((isoDateTime: string) => {

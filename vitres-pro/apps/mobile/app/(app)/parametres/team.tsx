@@ -29,10 +29,10 @@ import { Card, CardContent } from "../../../src/ui/components/Card";
 import { Button } from "../../../src/ui/components/Button";
 import { Dialog } from "../../../src/ui/components/Dialog";
 import { Input } from "../../../src/ui/components/Input";
-import { Select } from "../../../src/ui/components/Select";
 import { ColorPicker } from "../../../src/ui/components/ColorPicker";
 import { WeekdayHoursPicker } from "../../../src/ui/components/WeekdayHoursPicker";
 import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
+import { DateRangePicker } from "../../../src/ui/components/DateRangePicker";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { toast } from "../../../src/ui/toast";
@@ -101,15 +101,21 @@ export default function TeamManagementScreen() {
   });
 
   const roleItems = [
-    { id: "admin", label: "Administrateur" },
     { id: "employee", label: "Employé" },
     { id: "subcontractor", label: "Sous-traitant" },
+    { id: "admin", label: "Administrateur" },
   ];
 
   const updateMutation = useMutation({
     mutationFn: (p: any) => api.patch(`/api/employees/${editingEmp.id}`, p),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employees"] });
+      // Les heures/la période de l'employé impactent les totaux du planning
+      queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["planning-range"] });
+      queryClient.invalidateQueries({ queryKey: ["horizon-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["initial-stats-reprise"] });
+      queryClient.invalidateQueries({ queryKey: ["timetracking", "weekly-summary"] });
       toast.success("Succès", "Profil mis à jour");
       setEditingEmp(null);
     },
@@ -402,6 +408,27 @@ export default function TeamManagementScreen() {
 
             {/* Formulaire : Suppression de px-1 pour alignement strict */}
             <View className="w-full">
+              {/* Rôle */}
+              <View style={{ marginBottom: 16 }}>
+                <Text className={labelClass}>Rôle de l'employé</Text>
+                <SlidingPillSelector
+                  options={roleItems}
+                  selected={selectedRole?.id}
+                  onSelect={(id) => {
+                    const newRole = roleItems.find((r) => r.id === id);
+                    setSelectedRole(newRole);
+                    if (id !== "subcontractor") {
+                      setHoursValidFrom(null);
+                      setHoursValidUntil(null);
+                    }
+                  }}
+                  pillColor="#3B82F6"
+                  bgColor={isDark ? "#1E293B" : "#F1F5F9"}
+                  activeTextColor="#FFFFFF"
+                  inactiveTextColor={isDark ? "#94A3B8" : "#64748B"}
+                />
+              </View>
+
               {/* Input Téléphone */}
               <Input
                 label="Téléphone"
@@ -409,6 +436,14 @@ export default function TeamManagementScreen() {
                 value={editPhone}
                 onChangeText={setEditPhone}
                 containerStyle={{ marginBottom: 8 }}
+              />
+
+              {/* Color Picker */}
+              <ColorPicker
+                selectedColor={selectedColor}
+                onColorChange={setSelectedColor}
+                label="Couleur sur le planning"
+                containerStyle={{ marginBottom: 16 }}
               />
 
               {/* Heures par jour */}
@@ -422,72 +457,21 @@ export default function TeamManagementScreen() {
               </View>
 
               {selectedRole?.id === "subcontractor" && (
-                <View style={{ marginBottom: 16, gap: 10 }}>
-                  <Text className={labelClass}>Période d'activité (optionnel)</Text>
+                <View style={{ marginBottom: 16, gap: 8 }}>
+                  <Text className={labelClass}>Période d'activité</Text>
                   <Text className="text-xs text-muted-foreground -mt-1 mb-1">
                     En dehors de cette période, 0h prévues automatiquement.
                   </Text>
-
-                  {hoursValidFrom ? (
-                    <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
-                      <View style={{ flex: 1 }}>
-                        <DateTimePicker
-                          label="Actif à partir du"
-                          value={hoursValidFrom + "T00:00"}
-                          onChange={(v) => setHoursValidFrom(v.split("T")[0])}
-                          dateOnly
-                        />
-                      </View>
-                      <Pressable onPress={() => setHoursValidFrom(null)} hitSlop={8} style={{ marginBottom: 14 }}>
-                        <Text className="text-xs text-red-500 font-semibold">Retirer</Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <Pressable onPress={() => setHoursValidFrom(toISODate(new Date()))}>
-                      <Text className="text-primary text-sm font-semibold">+ Définir une date de début</Text>
-                    </Pressable>
-                  )}
-
-                  {hoursValidUntil ? (
-                    <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
-                      <View style={{ flex: 1 }}>
-                        <DateTimePicker
-                          label="Actif jusqu'au"
-                          value={hoursValidUntil + "T00:00"}
-                          onChange={(v) => setHoursValidUntil(v.split("T")[0])}
-                          dateOnly
-                        />
-                      </View>
-                      <Pressable onPress={() => setHoursValidUntil(null)} hitSlop={8} style={{ marginBottom: 14 }}>
-                        <Text className="text-xs text-red-500 font-semibold">Retirer</Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <Pressable onPress={() => setHoursValidUntil(toISODate(new Date()))}>
-                      <Text className="text-primary text-sm font-semibold">+ Définir une date de fin</Text>
-                    </Pressable>
-                  )}
+                  <DateRangePicker
+                    startDate={hoursValidFrom}
+                    endDate={hoursValidUntil}
+                    onChange={(start, end) => {
+                      setHoursValidFrom(start);
+                      setHoursValidUntil(end);
+                    }}
+                  />
                 </View>
               )}
-
-              {/* Select Rôle : On utilise la prop label pour l'alignement parfait avec Input */}
-              <Select
-                label="Rôle de l'employé"
-                items={roleItems}
-                value={selectedRole}
-                onChange={setSelectedRole}
-                title="Choisir un rôle"
-                searchable={false}
-                containerStyle={{ marginBottom: 8 }}
-              />
-
-              {/* Color Picker */}
-              <ColorPicker
-                selectedColor={selectedColor}
-                onColorChange={setSelectedColor}
-                label="Couleur sur le planning"
-                containerStyle={{ marginBottom: 16 }}
-              />
 
               {/* Espace avant bouton */}
               <View className="h-2" />
