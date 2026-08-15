@@ -23,6 +23,7 @@ import {
   Users,
   Settings,
   Bell,
+  Search,
 } from "lucide-react-native";
 
 export default function AppLayout() {
@@ -152,6 +153,7 @@ export default function AppLayout() {
               <Tabs.Screen name="index" />
               <Tabs.Screen name="calendar" />
               <Tabs.Screen name="clients" />
+              <Tabs.Screen name="recherche/index" />
               <Tabs.Screen name="facturation" options={{ href: null }} />
               <Tabs.Screen name="parametres" />
               <Tabs.Screen name="notifications/index" options={{ href: null }} />
@@ -205,6 +207,16 @@ export default function AppLayout() {
             href: isAdmin ? undefined : null,
             tabBarIcon: isAdmin
               ? ({ color, size }) => <Users size={size} color={color} />
+              : undefined,
+          }}
+        />
+        <Tabs.Screen
+          name="recherche/index"
+          options={{
+            title: "Recherche",
+            href: isAdmin ? null : undefined,
+            tabBarIcon: !isAdmin
+              ? ({ color, size }) => <Search size={size} color={color} />
               : undefined,
           }}
         />

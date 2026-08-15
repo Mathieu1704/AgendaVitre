@@ -11,6 +11,7 @@ import {
   Bell,
   PanelLeftClose,
   PanelLeftOpen,
+  Search,
 } from "lucide-react-native";
 import { supabase } from "../../lib/supabase";
 import { useNotifications } from "../../hooks/useNotifications";
@@ -61,9 +62,10 @@ export function Sidebar() {
       { path: "/(app)", label: "Dashboard", icon: LayoutDashboard, exact: true, match: "/", adminOnly: true },
       { path: "/(app)/calendar", label: "Planning", icon: Calendar, match: "/calendar", adminOnly: false },
       { path: "/(app)/clients", label: "Clients", icon: Users, match: "/clients", adminOnly: true },
+      { path: "/(app)/recherche", label: "Recherche", icon: Search, match: "/recherche", adminOnly: false, nonAdminOnly: true },
       { path: "/(app)/notifications", label: "Alertes", icon: Bell, badge: true, match: "/notifications", adminOnly: true },
       { path: "/(app)/parametres", label: "Paramètres", icon: Settings, match: "/parametres", adminOnly: false },
-    ].filter((item) => !item.adminOnly || isAdmin),
+    ].filter((item) => (!item.adminOnly || isAdmin) && (!item.nonAdminOnly || !isAdmin)),
     [isAdmin]
   );
 
