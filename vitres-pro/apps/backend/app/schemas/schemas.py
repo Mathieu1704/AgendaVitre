@@ -178,6 +178,7 @@ class InterventionItemBase(BaseModel):
     done: bool = True
     on_demand: bool = False
     is_adjustment: bool = False
+    note: Optional[str] = None
 
 class InterventionItemCreate(InterventionItemBase):
     pass

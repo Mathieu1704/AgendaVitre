@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import func, or_
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 from uuid import UUID
 from datetime import datetime, date
 import math
@@ -611,6 +611,8 @@ class NewAdjustmentItem(BaseModel):
 class ItemsDoneBody(BaseModel):
     not_done_item_ids: List[UUID] = []
     new_items: List[NewAdjustmentItem] = []
+    # Motif saisi par prestation décochée, clé = id de la prestation (en str).
+    not_done_notes: Dict[str, str] = {}
 
 
 @router.patch("/{intervention_id}/items-done", response_model=InterventionOut)
@@ -632,6 +634,11 @@ def update_items_done(
 
     for item in db_intervention.items:
         item.done = item.id not in not_done_ids
+        if item.id in not_done_ids:
+            note = body.not_done_notes.get(str(item.id), "").strip()
+            item.note = note or None
+        else:
+            item.note = None
 
     new_rows = [
         InterventionItem(
@@ -764,7 +771,16 @@ def no_reprise(
     intervention.reprise_note = note if note else None
 
     emp_name = current_user.full_name or current_user.email or "Un employé"
-    description = f"{emp_name} n'a pas repris de RDV pour '{intervention.title}'"
+    is_subcontractor = current_user.role == "subcontractor"
+    if is_subcontractor:
+        # Un sous-traitant ne planifie jamais de reprise : le message générique
+        # "n'a pas repris de RDV" prête à confusion (on dirait un oubli), alors
+        # qu'il s'agit de prestations marquées non faites à la clôture.
+        title = "Prestations non terminées"
+        description = f"{emp_name} n'a pas terminé toutes les prestations sur '{intervention.title}'"
+    else:
+        title = "RDV non repris"
+        description = f"{emp_name} n'a pas repris de RDV pour '{intervention.title}'"
     if note:
         description += f" — {note}"
 
@@ -780,7 +796,7 @@ def no_reprise(
         notif = InAppNotification(
             recipient_id=admin.id,
             type="no_reprise",
-            title="RDV non repris",
+            title=title,
             message=description,
             metadata_={
                 "intervention_id": str(intervention_id),

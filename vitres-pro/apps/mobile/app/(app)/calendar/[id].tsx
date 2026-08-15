@@ -95,6 +95,8 @@ export default function InterventionDetailScreen() {
   const [showAllDoneConfirm, setShowAllDoneConfirm] = useState(false);
   const [showItemsChecklist, setShowItemsChecklist] = useState(false);
   const [notDoneIds, setNotDoneIds] = useState<Set<string>>(new Set());
+  // Motif saisi par prestation décochée (employé ou sous-traitant), clé = item.id.
+  const [notDoneNotes, setNotDoneNotes] = useState<Record<string, string>>({});
   // Ajustements ad-hoc à la clôture : déduction partielle sur une prestation
   // décochée, ou supplément imprévu. `price` est ce qui compte réellement
   // dans le Total (positif dans les deux cas : le crédit pour la part faite
@@ -406,8 +408,6 @@ export default function InterventionDetailScreen() {
   // mais sans prix affichés et sans navigation vers le formulaire de reprise
   // — en cas de service non fait, on notifie juste l'admin (endpoint
   // /no-reprise, déjà fait pour ça).
-  const [subcontractorNote, setSubcontractorNote] = useState("");
-
   const subcontractorDoneMutation = useMutation({
     mutationFn: async () => {
       applyEditIntervention(queryClient, String(id), { status: "done" });
@@ -430,13 +430,23 @@ export default function InterventionDetailScreen() {
 
   const subcontractorChecklistMutation = useMutation({
     mutationFn: async (notDoneItemIds: string[]) => {
-      const note = subcontractorNote.trim();
+      const notes = Object.fromEntries(
+        notDoneItemIds
+          .map((itemId) => [itemId, (notDoneNotes[itemId] || "").trim()])
+          .filter(([, n]) => !!n),
+      );
+      // Note globale envoyée à l'admin (notification /no-reprise) : les motifs
+      // par prestation, concaténés avec leur libellé.
+      const note = (intervention?.items || [])
+        .filter((item: any) => notDoneItemIds.includes(item.id) && notes[item.id])
+        .map((item: any) => `${item.label} : ${notes[item.id]}`)
+        .join("\n");
       applyItemsDone(queryClient, String(id), notDoneItemIds);
       await enqueue({
         kind: "items-done",
         method: "PATCH",
         url: `/api/interventions/${id}/items-done`,
-        body: { not_done_item_ids: notDoneItemIds },
+        body: { not_done_item_ids: notDoneItemIds, not_done_notes: notes },
         label: "Prestations réalisées",
       });
       if (notDoneItemIds.length > 0) {
@@ -461,7 +471,7 @@ export default function InterventionDetailScreen() {
     },
     onSuccess: (_data, notDoneItemIds) => {
       setShowItemsChecklist(false);
-      setSubcontractorNote("");
+      setNotDoneNotes({});
       toast.success(
         notDoneItemIds.length > 0 ? "Enregistré" : "Terminée",
         isOnlineNow()
@@ -1122,6 +1132,11 @@ export default function InterventionDetailScreen() {
                               >
                                 {item.label}
                               </Text>
+                              {item.done === false && item.note && (
+                                <Text className="text-xs text-muted-foreground mt-1">
+                                  {item.note}
+                                </Text>
+                              )}
                             </View>
                           ))}
                         </View>
@@ -1168,8 +1183,9 @@ export default function InterventionDetailScreen() {
                                 return (
                                   <View
                                     key={item.id ?? idx}
-                                    className="flex-row justify-between items-center pb-2 border-b border-border dark:border-slate-800 last:border-0"
+                                    className="pb-2 border-b border-border dark:border-slate-800 last:border-0"
                                   >
+                                  <View className="flex-row justify-between items-center">
                                     <View className="flex-row items-center flex-1 mr-4">
                                       <Text
                                         className={`font-medium ${
@@ -1222,6 +1238,12 @@ export default function InterventionDetailScreen() {
                                         {formatPrice(displayPrice, "0 €")}
                                       </Text>
                                     </View>
+                                  </View>
+                                  {item.done === false && item.note && (
+                                    <Text className="text-xs text-muted-foreground mt-1">
+                                      {item.note}
+                                    </Text>
+                                  )}
                                   </View>
                                 );
                               });
@@ -1286,6 +1308,7 @@ export default function InterventionDetailScreen() {
                 return;
               }
               setNotDoneIds(new Set());
+              setNotDoneNotes({});
               setShowAllDoneConfirm(true);
             }}
             loading={isSubcontractor && subcontractorDoneMutation.isPending}
@@ -1439,6 +1462,7 @@ export default function InterventionDetailScreen() {
           setShowItemsChecklist(false);
           setAdjustments([]);
           setAdjustmentDraft(null);
+          setNotDoneNotes({});
         }}
       >
         <View style={{ padding: 20, gap: 16 }}>
@@ -1544,6 +1568,20 @@ export default function InterventionDetailScreen() {
                           </Text>
                         </Pressable>
                       )}
+                    </View>
+                  )}
+
+                  {/* Prestation décochée : motif (pourquoi ce n'est pas fait) */}
+                  {!checked && (
+                    <View style={{ marginLeft: 32 }}>
+                      <Input
+                        placeholder="Pourquoi ? (optionnel)"
+                        value={notDoneNotes[item.id] || ""}
+                        onChangeText={(t) =>
+                          setNotDoneNotes((prev) => ({ ...prev, [item.id]: t }))
+                        }
+                        style={{ height: 40 }}
+                      />
                     </View>
                   )}
                 </View>
@@ -1684,23 +1722,13 @@ export default function InterventionDetailScreen() {
               </Text>
             </View>
           )}
-          {isSubcontractor && notDoneIds.size > 0 && (
-            <Input
-              label="Note pour l'admin (optionnelle)"
-              placeholder="Ex: client absent, matériel manquant..."
-              value={subcontractorNote}
-              onChangeText={setSubcontractorNote}
-              multiline
-              style={{ height: 90, alignItems: "flex-start", paddingVertical: 12 }}
-              inputStyle={{ height: "100%", textAlignVertical: "top" }}
-            />
-          )}
           <View style={{ flexDirection: "row", gap: 12 }}>
             <Pressable
               onPress={() => {
                 setShowItemsChecklist(false);
                 setAdjustments([]);
                 setAdjustmentDraft(null);
+                setNotDoneNotes({});
               }}
               style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: isDark ? "#1E293B" : "#F1F5F9" }}
             >
@@ -1732,10 +1760,12 @@ export default function InterventionDetailScreen() {
                     pending_adjustments: JSON.stringify(
                       adjustments.map(({ label, price }) => ({ label, price })),
                     ),
+                    pending_not_done_notes: JSON.stringify(notDoneNotes),
                   },
                 });
                 setAdjustments([]);
                 setAdjustmentDraft(null);
+                setNotDoneNotes({});
               }}
               disabled={isSubcontractor ? subcontractorChecklistMutation.isPending : false}
               style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: "#3B82F6", opacity: isSubcontractor && subcontractorChecklistMutation.isPending ? 0.6 : 1 }}

@@ -196,6 +196,8 @@ class InterventionItem(Base):
     # supplément imprévu), pas une vraie prestation du catalogue : exclue du
     # préremplissage d'une future reprise, mais reste visible dans le détail.
     is_adjustment = Column(Boolean, nullable=False, default=False, server_default="false")
+    # Motif saisi à la clôture quand la prestation est décochée (pas faite / partielle).
+    note = Column(Text, nullable=True)
 
     intervention = relationship("Intervention", back_populates="items")
     client_service = relationship("ClientService")

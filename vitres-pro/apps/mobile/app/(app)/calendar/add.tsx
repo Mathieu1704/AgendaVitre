@@ -329,6 +329,7 @@ export default function AddInterventionScreen() {
     from_zone,
     pending_not_done,
     pending_adjustments,
+    pending_not_done_notes,
   } = useLocalSearchParams<{
     id?: string;
     reprise_of?: string;
@@ -341,6 +342,7 @@ export default function AddInterventionScreen() {
     // est réellement confirmée ici — voir handleSubmit / handleNoReprise.
     pending_not_done?: string;
     pending_adjustments?: string;
+    pending_not_done_notes?: string;
   }>();
   const isEditMode = !!id && !reprise_of && !duplicate_of;
   const isRepriseMode = !!reprise_of;
@@ -369,6 +371,15 @@ export default function AddInterventionScreen() {
       return [];
     }
   }, [pending_adjustments]);
+  const pendingNotDoneNotes: Record<string, string> = useMemo(() => {
+    if (!pending_not_done_notes) return {};
+    try {
+      const parsed = JSON.parse(pending_not_done_notes);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }, [pending_not_done_notes]);
   const hasPendingChecklist =
     pendingNotDoneIds.length > 0 || pendingAdjustmentItems.length > 0;
 
@@ -1436,7 +1447,11 @@ export default function AddInterventionScreen() {
             kind: "items-done",
             method: "PATCH",
             url: `/api/interventions/${reprise_of}/items-done`,
-            body: { not_done_item_ids: pendingNotDoneIds, new_items: pendingAdjustmentItems },
+            body: {
+              not_done_item_ids: pendingNotDoneIds,
+              new_items: pendingAdjustmentItems,
+              not_done_notes: pendingNotDoneNotes,
+            },
             label: "Prestations réalisées",
           });
         }
@@ -1508,7 +1523,11 @@ export default function AddInterventionScreen() {
           kind: "items-done",
           method: "PATCH",
           url: `/api/interventions/${reprise_of}/items-done`,
-          body: { not_done_item_ids: pendingNotDoneIds, new_items: pendingAdjustmentItems },
+          body: {
+            not_done_item_ids: pendingNotDoneIds,
+            new_items: pendingAdjustmentItems,
+            not_done_notes: pendingNotDoneNotes,
+          },
           label: "Prestations réalisées",
         });
       }
