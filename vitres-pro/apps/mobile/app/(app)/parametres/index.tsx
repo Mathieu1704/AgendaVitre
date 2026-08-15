@@ -31,7 +31,6 @@ import {
 } from "lucide-react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
 import Constants from "expo-constants";
-import * as ImagePicker from "expo-image-picker";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -48,6 +47,21 @@ import {
   loadProfile as loadCachedProfile,
   saveProfile as saveCachedProfile,
 } from "../../../src/lib/offline/profileCache";
+
+// Chargement paresseux : sur un build natif publié avant l'ajout de ce module
+// (avant rebuild EAS), un `import` statique fait planter tout l'écran dès son
+// ouverture. En le différant + catchant ici, seul le tap sur "photo" échoue
+// proprement le temps que le nouveau binaire soit déployé.
+let imagePickerModule: typeof import("expo-image-picker") | null | undefined;
+const getImagePicker = async () => {
+  if (imagePickerModule !== undefined) return imagePickerModule;
+  try {
+    imagePickerModule = await import("expo-image-picker");
+  } catch {
+    imagePickerModule = null;
+  }
+  return imagePickerModule;
+};
 
 export default function ParametresScreen() {
   const router = useRouter();
@@ -222,6 +236,11 @@ export default function ParametresScreen() {
 
   const handleTakePhoto = async () => {
     setShowAvatarSheet(false);
+    const ImagePicker = await getImagePicker();
+    if (!ImagePicker) {
+      toast.error("Mise à jour requise", "Cette fonctionnalité arrive dans la prochaine mise à jour de l'application.");
+      return;
+    }
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
       toast.error("Permission refusée", "Accès à l'appareil photo requis.");
@@ -239,6 +258,11 @@ export default function ParametresScreen() {
 
   const handlePickFromLibrary = async () => {
     setShowAvatarSheet(false);
+    const ImagePicker = await getImagePicker();
+    if (!ImagePicker) {
+      toast.error("Mise à jour requise", "Cette fonctionnalité arrive dans la prochaine mise à jour de l'application.");
+      return;
+    }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       toast.error("Permission refusée", "Accès à la galerie requis.");
