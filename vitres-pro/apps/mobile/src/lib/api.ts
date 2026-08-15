@@ -10,7 +10,7 @@ const configuredApiUrl =
 // Dans l'émulateur Android, `localhost` pointe vers Android lui-même. L'hôte
 // macOS est exposé par l'adresse spéciale 10.0.2.2. iOS et le web conservent
 // localhost, tandis que les URL de production (Railway) restent inchangées.
-const API_URL =
+export const API_URL =
   Platform.OS === "android"
     ? configuredApiUrl
         .replace("://localhost", "://10.0.2.2")

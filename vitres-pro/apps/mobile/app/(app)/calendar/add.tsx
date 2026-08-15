@@ -1815,7 +1815,7 @@ export default function AddInterventionScreen() {
                   <View
                     style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
                   >
-                    {(Object.keys(TYPE_CONFIG) as IntervType[]).map((t) => {
+                    {(Object.keys(TYPE_CONFIG) as IntervType[]).filter((t) => t !== "tournee" || isEditMode).map((t) => {
                       const cfg = TYPE_CONFIG[t];
                       const active = intervType === t;
                       return (

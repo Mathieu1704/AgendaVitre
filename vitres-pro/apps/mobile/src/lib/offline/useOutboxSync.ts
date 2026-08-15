@@ -78,6 +78,8 @@ export function useOutboxSync() {
     queryClient.invalidateQueries({ queryKey: ["intervention"] });
     queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
     queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    queryClient.invalidateQueries({ queryKey: ["tour-run"] });
+    queryClient.invalidateQueries({ queryKey: ["tour-runs-assigned"] });
   }, [queryClient]);
 
   const run = useCallback(async () => {

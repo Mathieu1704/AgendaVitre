@@ -492,7 +492,7 @@ export default function ParametresScreen() {
                 </Pressable>
                 {/* Tournées récurrentes */}
                 <Pressable
-                  onPress={() => router.push("/(app)/tournees" as any)}
+                  onPress={() => router.push("/(app)/parametres/tournees" as any)}
                   className="mb-3"
                 >
                   <Card

@@ -1,12 +1,13 @@
 import os
 import sentry_sdk
+from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from app.routers import interventions, clients, planning, employees, absences, raw_events, notifications, logs, settings, timetracking
+from app.routers import interventions, clients, planning, employees, absences, raw_events, notifications, logs, settings, timetracking, tours
 
 sentry_dsn = os.getenv("SENTRY_DSN")
 if sentry_dsn:
@@ -36,7 +37,7 @@ app.add_middleware(
         "https://agenda-vitre.vercel.app",
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -50,6 +51,31 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["not
 app.include_router(logs.router, prefix="/api/logs", tags=["logs"])
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 app.include_router(timetracking.router, prefix="/api/timetracking", tags=["timetracking"])
+app.include_router(tours.router, prefix="/api/tours", tags=["tours"])
+
+tour_scheduler = BackgroundScheduler(timezone="Europe/Brussels")
+
+
+@app.on_event("startup")
+def start_tour_draft_scheduler():
+    tours.generate_drafts_job()
+    if not tour_scheduler.running:
+        tour_scheduler.add_job(
+            tours.generate_drafts_job,
+            "interval",
+            hours=12,
+            id="tour-drafts-eight-week-horizon",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        tour_scheduler.start()
+
+
+@app.on_event("shutdown")
+def stop_tour_draft_scheduler():
+    if tour_scheduler.running:
+        tour_scheduler.shutdown(wait=False)
 
 
 

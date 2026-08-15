@@ -46,12 +46,20 @@ export function buildFlatRows(
   const scheduled = list.filter((i) => !i.time_tbd);
   const unscheduled = list.filter((i) => i.time_tbd);
 
+  const employeeKey = (item: any) =>
+    (item.employees ?? [])
+      .map((e: any) => e.full_name ?? e.id ?? "")
+      .sort()
+      .join("|");
+
   const sortItems = (items: any[]) => [...items].sort((a, b) => {
     const sd = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
     if (sd !== 0) return sd;
     const td = (TYPE_ORDER[a.type ?? "intervention"] ?? 9) - (TYPE_ORDER[b.type ?? "intervention"] ?? 9);
     if (td !== 0) return td;
-    return (a.sub_zone ?? "").localeCompare(b.sub_zone ?? "");
+    const ed = employeeKey(a).localeCompare(employeeKey(b));
+    if (ed !== 0) return ed;
+    return new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
   });
 
   const sorted = sortItems(scheduled);
@@ -88,14 +96,18 @@ export function buildFlatRows(
         rows.push({ kind: "type-header", type: tg.type, key: `th-${sg.status}-${sgIdx}-${tg.type}-${tgIdx}` });
       }
 
+      // Heure définie (statut planifié/en cours/etc., pas "à planifier") : on
+      // trie déjà par heure, l'affichage par zone n'apporte plus rien.
+      const timeDefined = sg.status !== "unscheduled";
+
       const szGroups: { code: string | null; items: any[] }[] = [];
       for (const item of tg.items) {
-        const code = item.sub_zone ?? null;
+        const code = timeDefined ? null : (item.sub_zone ?? null);
         const last = szGroups[szGroups.length - 1];
         if (last && last.code === code) last.items.push(item);
         else szGroups.push({ code, items: [item] });
       }
-      const hasMultipleSubZones = szGroups.length > 1 || (szGroups.length === 1 && szGroups[0].code !== null);
+      const hasMultipleSubZones = !timeDefined && (szGroups.length > 1 || (szGroups.length === 1 && szGroups[0].code !== null));
 
       for (const [zgIdx, zg] of szGroups.entries()) {
         const sz = zg.code ? subZoneMap.get(zg.code) : null;
@@ -133,12 +145,20 @@ export function renderInterventionGroups(
 
   const { isDark, isAdmin, subZoneMap, viewMode, selectedDate, effectiveZone, setAssignModal, setSelectedAssignIds, setInitialAssignIds } = ctx;
 
+  const employeeKey = (item: any) =>
+    (item.employees ?? [])
+      .map((e: any) => e.full_name ?? e.id ?? "")
+      .sort()
+      .join("|");
+
   const sortItems = (items: any[]) => [...items].sort((a, b) => {
     const sd = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
     if (sd !== 0) return sd;
     const td = (TYPE_ORDER[a.type ?? "intervention"] ?? 9) - (TYPE_ORDER[b.type ?? "intervention"] ?? 9);
     if (td !== 0) return td;
-    return (a.sub_zone ?? "").localeCompare(b.sub_zone ?? "");
+    const ed = employeeKey(a).localeCompare(employeeKey(b));
+    if (ed !== 0) return ed;
+    return new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
   });
 
   const scheduled = list.filter((i) => !i.time_tbd);
@@ -180,14 +200,18 @@ export function renderInterventionGroups(
           </View>
         )}
         {typeGroups.map((tg, tgIdx) => {
+          // Heure définie (statut planifié/en cours/etc., pas "à planifier") : on
+          // trie déjà par heure, l'affichage par zone n'apporte plus rien.
+          const timeDefined = group.status !== "unscheduled";
+
           const szGroups: { code: string | null; items: typeof sorted }[] = [];
           for (const item of tg.items) {
-            const code = item.sub_zone ?? null;
+            const code = timeDefined ? null : (item.sub_zone ?? null);
             const last = szGroups[szGroups.length - 1];
             if (last && last.code === code) last.items.push(item);
             else szGroups.push({ code, items: [item] });
           }
-          const hasMultipleSubZones = szGroups.length > 1 || (szGroups.length === 1 && szGroups[0].code !== null);
+          const hasMultipleSubZones = !timeDefined && (szGroups.length > 1 || (szGroups.length === 1 && szGroups[0].code !== null));
 
           return (
             <View key={`${tg.type}-${tgIdx}`}>

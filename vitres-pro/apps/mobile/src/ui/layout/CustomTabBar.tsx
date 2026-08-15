@@ -25,13 +25,20 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
     (r: any) => r.key === state.routes[state.index]?.key
   );
 
+  // Routes cachées (href: null) qui ne vivent pas sous leur propre préfixe
+  // dans la tab bar : on les rattache explicitement à l'onglet parent visible.
+  const HIDDEN_ROUTE_PARENT: Record<string, string> = {
+    facturation: "parametres",
+  };
+
   // Si la route active est cachée (href: null), trouver la tab parente par préfixe
   const activeIndex = (() => {
     if (activeVisibleIndex >= 0) return activeVisibleIndex;
     const currentName: string = state.routes[state.index]?.name ?? "";
     const prefix = currentName.split("/")[0]; // ex: "calendar", "clients", "parametres"
+    const targetPrefix = HIDDEN_ROUTE_PARENT[prefix] ?? prefix;
     const parentIndex = visibleRoutes.findIndex((r: any) =>
-      r.name.startsWith(prefix)
+      r.name.startsWith(targetPrefix)
     );
     return parentIndex >= 0 ? parentIndex : 0;
   })();

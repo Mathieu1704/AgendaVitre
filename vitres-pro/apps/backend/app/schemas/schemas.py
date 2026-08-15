@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List, Dict, Any, Literal
-from datetime import datetime, date
+from datetime import datetime, date, time
 from uuid import UUID
 import unicodedata
 
@@ -242,6 +242,14 @@ class InterventionOutLite(BaseModel):
     class Config:
         from_attributes = True
 
+class TourRunSummaryOut(BaseModel):
+    id: UUID
+    publication_status: str
+    lifecycle_status: str
+    progress: Dict[str, int]
+    class Config:
+        from_attributes = True
+
 class InterventionOut(BaseModel):
     id: UUID
     type: str = "intervention"
@@ -269,6 +277,7 @@ class InterventionOut(BaseModel):
     client: Optional[ClientOutLite] = None
     employees: List[EmployeeOut] = []
     items: List[InterventionItemOut] = []
+    tour_run: Optional[TourRunSummaryOut] = None
 
     class Config:
         from_attributes = True
@@ -400,3 +409,296 @@ class TimeEntryCorrectionIn(BaseModel):
     work_date: date
     clock_in_at: Optional[datetime] = None
     clock_out_at: Optional[datetime] = None
+
+
+# --- TOURNEES RECURRENTES ---
+TourBillingMode = Literal[
+    "monthly_invoice",
+    "quarterly_invoice",
+    "cash_invoiced",
+    "cash_no_invoice",
+]
+TourScheduleKind = Literal["interval", "on_demand", "annual"]
+
+
+class TourScheduleInput(BaseModel):
+    id: Optional[UUID] = None
+    kind: TourScheduleKind = "interval"
+    anchor_date: Optional[date] = None
+    interval_weeks: Optional[int] = None
+    active_months: List[int] = list(range(1, 13))
+    monthly_cap: Optional[int] = None
+    position: float = 0
+
+    @field_validator("active_months")
+    @classmethod
+    def _valid_months(cls, value):
+        months = sorted(set(value))
+        if any(month < 1 or month > 12 for month in months):
+            raise ValueError("Les mois actifs doivent etre compris entre 1 et 12.")
+        return months
+
+    @field_validator("interval_weeks")
+    @classmethod
+    def _valid_interval(cls, value):
+        if value is not None and value <= 0:
+            raise ValueError("L'intervalle doit etre superieur a zero.")
+        return value
+
+    @field_validator("monthly_cap")
+    @classmethod
+    def _valid_monthly_cap(cls, value):
+        if value is not None and value <= 0:
+            raise ValueError("Le plafond mensuel doit etre superieur a zero.")
+        return value
+
+
+class TourServiceInput(BaseModel):
+    id: Optional[UUID] = None
+    label: str
+    price_ht: float = 0
+    billing_mode: TourBillingMode = "monthly_invoice"
+    position: float = 0
+    active: bool = True
+    needs_review: bool = False
+    source_data: Optional[Dict[str, Any]] = None
+    schedules: List[TourScheduleInput] = []
+
+    @field_validator("price_ht")
+    @classmethod
+    def _valid_price(cls, value):
+        if value < 0:
+            raise ValueError("Le prix HT ne peut pas etre negatif.")
+        return value
+
+
+class TourStopInput(BaseModel):
+    id: Optional[UUID] = None
+    name: str
+    export_label: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    time_window: Optional[str] = None
+    estimated_minutes: Optional[int] = None
+    instructions: Optional[str] = None
+    position: float = 0
+    active: bool = True
+    needs_review: bool = False
+    source_data: Optional[Dict[str, Any]] = None
+    services: List[TourServiceInput] = []
+
+    @field_validator("latitude")
+    @classmethod
+    def _valid_latitude(cls, value):
+        if value is not None and not -90 <= value <= 90:
+            raise ValueError("Latitude invalide.")
+        return value
+
+    @field_validator("longitude")
+    @classmethod
+    def _valid_longitude(cls, value):
+        if value is not None and not -180 <= value <= 180:
+            raise ValueError("Longitude invalide.")
+        return value
+
+    @field_validator("estimated_minutes")
+    @classmethod
+    def _valid_duration(cls, value):
+        if value is not None and value <= 0:
+            raise ValueError("La duree estimee doit etre superieure a zero.")
+        return value
+
+
+class TourSectionInput(BaseModel):
+    id: Optional[UUID] = None
+    label: str
+    position: float = 0
+    stops: List[TourStopInput] = []
+
+
+class TourTemplateInput(BaseModel):
+    name: str
+    zone: Literal["hainaut", "ardennes"]
+    weekday: int
+    default_start_time: time
+    default_end_time: time
+    active: bool = False
+    archived: bool = False
+    setup_complete: bool = False
+    source_document: Optional[str] = None
+    sections: List[TourSectionInput] = []
+
+    @field_validator("weekday")
+    @classmethod
+    def _valid_weekday(cls, value):
+        if value < 1 or value > 7:
+            raise ValueError("Le jour doit etre compris entre 1 (lundi) et 7 (dimanche).")
+        return value
+
+
+class TourScheduleOut(TourScheduleInput):
+    id: UUID
+    class Config:
+        from_attributes = True
+
+
+class TourServiceOut(TourServiceInput):
+    id: UUID
+    schedules: List[TourScheduleOut] = []
+    class Config:
+        from_attributes = True
+
+
+class TourStopOut(TourStopInput):
+    id: UUID
+    export_label: str
+    services: List[TourServiceOut] = []
+    class Config:
+        from_attributes = True
+
+
+class TourSectionOut(TourSectionInput):
+    id: UUID
+    stops: List[TourStopOut] = []
+    class Config:
+        from_attributes = True
+
+
+class TourTemplateOut(TourTemplateInput):
+    id: UUID
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    sections: List[TourSectionOut] = []
+    class Config:
+        from_attributes = True
+
+
+class TourRunCashOut(BaseModel):
+    id: UUID
+    billing_mode: TourBillingMode
+    expected_amount: float
+    received_amount: Optional[float] = None
+    confirmed_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+
+class TourRunServiceOut(BaseModel):
+    id: UUID
+    source_service_id: Optional[UUID] = None
+    label: str
+    price_ht: float
+    billing_mode: TourBillingMode
+    position: float
+    suggested: bool
+    selected: bool
+    status: Literal["pending", "done", "not_done"]
+    exception_reason: Optional[str] = None
+    performed_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+
+class TourRunStopOut(BaseModel):
+    id: UUID
+    source_stop_id: Optional[UUID] = None
+    section_label: Optional[str] = None
+    name: str
+    export_label: str
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    time_window: Optional[str] = None
+    estimated_minutes: Optional[int] = None
+    instructions: Optional[str] = None
+    position: float
+    selected: bool
+    status: Literal["pending", "done", "partial", "not_visited"]
+    exception_reason: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    services: List[TourRunServiceOut] = []
+    cash_confirmations: List[TourRunCashOut] = []
+    class Config:
+        from_attributes = True
+
+
+class TourRunOut(BaseModel):
+    id: UUID
+    template_id: Optional[UUID] = None
+    scheduled_date: date
+    template_version: int
+    publication_status: Literal["draft", "published"]
+    lifecycle_status: str
+    progress: Dict[str, int]
+    published_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    intervention: InterventionOutLite
+    employees: List[EmployeeOut] = []
+    stops: List[TourRunStopOut] = []
+    class Config:
+        from_attributes = True
+
+
+class TourDraftGenerateInput(BaseModel):
+    start_date: Optional[date] = None
+    weeks: int = 8
+
+
+class TourDraftSelectionInput(BaseModel):
+    selected: bool
+
+
+class TourDraftScheduleInput(BaseModel):
+    start_time: datetime
+    end_time: datetime
+
+
+class TourPublishInput(BaseModel):
+    employee_ids: List[UUID]
+
+
+class TourServiceStatusInput(BaseModel):
+    status: Literal["pending", "done", "not_done"]
+    reason: Optional[str] = None
+
+
+class TourStopResolveInput(BaseModel):
+    status: Literal["done", "partial", "not_visited"]
+    reason: Optional[str] = None
+    not_done_service_ids: List[UUID] = []
+    service_reasons: Dict[str, str] = {}
+    cash_received: Dict[str, float] = {}
+    client_operation_id: Optional[UUID] = None
+
+
+class TourCashInput(BaseModel):
+    received_amount: float
+
+
+class TourBillingReviewInput(BaseModel):
+    cadence: Literal["monthly", "quarterly"]
+    export_label: str
+    bucket_start: date
+    selected: bool = True
+    override_amount: Optional[float] = None
+
+
+class TourBillingExportInput(BaseModel):
+    zone: Literal["hainaut", "ardennes"]
+    period_start: date
+
+
+class TourBillingBatchOut(BaseModel):
+    id: UUID
+    zone: str
+    period_start: date
+    filename: str
+    created_at: datetime
+    class Config:
+        from_attributes = True

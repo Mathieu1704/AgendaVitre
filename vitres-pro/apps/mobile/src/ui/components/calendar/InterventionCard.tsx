@@ -102,6 +102,13 @@ export const InterventionCard = React.memo(function InterventionCard({
   const card = (
     <Pressable
       onPress={() => {
+        if (item.tour_run?.id) {
+          router.push({
+            pathname: "/(app)/parametres/tournees/run/[id]",
+            params: { id: item.tour_run.id },
+          });
+          return;
+        }
         // La carte possède déjà toutes les données nécessaires à la fiche.
         // Alimenter sa clé directe évite de scanner les listes du planning au
         // montage de l'écran suivant, notamment après plusieurs mois visités.
@@ -118,7 +125,7 @@ export const InterventionCard = React.memo(function InterventionCard({
           },
         });
       }}
-      onLongPress={() => {
+      onLongPress={item.tour_run?.id ? undefined : () => {
         const currentIds = employees.map((e: any) => e.id);
         setAssignModal({ mode: "single", interventionId: item.id, currentIds });
         setSelectedAssignIds(currentIds);
@@ -264,6 +271,16 @@ export const InterventionCard = React.memo(function InterventionCard({
               ? item.client.address
               : item.title}
           </Text>
+          {item.tour_run?.progress && (
+            <View style={{ marginTop: 5 }}>
+              <View style={{ height: 4, borderRadius: 999, backgroundColor: "#FED7AA", overflow: "hidden" }}>
+                <View style={{ height: "100%", width: `${item.tour_run.progress.percent}%`, backgroundColor: item.tour_run.progress.percent === 100 ? "#16A34A" : "#F97316" }} />
+              </View>
+              <Text style={{ fontSize: 10, color: "#C2410C", fontWeight: "700", marginTop: 2 }}>
+                {item.tour_run.progress.resolved}/{item.tour_run.progress.total} commerces
+              </Text>
+            </View>
+          )}
           {hasClient && item.client?.address && (
             <>
               <Text

@@ -44,7 +44,11 @@ export type OutboxKind =
   | "service-price"
   | "service-delete"
   | "edit-intervention-scope"
-  | "delete-intervention-scope";
+  | "delete-intervention-scope"
+  | "tour-service-status"
+  | "tour-stop-resolve"
+  | "tour-cash"
+  | "tour-close";
 
 export type OutboxEntry = {
   id: string;                  // sert aussi de client_operation_id
@@ -456,7 +460,9 @@ export async function flush(): Promise<{ sent: number; failed: number; remaining
     flushing = false;
   }
 
-  if (sent > 0) notifyFlushed();
+  // Un refus definitif doit lui aussi remplacer l'etat optimiste local par
+  // l'etat serveur (notamment si deux employes ont modifie le meme commerce).
+  if (sent > 0 || failed > 0) notifyFlushed();
 
   const queue = await getQueue();
   const remaining = queue.length;

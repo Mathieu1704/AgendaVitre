@@ -43,6 +43,13 @@ function isPersistableKey(key: readonly unknown[]): boolean {
     return spanDays >= 20 && spanDays <= 100;
   }
 
+  if (root === "tour-runs-assigned") {
+    if (key.length !== 3 || typeof key[1] !== "string" || typeof key[2] !== "string") return false;
+    const start = Date.parse(key[1]);
+    const end = Date.parse(key[2]);
+    return Number.isFinite(start) && Number.isFinite(end) && end >= start && (end - start) / 86_400_000 <= 100;
+  }
+
   // Volontairement exclus :
   //  - ["clients"] : ~3000 clients, inutiles hors ligne puisque chaque
   //    intervention embarque déjà le sien ;
@@ -63,7 +70,8 @@ function isPersistableKey(key: readonly unknown[]): boolean {
     // calendrier de reprise). Légères — de simples agrégats par date, pas des
     // interventions complètes — donc peu coûteuses à conserver.
     root === "horizon-stats" ||
-    root === "initial-stats-reprise"
+    root === "initial-stats-reprise" ||
+    root === "tour-run"
   );
 }
 

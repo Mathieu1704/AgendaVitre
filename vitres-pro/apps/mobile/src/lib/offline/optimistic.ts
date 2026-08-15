@@ -11,6 +11,7 @@
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { onDemandPrice } from "../price";
+import { newTempId } from "./idMap";
 
 type AnyIntervention = Record<string, any>;
 export type InterventionCacheSnapshot = [readonly unknown[], unknown];
@@ -107,15 +108,27 @@ export function applyItemsDone(
   qc: QueryClient,
   interventionId: string,
   notDoneItemIds: string[],
+  newItems: { label: string; price: number }[] = [],
 ): void {
   const notDone = new Set(notDoneItemIds);
 
   patchIntervention(qc, interventionId, (current) => {
     const items = Array.isArray(current.items) ? current.items : [];
-    const nextItems = items.map((item: any) => ({
-      ...item,
-      done: !notDone.has(item.id),
-    }));
+    const nextItems = [
+      ...items.map((item: any) => ({
+        ...item,
+        done: !notDone.has(item.id),
+      })),
+      // Ajustements ad-hoc (déduction partielle / supplément) : pas encore
+      // d'id serveur, un id temporaire suffit pour l'aperçu optimiste.
+      ...newItems.map((adj) => ({
+        id: newTempId(),
+        label: adj.label,
+        price: adj.price,
+        done: true,
+        on_demand: false,
+      })),
+    ];
     const total = nextItems.reduce((sum: number, item: any) => {
       if (!item.done) return sum;
       const base = Number(item.price) || 0;

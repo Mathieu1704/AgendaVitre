@@ -34,11 +34,12 @@ export default function AppLayout() {
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
   const { unreadCount } = useNotifications();
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, isSubcontractor, loading: authLoading } = useAuth();
   const { isDark } = useTheme();
   const queryClient = useQueryClient();
   const prefetchedRef = useRef(false);
   const prefetchedAdminRef = useRef(false);
+  const prefetchedToursRef = useRef(false);
 
   // Mémorise l'écran courant à chaque navigation, pour pouvoir y revenir si
   // l'API force une déconnexion (401) en pleine utilisation — voir returnTo.ts.
@@ -97,6 +98,27 @@ export default function AppLayout() {
       queryClient.prefetchQuery({ queryKey: ["sub-zones"],    queryFn: () => api.get("/api/settings/zones").then((r) => r.data),    staleTime: STALE });
     }, 3000);
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (authLoading || isAdmin || isSubcontractor || prefetchedToursRef.current) return;
+    prefetchedToursRef.current = true;
+    const rangeStart = monthRangeStart(new Date());
+    const rangeEnd = monthRangeEnd(new Date());
+    const tourStart = rangeStart.slice(0, 10);
+    const tourEnd = rangeEnd.slice(0, 10);
+    queryClient.prefetchQuery({
+      queryKey: ["tour-runs-assigned", tourStart, tourEnd],
+      queryFn: async () => {
+        const runs = (await api.get("/api/tours/assigned", { params: { start: tourStart, end: tourEnd } })).data;
+        if (Array.isArray(runs)) {
+          runs.forEach((run: any) => queryClient.setQueryData(["tour-run", run.id], run));
+          return runs;
+        }
+        return [];
+      },
+      staleTime: 2 * 60 * 1000,
+    });
+  }, [authLoading, isAdmin, isSubcontractor, queryClient]);
 
   useEffect(() => {
     let mounted = true;

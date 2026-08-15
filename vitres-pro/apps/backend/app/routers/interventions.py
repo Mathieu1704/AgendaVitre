@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from app.models.models import (
     get_db, Intervention, Client, Employee, InterventionItem,
     intervention_employees, RawCalendarEvent, AuditLog, InAppNotification,
-    InterventionService, InterventionNote
+    InterventionService, InterventionNote, TourRun
 )
 from app.schemas.schemas import (
     InterventionCreate, InterventionOut,
@@ -60,6 +60,7 @@ def _load_intervention(intervention_id: UUID, db: Session) -> Intervention:
         selectinload(Intervention.employees),
         selectinload(Intervention.items),
         selectinload(Intervention.hourly_rate),
+        selectinload(Intervention.tour_run).selectinload(TourRun.stops),
     ).filter(Intervention.id == intervention_id).first()
 
 
@@ -138,7 +139,14 @@ def read_interventions(
         selectinload(Intervention.employees),
         selectinload(Intervention.items),
         selectinload(Intervention.hourly_rate),
+        selectinload(Intervention.tour_run).selectinload(TourRun.stops),
     )
+    query = query.filter(
+        ~Intervention.tour_run.has()
+        | Intervention.tour_run.has(TourRun.publication_status == "published")
+    )
+    if current_user.role == "subcontractor":
+        query = query.filter(~Intervention.tour_run.has())
     if current_user.role != 'admin':
         query = query.filter(
             Intervention.zone == current_user.zone,
@@ -194,9 +202,16 @@ def search_interventions(
             selectinload(Intervention.employees),
             selectinload(Intervention.items),
             selectinload(Intervention.hourly_rate),
+            selectinload(Intervention.tour_run).selectinload(TourRun.stops),
         )
         .filter(or_(*conditions))
+        .filter(
+            ~Intervention.tour_run.has()
+            | Intervention.tour_run.has(TourRun.publication_status == "published")
+        )
     )
+    if current_user.role == "subcontractor":
+        query = query.filter(~Intervention.tour_run.has())
     if current_user.role != 'admin':
         query = query.filter(
             Intervention.zone == current_user.zone,
@@ -300,6 +315,13 @@ def read_intervention(
     intervention = _load_intervention(intervention_id, db)
     if not intervention:
         raise HTTPException(status_code=404, detail="Non trouvé")
+    if intervention.tour_run and current_user.role != "admin":
+        if (
+            current_user.role != "employee"
+            or intervention.tour_run.publication_status != "published"
+            or not any(employee.id == current_user.id for employee in intervention.employees)
+        ):
+            raise HTTPException(status_code=403, detail="Tournee non assignee ou non publiee.")
     if current_user.role == 'subcontractor':
         _strip_prices([intervention])
     return intervention
@@ -313,6 +335,8 @@ def create_intervention(
 ):
     if current_user.role == 'subcontractor':
         raise HTTPException(status_code=403, detail="Réservé aux admins et employés.")
+    if intervention.type == "tournee":
+        raise HTTPException(status_code=409, detail="Créez les nouvelles tournees depuis le module Tournees.")
     # Rejeu d'une operation hors-connexion deja traitee : on renvoie l'existante
     # au lieu d'en creer une seconde.
     seen = already_processed(db, intervention.client_operation_id)
@@ -430,6 +454,7 @@ def bulk_assign_employees(
     interventions = db.query(Intervention).options(selectinload(Intervention.employees)).filter(
         func.date(Intervention.start_time) == body.date,
         Intervention.sub_zone == body.sub_zone,
+        ~Intervention.tour_run.has(),
     ).all()
 
     employees = db.query(Employee).filter(Employee.id.in_(body.employee_ids)).all()
@@ -455,6 +480,8 @@ def update_intervention(
     db_intervention = db.query(Intervention).filter(Intervention.id == intervention_id).first()
     if not db_intervention:
         raise HTTPException(status_code=404, detail="Introuvable")
+    if db_intervention.tour_run:
+        raise HTTPException(status_code=409, detail="Utilisez le module Tournees pour modifier cette occurrence figee.")
 
     # Backfill paresseux : une intervention sans client créée avant ce champ
     # n'a pas de reprise_chain_id. On lui en attribue un dès la première
@@ -629,6 +656,8 @@ def update_items_done(
     db_intervention = _load_intervention(intervention_id, db)
     if not db_intervention:
         raise HTTPException(status_code=404, detail="Introuvable")
+    if db_intervention.tour_run:
+        raise HTTPException(status_code=409, detail="Utilisez la checklist Tournees pour modifier les prestations.")
 
     valid_ids = {item.id for item in db_intervention.items}
     not_done_ids = valid_ids.intersection(set(body.not_done_item_ids))
@@ -688,6 +717,8 @@ def delete_intervention(
     db_intervention = db.query(Intervention).filter(Intervention.id == intervention_id).first()
     if not db_intervention:
         raise HTTPException(status_code=404, detail="Introuvable")
+    if db_intervention.tour_run:
+        raise HTTPException(status_code=409, detail="Annulez cette occurrence depuis le module Tournees.")
 
     title = db_intervention.title
     db.query(RawCalendarEvent).filter(
@@ -763,6 +794,8 @@ def no_reprise(
     intervention = db.query(Intervention).filter(Intervention.id == intervention_id).first()
     if not intervention:
         raise HTTPException(status_code=404, detail="Introuvable")
+    if intervention.tour_run:
+        raise HTTPException(status_code=409, detail="Cloturez cette occurrence depuis sa checklist Tournees.")
 
     note = payload.get("note", "").strip()
     now = datetime.now(timezone.utc)

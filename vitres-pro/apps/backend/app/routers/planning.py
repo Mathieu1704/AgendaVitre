@@ -15,7 +15,7 @@ def _utc_bounds(d: date):
     end   = (datetime(d.year, d.month, d.day, tzinfo=BRUSSELS_TZ) + timedelta(days=1)).astimezone(timezone.utc)
     return start, end
 
-from app.models.models import get_db, Intervention, Employee, Absence, CompanySettings, ProgressiveHours, CompanyClosure
+from app.models.models import get_db, Intervention, Employee, Absence, CompanySettings, ProgressiveHours, CompanyClosure, TourRun
 from app.core.deps import get_current_user
 
 router = APIRouter()
@@ -137,6 +137,7 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
         Intervention.start_time >= day_start,
         Intervention.start_time < day_end,
         Intervention.status != "cancelled",
+        ~Intervention.tour_run.has() | Intervention.tour_run.has(TourRun.publication_status == "published"),
     )
     if sub_zone:
         int_query = int_query.filter(Intervention.sub_zone == sub_zone)
@@ -235,6 +236,7 @@ def get_range_stats_endpoint(
         Intervention.start_time >= range_start_utc,
         Intervention.start_time < range_end_utc,
         Intervention.status != "cancelled",
+        ~Intervention.tour_run.has() | Intervention.tour_run.has(TourRun.publication_status == "published"),
     )
     if sub_zone:
         int_query = int_query.filter(Intervention.sub_zone == sub_zone)

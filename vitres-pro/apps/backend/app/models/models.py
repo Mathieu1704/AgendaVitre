@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, Text, Numeric, create_engine, Table, Float, Date, Integer, UniqueConstraint
+from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, Text, Numeric, create_engine, Table, Float, Date, Time, Integer, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from sqlalchemy.sql import func
@@ -261,6 +261,7 @@ class Intervention(Base):
 
     items = relationship("InterventionItem", back_populates="intervention", cascade="all, delete-orphan")
     notes = relationship("InterventionNote", back_populates="intervention", cascade="all, delete-orphan", order_by="InterventionNote.created_at")
+    tour_run = relationship("TourRun", back_populates="intervention", uselist=False, cascade="all, delete-orphan", passive_deletes=True)
 
 
 class InterventionNote(Base):
@@ -412,3 +413,252 @@ class ClientOperation(Base):
     endpoint = Column(Text, nullable=False)
     result_id = Column(UUID(as_uuid=True), nullable=True)  # ressource creee, si applicable
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# --- TOURNEES RECURRENTES ---
+
+class TourTemplate(Base):
+    """Modele administrable d'une tournee, independant du carnet Clients."""
+    __tablename__ = "tour_templates"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(180), nullable=False)
+    zone = Column(String(20), nullable=False)
+    weekday = Column(Integer, nullable=False)  # ISO: 1=lundi, 7=dimanche
+    default_start_time = Column(Time, nullable=False)
+    default_end_time = Column(Time, nullable=False)
+    active = Column(Boolean, default=False, nullable=False, server_default="false")
+    archived = Column(Boolean, default=False, nullable=False, server_default="false")
+    setup_complete = Column(Boolean, default=False, nullable=False, server_default="false")
+    version = Column(Integer, default=1, nullable=False, server_default="1")
+    source_document = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    sections = relationship("TourSection", back_populates="template", cascade="all, delete-orphan", order_by="TourSection.position")
+    stops = relationship("TourStop", back_populates="template", cascade="all, delete-orphan", order_by="TourStop.position")
+    runs = relationship("TourRun", back_populates="template")
+
+
+class TourSection(Base):
+    __tablename__ = "tour_sections"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    template_id = Column(UUID(as_uuid=True), ForeignKey("tour_templates.id", ondelete="CASCADE"), nullable=False, index=True)
+    label = Column(String(180), nullable=False)
+    position = Column(Float, nullable=False, default=0)
+
+    template = relationship("TourTemplate", back_populates="sections")
+    stops = relationship("TourStop", back_populates="section", order_by="TourStop.position")
+
+
+class TourStop(Base):
+    __tablename__ = "tour_stops"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    template_id = Column(UUID(as_uuid=True), ForeignKey("tour_templates.id", ondelete="CASCADE"), nullable=False, index=True)
+    section_id = Column(UUID(as_uuid=True), ForeignKey("tour_sections.id", ondelete="SET NULL"), nullable=True)
+    name = Column(String(240), nullable=False)
+    export_label = Column(String(240), nullable=False)
+    address = Column(Text, nullable=True)
+    phone = Column(String(80), nullable=True)
+    email = Column(String(240), nullable=True)
+    latitude = Column(Numeric(9, 6), nullable=True)
+    longitude = Column(Numeric(9, 6), nullable=True)
+    time_window = Column(String(120), nullable=True)
+    estimated_minutes = Column(Integer, nullable=True)
+    instructions = Column(Text, nullable=True)
+    position = Column(Float, nullable=False, default=0)
+    active = Column(Boolean, default=True, nullable=False, server_default="true")
+    needs_review = Column(Boolean, default=False, nullable=False, server_default="false")
+    source_data = Column(JSONB, nullable=True)
+
+    template = relationship("TourTemplate", back_populates="stops")
+    section = relationship("TourSection", back_populates="stops")
+    services = relationship("TourService", back_populates="stop", cascade="all, delete-orphan", order_by="TourService.position")
+
+
+class TourService(Base):
+    __tablename__ = "tour_services"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    stop_id = Column(UUID(as_uuid=True), ForeignKey("tour_stops.id", ondelete="CASCADE"), nullable=False, index=True)
+    label = Column(String(240), nullable=False)
+    price_ht = Column(Numeric(10, 2), nullable=False, default=0)
+    billing_mode = Column(String(30), nullable=False, default="monthly_invoice")
+    position = Column(Float, nullable=False, default=0)
+    active = Column(Boolean, default=True, nullable=False, server_default="true")
+    needs_review = Column(Boolean, default=False, nullable=False, server_default="false")
+    source_data = Column(JSONB, nullable=True)
+
+    stop = relationship("TourStop", back_populates="services")
+    schedules = relationship("TourServiceSchedule", back_populates="service", cascade="all, delete-orphan", order_by="TourServiceSchedule.position")
+
+
+class TourServiceSchedule(Base):
+    """Une prestation peut avoir plusieurs regles (hiver/hors hiver)."""
+    __tablename__ = "tour_service_schedules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    service_id = Column(UUID(as_uuid=True), ForeignKey("tour_services.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(String(20), nullable=False, default="interval")  # interval | on_demand | annual
+    anchor_date = Column(Date, nullable=True)
+    interval_weeks = Column(Integer, nullable=True)
+    active_months = Column(JSONB, nullable=False, default=lambda: list(range(1, 13)))
+    monthly_cap = Column(Integer, nullable=True)
+    position = Column(Float, nullable=False, default=0)
+
+    service = relationship("TourService", back_populates="schedules")
+
+
+class TourRun(Base):
+    """Occurrence hebdomadaire; son contenu est une copie figee du modele."""
+    __tablename__ = "tour_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    template_id = Column(UUID(as_uuid=True), ForeignKey("tour_templates.id", ondelete="SET NULL"), nullable=True, index=True)
+    intervention_id = Column(UUID(as_uuid=True), ForeignKey("interventions.id", ondelete="CASCADE"), nullable=False, unique=True)
+    scheduled_date = Column(Date, nullable=False)
+    template_version = Column(Integer, nullable=False)
+    publication_status = Column(String(20), nullable=False, default="draft")  # draft | published
+    published_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    template = relationship("TourTemplate", back_populates="runs")
+    intervention = relationship("Intervention", back_populates="tour_run")
+    stops = relationship("TourRunStop", back_populates="run", cascade="all, delete-orphan", order_by="TourRunStop.position")
+
+    __table_args__ = (
+        UniqueConstraint("template_id", "scheduled_date", name="uq_tour_run_template_day"),
+    )
+
+    @property
+    def lifecycle_status(self):
+        if self.publication_status == "draft":
+            return "draft"
+        if not self.intervention or self.intervention.status == "planned":
+            return "published"
+        return self.intervention.status
+
+    @property
+    def progress(self):
+        selected = [stop for stop in self.stops if stop.selected]
+        resolved = [stop for stop in selected if stop.status != "pending"]
+        total = len(selected)
+        return {
+            "resolved": len(resolved),
+            "total": total,
+            "percent": round((len(resolved) / total) * 100) if total else 0,
+        }
+
+    @property
+    def employees(self):
+        return self.intervention.employees if self.intervention else []
+
+
+class TourRunStop(Base):
+    __tablename__ = "tour_run_stops"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_id = Column(UUID(as_uuid=True), ForeignKey("tour_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_stop_id = Column(UUID(as_uuid=True), ForeignKey("tour_stops.id", ondelete="SET NULL"), nullable=True)
+    section_label = Column(String(180), nullable=True)
+    name = Column(String(240), nullable=False)
+    export_label = Column(String(240), nullable=False)
+    address = Column(Text, nullable=True)
+    phone = Column(String(80), nullable=True)
+    email = Column(String(240), nullable=True)
+    latitude = Column(Numeric(9, 6), nullable=True)
+    longitude = Column(Numeric(9, 6), nullable=True)
+    time_window = Column(String(120), nullable=True)
+    estimated_minutes = Column(Integer, nullable=True)
+    instructions = Column(Text, nullable=True)
+    position = Column(Float, nullable=False, default=0)
+    selected = Column(Boolean, default=False, nullable=False, server_default="false")
+    status = Column(String(20), nullable=False, default="pending")
+    exception_reason = Column(Text, nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    run = relationship("TourRun", back_populates="stops")
+    services = relationship("TourRunService", back_populates="run_stop", cascade="all, delete-orphan", order_by="TourRunService.position")
+    cash_confirmations = relationship("TourRunCash", back_populates="run_stop", cascade="all, delete-orphan")
+
+
+class TourRunService(Base):
+    __tablename__ = "tour_run_services"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_stop_id = Column(UUID(as_uuid=True), ForeignKey("tour_run_stops.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_service_id = Column(UUID(as_uuid=True), ForeignKey("tour_services.id", ondelete="SET NULL"), nullable=True)
+    label = Column(String(240), nullable=False)
+    price_ht = Column(Numeric(10, 2), nullable=False, default=0)
+    billing_mode = Column(String(30), nullable=False)
+    position = Column(Float, nullable=False, default=0)
+    suggested = Column(Boolean, default=False, nullable=False, server_default="false")
+    selected = Column(Boolean, default=False, nullable=False, server_default="false")
+    status = Column(String(20), nullable=False, default="pending")
+    exception_reason = Column(Text, nullable=True)
+    performed_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    run_stop = relationship("TourRunStop", back_populates="services")
+
+
+class TourRunCash(Base):
+    __tablename__ = "tour_run_cash"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_stop_id = Column(UUID(as_uuid=True), ForeignKey("tour_run_stops.id", ondelete="CASCADE"), nullable=False, index=True)
+    billing_mode = Column(String(30), nullable=False)
+    expected_amount = Column(Numeric(10, 2), nullable=False, default=0)
+    received_amount = Column(Numeric(10, 2), nullable=True)
+    confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    confirmed_by = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    run_stop = relationship("TourRunStop", back_populates="cash_confirmations")
+    confirmer = relationship("Employee", foreign_keys=[confirmed_by])
+
+    __table_args__ = (
+        UniqueConstraint("run_stop_id", "billing_mode", name="uq_tour_cash_stop_mode"),
+    )
+
+
+class TourBillingReview(Base):
+    """Choix comptable persiste sans modifier les donnees terrain."""
+    __tablename__ = "tour_billing_reviews"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    zone = Column(String(20), nullable=False)
+    period_start = Column(Date, nullable=False)
+    cadence = Column(String(20), nullable=False)  # monthly | quarterly
+    export_label = Column(String(240), nullable=False)
+    bucket_start = Column(Date, nullable=False)
+    selected = Column(Boolean, nullable=False, default=True, server_default="true")
+    override_amount = Column(Numeric(10, 2), nullable=True)
+    updated_by = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("zone", "period_start", "cadence", "export_label", "bucket_start", name="uq_tour_billing_review_cell"),
+    )
+
+
+class TourBillingBatch(Base):
+    """Lot immuable: le JSON permet de regenerer exactement le XLSX."""
+    __tablename__ = "tour_billing_batches"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    zone = Column(String(20), nullable=False)
+    period_start = Column(Date, nullable=False)
+    filename = Column(String(255), nullable=False)
+    payload = Column(JSONB, nullable=False)
+    source_service_ids = Column(JSONB, nullable=False, default=list)
+    source_cash_ids = Column(JSONB, nullable=False, default=list)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    creator = relationship("Employee", foreign_keys=[created_by])

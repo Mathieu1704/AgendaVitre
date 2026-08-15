@@ -23,6 +23,12 @@ export interface CalEvent {
     byday?: string[] | number[];
   } | null;
   client?: { name?: string | null; address?: string | null } | null;
+  tour_run?: {
+    id: string;
+    publication_status: "draft" | "published";
+    lifecycle_status: string;
+    progress: { resolved: number; total: number; percent: number };
+  } | null;
 }
 
 interface Props {
@@ -116,7 +122,7 @@ export function CalendarEventBlock({
   }));
 
   function handleDragEnd(tx: number, ty: number) {
-    if (!onDragEnd) return;
+    if (!onDragEnd || event.tour_run?.id) return;
     const deltaMinY = (ty / hourPx) * 60;
     const snappedDeltaMin = snapToSlot(deltaMinY);
 
@@ -141,7 +147,7 @@ export function CalendarEventBlock({
   }
 
   function handleResizeEnd(dh: number) {
-    if (!onResizeEnd) return;
+    if (!onResizeEnd || event.tour_run?.id) return;
     const deltaMinH = (dh / hourPx) * 60;
     const snappedDelta = snapToSlot(deltaMinH);
     const newEnd = addMinutesToISO(event.end_time, snappedDelta);
@@ -240,9 +246,14 @@ export function CalendarEventBlock({
               {startHour} – {endHour}
             </Text>
           )}
+          {!compact && event.tour_run?.progress && height > hourPx * 0.75 && (
+            <Text style={{ fontSize: 8, color: isDark ? "#FDBA74" : "#C2410C", marginTop: 1, fontWeight: "700" }} numberOfLines={1}>
+              {event.tour_run.progress.resolved}/{event.tour_run.progress.total} commerces
+            </Text>
+          )}
 
           {/* Resize handle */}
-          {onResizeEnd && (
+          {onResizeEnd && !event.tour_run?.id && (
             <GestureDetector gesture={resizeGesture}>
               <View
                 style={{

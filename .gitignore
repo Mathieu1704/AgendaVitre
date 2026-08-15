@@ -92,6 +92,13 @@ MEMOIRE_PROJET.md
 # Contient des donnees clients et des acces DB — ne doit jamais partir sur le depot public.
 **/apps/backend/scripts/
 
+# L'importeur de tournées fait partie de l'application, mais sa sortie contient
+# des données clients et doit rester strictement locale.
+!vitres-pro/apps/backend/scripts/
+vitres-pro/apps/backend/scripts/*
+!vitres-pro/apps/backend/scripts/import_tours_word.py
+vitres-pro/apps/backend/data/tours_initial_seed.json
+
 ####################################
 # COPIES / ARTEFACTS LOCAUX
 ####################################

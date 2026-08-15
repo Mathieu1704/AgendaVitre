@@ -182,7 +182,11 @@ export function EventDetailPopover({
 
   const handleView = () => {
     onClose();
-    router.push(`/(app)/calendar/${event.id}` as any);
+    if (event.tour_run?.id) {
+      router.push(`/(app)/parametres/tournees/run/${event.tour_run.id}` as any);
+    } else {
+      router.push(`/(app)/calendar/${event.id}` as any);
+    }
   };
 
   const handleEdit = () => {
@@ -374,18 +378,22 @@ function PopoverContent({
           >
             <Eye size={16} color={subtextColor} />
           </Pressable>
-          <Pressable
-            onPress={onEdit}
-            style={{ padding: 6, borderRadius: 6, backgroundColor: isDark ? "#334155" : "#F1F5F9" }}
-          >
-            <Edit3 size={16} color={subtextColor} />
-          </Pressable>
-          <Pressable
-            onPress={onDelete}
-            style={{ padding: 6, borderRadius: 6, backgroundColor: isDark ? "#334155" : "#F1F5F9" }}
-          >
-            <Trash2 size={16} color="#EF4444" />
-          </Pressable>
+          {!event.tour_run?.id && (
+            <>
+              <Pressable
+                onPress={onEdit}
+                style={{ padding: 6, borderRadius: 6, backgroundColor: isDark ? "#334155" : "#F1F5F9" }}
+              >
+                <Edit3 size={16} color={subtextColor} />
+              </Pressable>
+              <Pressable
+                onPress={onDelete}
+                style={{ padding: 6, borderRadius: 6, backgroundColor: isDark ? "#334155" : "#F1F5F9" }}
+              >
+                <Trash2 size={16} color="#EF4444" />
+              </Pressable>
+            </>
+          )}
           <Pressable
             onPress={onClose}
             style={{ padding: 6, borderRadius: 6, backgroundColor: isDark ? "#334155" : "#F1F5F9" }}
