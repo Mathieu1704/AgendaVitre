@@ -12,6 +12,7 @@ import {
   Linking,
   Alert,
   KeyboardAvoidingView,
+  Keyboard,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import {
@@ -86,6 +87,25 @@ export default function InterventionDetailScreen() {
   const isDesktop = width >= 768;
   const insets = useSafeAreaInsets();
   const { isAdmin, isSubcontractor, employeeId } = useAuth();
+  const scrollRef = useRef<ScrollView>(null);
+  const noteFocusedRef = useRef(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvt, () => {
+      setKeyboardVisible(true);
+      if (!noteFocusedRef.current) return;
+      // Laisse la mise en page se stabiliser (KeyboardAvoidingView + padding réduit) avant de scroller.
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    });
+    const hideSub = Keyboard.addListener(hideEvt, () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // 1. TOUS LES STATES
   const [menuVisible, setMenuVisible] = useState(false);
@@ -199,6 +219,23 @@ export default function InterventionDetailScreen() {
       toast.error("Erreur", err.response?.data?.detail || "Impossible d'ajouter la note");
     },
   });
+
+  const deleteNoteMutation = useMutation({
+    mutationFn: async (noteId: string) => api.delete(`/api/interventions/${id}/notes/${noteId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["intervention-notes", id] });
+    },
+    onError: (err: any) => {
+      toast.error("Erreur", err.response?.data?.detail || "Impossible de supprimer la note");
+    },
+  });
+
+  const confirmDeleteNote = (noteId: string) => {
+    Alert.alert("Supprimer la note", "Cette action est irréversible.", [
+      { text: "Annuler", style: "cancel" },
+      { text: "Supprimer", style: "destructive", onPress: () => deleteNoteMutation.mutate(noteId) },
+    ]);
+  };
 
   const isFocused = useRef(false);
   useFocusEffect(useCallback(() => {
@@ -697,7 +734,13 @@ export default function InterventionDetailScreen() {
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} keyboardDismissMode="interactive">
+      <ScrollView
+        ref={scrollRef}
+        className="flex-1"
+        showsVerticalScrollIndicator={false}
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
+      >
         {/* --- TITRE --- */}
         <View className="px-6 pt-4 pb-2">
           <View>
@@ -914,7 +957,7 @@ export default function InterventionDetailScreen() {
         </View>
 
         {/* --- BLOCS D'INFORMATIONS --- */}
-        <View className="px-6 pb-32" style={{ marginTop: -10 }}>
+        <View className={keyboardVisible ? "px-6 pb-6" : "px-6 pb-32"} style={{ marginTop: -10 }}>
           {/* LIGNE 1 : CLIENT */}
           <View
             className={isDesktop ? "flex-row w-full gap-4" : "gap-4"}
@@ -1334,8 +1377,7 @@ export default function InterventionDetailScreen() {
               {notes && notes.length > 0 && (
                 <View style={{ gap: 12 }}>
                   {notes.map((note: any) => (
-                    <View key={note.id} style={{ flexDirection: "row", gap: 10 }}>
-                      <Avatar name={note.author_name} size="sm" color={note.author_color} />
+                    <View key={note.id} style={{ flexDirection: "row", gap: 8 }}>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                           <Text style={{ fontWeight: "700", color: note.author_color || "#3B82F6" }}>
@@ -1354,6 +1396,11 @@ export default function InterventionDetailScreen() {
                           {note.text}
                         </Text>
                       </View>
+                      {isAdmin && (
+                        <Pressable onPress={() => confirmDeleteNote(note.id)} hitSlop={10} style={{ paddingTop: 2 }}>
+                          <Trash2 size={14} color="#EF4444" />
+                        </Pressable>
+                      )}
                     </View>
                   ))}
                 </View>
@@ -1363,6 +1410,8 @@ export default function InterventionDetailScreen() {
                 <TextInput
                   value={newNoteText}
                   onChangeText={setNewNoteText}
+                  onFocus={() => { noteFocusedRef.current = true; }}
+                  onBlur={() => { noteFocusedRef.current = false; }}
                   placeholder="Écrire une note..."
                   placeholderTextColor={isDark ? "#64748B" : "#94A3B8"}
                   multiline
@@ -1373,6 +1422,7 @@ export default function InterventionDetailScreen() {
                   onPress={() => {
                     const text = newNoteText.trim();
                     if (text) addNoteMutation.mutate(text);
+                    Keyboard.dismiss();
                   }}
                   disabled={!newNoteText.trim() || addNoteMutation.isPending}
                   style={{

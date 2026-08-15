@@ -882,3 +882,24 @@ def create_intervention_note(
         author_name=current_user.full_name or current_user.email,
         author_color=current_user.color,
     )
+
+@router.delete("/{intervention_id}/notes/{note_id}")
+def delete_intervention_note(
+    intervention_id: UUID,
+    note_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Seul un admin peut supprimer une note")
+
+    note = db.query(InterventionNote).filter(
+        InterventionNote.id == note_id,
+        InterventionNote.intervention_id == intervention_id,
+    ).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note introuvable")
+
+    db.delete(note)
+    db.commit()
+    return {"message": "ok"}
