@@ -97,8 +97,6 @@ export default function InterventionDetailScreen() {
   const [notDoneIds, setNotDoneIds] = useState<Set<string>>(new Set());
   // Motif saisi par prestation décochée (employé ou sous-traitant), clé = item.id.
   const [notDoneNotes, setNotDoneNotes] = useState<Record<string, string>>({});
-  // Sous-traitant : prestation décochée mais faite en partie (sans montant, prix masqués).
-  const [partialIds, setPartialIds] = useState<Set<string>>(new Set());
   // Ajustements ad-hoc à la clôture : déduction partielle sur une prestation
   // décochée, ou supplément imprévu. `price` est ce qui compte réellement
   // dans le Total (positif dans les deux cas : le crédit pour la part faite
@@ -437,24 +435,18 @@ export default function InterventionDetailScreen() {
           .map((itemId) => [itemId, (notDoneNotes[itemId] || "").trim()])
           .filter(([, n]) => !!n),
       );
-      const partialItemIds = notDoneItemIds.filter((itemId) => partialIds.has(itemId));
       // Note globale envoyée à l'admin (notification /no-reprise) : les motifs
-      // par prestation, concaténés avec leur libellé (préfixé "partiel" si
-      // la prestation a été faite en partie plutôt que pas du tout).
+      // par prestation, concaténés avec leur libellé.
       const note = (intervention?.items || [])
-        .filter((item: any) => notDoneItemIds.includes(item.id) && (notes[item.id] || partialIds.has(item.id)))
-        .map((item: any) => {
-          const prefix = partialIds.has(item.id) ? "partiel" : "pas fait";
-          const suffix = notes[item.id] ? ` : ${notes[item.id]}` : "";
-          return `${item.label} (${prefix})${suffix}`;
-        })
+        .filter((item: any) => notDoneItemIds.includes(item.id) && notes[item.id])
+        .map((item: any) => `${item.label} : ${notes[item.id]}`)
         .join("\n");
       applyItemsDone(queryClient, String(id), notDoneItemIds);
       await enqueue({
         kind: "items-done",
         method: "PATCH",
         url: `/api/interventions/${id}/items-done`,
-        body: { not_done_item_ids: notDoneItemIds, not_done_notes: notes, partial_item_ids: partialItemIds },
+        body: { not_done_item_ids: notDoneItemIds, not_done_notes: notes },
         label: "Prestations réalisées",
       });
       if (notDoneItemIds.length > 0) {
@@ -480,7 +472,6 @@ export default function InterventionDetailScreen() {
     onSuccess: (_data, notDoneItemIds) => {
       setShowItemsChecklist(false);
       setNotDoneNotes({});
-      setPartialIds(new Set());
       toast.success(
         notDoneItemIds.length > 0 ? "Enregistré" : "Terminée",
         isOnlineNow()
@@ -1132,24 +1123,15 @@ export default function InterventionDetailScreen() {
                               key={idx}
                               className="pb-2 border-b border-border dark:border-slate-800 last:border-0"
                             >
-                              <View className="flex-row items-center">
-                                <Text
-                                  className={`font-medium ${
-                                    item.done === false && !item.partial
-                                      ? "text-muted-foreground line-through"
-                                      : "text-foreground dark:text-white"
-                                  }`}
-                                >
-                                  {item.label}
-                                </Text>
-                                {item.done === false && item.partial && (
-                                  <View className="ml-2 px-1.5 py-0.5 rounded-md bg-amber-500/10">
-                                    <Text className="text-[10px] font-bold text-amber-500">
-                                      partiel
-                                    </Text>
-                                  </View>
-                                )}
-                              </View>
+                              <Text
+                                className={`font-medium ${
+                                  item.done === false
+                                    ? "text-muted-foreground line-through"
+                                    : "text-foreground dark:text-white"
+                                }`}
+                              >
+                                {item.label}
+                              </Text>
                               {item.done === false && item.note && (
                                 <Text className="text-xs text-muted-foreground mt-1">
                                   {item.note}
@@ -1327,7 +1309,6 @@ export default function InterventionDetailScreen() {
               }
               setNotDoneIds(new Set());
               setNotDoneNotes({});
-              setPartialIds(new Set());
               setShowAllDoneConfirm(true);
             }}
             loading={isSubcontractor && subcontractorDoneMutation.isPending}
@@ -1482,7 +1463,6 @@ export default function InterventionDetailScreen() {
           setAdjustments([]);
           setAdjustmentDraft(null);
           setNotDoneNotes({});
-          setPartialIds(new Set());
         }}
       >
         <View style={{ padding: 20, gap: 16 }}>
@@ -1591,42 +1571,9 @@ export default function InterventionDetailScreen() {
                     </View>
                   )}
 
-                  {/* Sous-traitant : fait en partie (pas de montant, prix masqués) */}
-                  {isSubcontractor && !checked && (
-                    <Pressable
-                      onPress={() =>
-                        setPartialIds((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(item.id)) next.delete(item.id);
-                          else next.add(item.id);
-                          return next;
-                        })
-                      }
-                      style={{ marginLeft: 32, flexDirection: "row", alignItems: "center", gap: 6 }}
-                    >
-                      <View
-                        style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: 5,
-                          borderWidth: 2,
-                          borderColor: partialIds.has(item.id) ? "#F59E0B" : "#CBD5E1",
-                          backgroundColor: partialIds.has(item.id) ? "#F59E0B" : "transparent",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        {partialIds.has(item.id) && <Check size={11} color="#fff" />}
-                      </View>
-                      <Text style={{ fontSize: 13, fontWeight: "600", color: "#F59E0B" }}>
-                        Fait en partie
-                      </Text>
-                    </Pressable>
-                  )}
-
                   {/* Prestation décochée : motif (pourquoi ce n'est pas fait) */}
                   {!checked && (
-                    <View style={{ marginLeft: 32, marginTop: 6 }}>
+                    <View style={{ marginLeft: 32 }}>
                       <Input
                         placeholder="Pourquoi ? (optionnel)"
                         value={notDoneNotes[item.id] || ""}
@@ -1782,7 +1729,6 @@ export default function InterventionDetailScreen() {
                 setAdjustments([]);
                 setAdjustmentDraft(null);
                 setNotDoneNotes({});
-                setPartialIds(new Set());
               }}
               style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: isDark ? "#1E293B" : "#F1F5F9" }}
             >
@@ -1820,7 +1766,6 @@ export default function InterventionDetailScreen() {
                 setAdjustments([]);
                 setAdjustmentDraft(null);
                 setNotDoneNotes({});
-                setPartialIds(new Set());
               }}
               disabled={isSubcontractor ? subcontractorChecklistMutation.isPending : false}
               style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: "#3B82F6", opacity: isSubcontractor && subcontractorChecklistMutation.isPending ? 0.6 : 1 }}
