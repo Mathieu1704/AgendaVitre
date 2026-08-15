@@ -149,11 +149,13 @@ export default function InterventionDetailScreen() {
       return res.data;
     },
     initialData: interventionFromLists,
-    // Marquée périmée d'emblée : la version de la liste sert d'affichage
-    // immédiat, mais la fiche se rafraîchit dès que le réseau le permet.
-    // Une carte du planning vient normalement d'alimenter cette clé. Elle est
-    // assez fraîche pour ouvrir la fiche sans requête concurrente immédiate ;
-    // un retour ultérieur au focus la réconciliera si nécessaire.
+    // `initialDataUpdatedAt: 0` : sans ça, React Query traite les données de
+    // la liste comme "fraîches dès maintenant" et n'attend pas moins de
+    // `staleTime` avant de rafraîchir — un admin qui ouvre la fiche depuis
+    // une notif (ex: sous-traitant ayant décoché des prestations) verrait
+    // encore l'ancien état pendant 30s. Marquées périmées d'emblée à la
+    // place : affichage immédiat depuis le cache, mais refetch dès l'ouverture.
+    initialDataUpdatedAt: 0,
     staleTime: 30 * 1000,
     refetchOnMount: true,
     // Pas de push temps réel : sans ça, un admin qui garde cet écran ouvert
