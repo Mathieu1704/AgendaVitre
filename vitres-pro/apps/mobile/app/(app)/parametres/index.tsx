@@ -99,7 +99,9 @@ export default function ParametresScreen() {
     refetchOnMount: true,
   });
   const hideCash = companySettings?.hide_cash ?? false;
-  const toggleAnim = useRef(new Animated.Value(companySettings?.hide_cash ? 1 : 0)).current;
+  const toggleAnim = useRef(
+    new Animated.Value(companySettings?.hide_cash ? 1 : 0),
+  ).current;
 
   useEffect(() => {
     Animated.timing(toggleAnim, {
@@ -203,7 +205,9 @@ export default function ParametresScreen() {
   const applyAvatarUrl = (avatarUrl: string | null) => {
     setProfile((p: any) => ({ ...p, avatar_url: avatarUrl }));
     queryClient.setQueryData(["employees"], (old: any[] | undefined) =>
-      old?.map((e) => (e.id === profile?.id ? { ...e, avatar_url: avatarUrl } : e)),
+      old?.map((e) =>
+        e.id === profile?.id ? { ...e, avatar_url: avatarUrl } : e,
+      ),
     );
     // Garde le header (useAuth/profileCache) synchro sans redémarrage.
     void loadCachedProfile().then((cached) => {
@@ -215,14 +219,21 @@ export default function ParametresScreen() {
     setUploadingAvatar(true);
     try {
       const form = new FormData();
-      form.append("file", { uri, name: "avatar.jpg", type: "image/jpeg" } as any);
+      form.append("file", {
+        uri,
+        name: "avatar.jpg",
+        type: "image/jpeg",
+      } as any);
       const res = await api.post("/api/employees/me/avatar", form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       applyAvatarUrl(res.data?.avatar_url ?? null);
       toast.success("Photo mise à jour", "");
     } catch {
-      toast.error("Erreur", "Impossible d'envoyer la photo. Vérifiez votre connexion.");
+      toast.error(
+        "Erreur",
+        "Impossible d'envoyer la photo. Vérifiez votre connexion.",
+      );
     } finally {
       setUploadingAvatar(false);
     }
@@ -245,7 +256,10 @@ export default function ParametresScreen() {
     setShowAvatarSheet(false);
     const ImagePicker = await getImagePicker();
     if (!ImagePicker) {
-      toast.error("Mise à jour requise", "Cette fonctionnalité arrive dans la prochaine mise à jour de l'application.");
+      toast.error(
+        "Mise à jour requise",
+        "Cette fonctionnalité arrive dans la prochaine mise à jour de l'application.",
+      );
       return;
     }
     const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -267,7 +281,10 @@ export default function ParametresScreen() {
     setShowAvatarSheet(false);
     const ImagePicker = await getImagePicker();
     if (!ImagePicker) {
-      toast.error("Mise à jour requise", "Cette fonctionnalité arrive dans la prochaine mise à jour de l'application.");
+      toast.error(
+        "Mise à jour requise",
+        "Cette fonctionnalité arrive dans la prochaine mise à jour de l'application.",
+      );
       return;
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -349,85 +366,87 @@ export default function ParametresScreen() {
               style={({ pressed }) => ({ opacity: 1 })}
               android_disableSound
             >
-            <Card className="mb-6 rounded-[32px] overflow-hidden">
-              <CardHeader className="p-6 pb-4">
-                <SectionTitle
-                  icon={User}
-                  title="Mon Profil"
-                  color={profile?.color || "#3B82F6"}
-                />
-              </CardHeader>
-              <CardContent className="p-6 pt-0">
-                <View className="flex-row items-center mb-6">
-                  <Pressable
-                    onPress={() => AVATAR_EDIT_ENABLED && setShowAvatarSheet(true)}
-                    disabled={uploadingAvatar || !AVATAR_EDIT_ENABLED}
-                    style={{ position: "relative" }}
-                  >
-                    <Avatar
-                      name={profile?.full_name || profile?.email || "?"}
-                      size="lg"
-                      color={profile?.color}
-                      imageUrl={profile?.avatar_url}
-                    />
-                    {AVATAR_EDIT_ENABLED && (
-                      <View
-                        style={{
-                          position: "absolute",
-                          bottom: -2,
-                          right: -2,
-                          width: 22,
-                          height: 22,
-                          borderRadius: 11,
-                          backgroundColor: "#3B82F6",
-                          borderWidth: 2,
-                          borderColor: isDark ? "#0F172A" : "#FFFFFF",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        {uploadingAvatar ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Camera size={11} color="#fff" />
-                        )}
-                      </View>
-                    )}
-                  </Pressable>
-                  <View className="ml-4 flex-1">
-                    <Text className="text-xl font-bold text-foreground dark:text-white">
-                      {profile?.full_name || "Utilisateur"}
-                    </Text>
-                    <View className="flex-row items-center mt-1">
-                      <Briefcase size={14} color="#94A3B8" />
-                      <Text className="text-muted-foreground ml-1 capitalize">
-                        {profile?.role === "admin"
-                          ? "Administrateur"
-                          : profile?.role === "subcontractor"
-                            ? "Sous-traitant"
-                            : "Employé"}
+              <Card className="mb-6 rounded-[32px] overflow-hidden">
+                <CardHeader className="p-6 pb-4">
+                  <SectionTitle
+                    icon={User}
+                    title="Mon Profil"
+                    color={profile?.color || "#3B82F6"}
+                  />
+                </CardHeader>
+                <CardContent className="p-6 pt-0">
+                  <View className="flex-row items-center mb-6">
+                    <Pressable
+                      onPress={() =>
+                        AVATAR_EDIT_ENABLED && setShowAvatarSheet(true)
+                      }
+                      disabled={uploadingAvatar || !AVATAR_EDIT_ENABLED}
+                      style={{ position: "relative" }}
+                    >
+                      <Avatar
+                        name={profile?.full_name || profile?.email || "?"}
+                        size="lg"
+                        color={profile?.color}
+                        imageUrl={profile?.avatar_url}
+                      />
+                      {AVATAR_EDIT_ENABLED && (
+                        <View
+                          style={{
+                            position: "absolute",
+                            bottom: -2,
+                            right: -2,
+                            width: 22,
+                            height: 22,
+                            borderRadius: 11,
+                            backgroundColor: "#3B82F6",
+                            borderWidth: 2,
+                            borderColor: isDark ? "#0F172A" : "#FFFFFF",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {uploadingAvatar ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <Camera size={11} color="#fff" />
+                          )}
+                        </View>
+                      )}
+                    </Pressable>
+                    <View className="ml-4 flex-1">
+                      <Text className="text-xl font-bold text-foreground dark:text-white">
+                        {profile?.full_name || "Utilisateur"}
                       </Text>
+                      <View className="flex-row items-center mt-1">
+                        <Briefcase size={14} color="#94A3B8" />
+                        <Text className="text-muted-foreground ml-1 capitalize">
+                          {profile?.role === "admin"
+                            ? "Administrateur"
+                            : profile?.role === "subcontractor"
+                              ? "Sous-traitant"
+                              : "Employé"}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                </View>
 
-                {/* Bloc Email arrondi */}
-                <View
-                  className="bg-muted/50 p-4 rounded-[24px]"
-                  style={{
-                    borderWidth: 1,
-                    borderColor: isDark ? "#334155" : "#E2E8F0",
-                  }}
-                >
-                  <Text className="text-xs text-muted-foreground uppercase font-bold mb-1">
-                    Email de connexion
-                  </Text>
-                  <Text className="text-base font-medium text-foreground dark:text-white">
-                    {profile?.email}
-                  </Text>
-                </View>
-              </CardContent>
-            </Card>
+                  {/* Bloc Email arrondi */}
+                  <View
+                    className="bg-muted/50 p-4 rounded-[24px]"
+                    style={{
+                      borderWidth: 1,
+                      borderColor: isDark ? "#334155" : "#E2E8F0",
+                    }}
+                  >
+                    <Text className="text-xs text-muted-foreground uppercase font-bold mb-1">
+                      Email de connexion
+                    </Text>
+                    <Text className="text-base font-medium text-foreground dark:text-white">
+                      {profile?.email}
+                    </Text>
+                  </View>
+                </CardContent>
+              </Card>
             </Pressable>
 
             {/* === SECTION ADMIN (Visible seulement si Admin) === */}
@@ -437,27 +456,30 @@ export default function ParametresScreen() {
                   Administration
                 </Text>
 
-                {/* Gérer Équipe */}
+                {/* Heures & Encaissement */}
                 <Pressable
-                  onPress={() => router.push("/(app)/parametres/team" as any)}
+                  onPress={() => router.push("/(app)/parametres/heures" as any)}
                   className="mb-3"
                 >
-                  {/* ✅ Card arrondie */}
                   <Card
-                    className="rounded-[32px] bg-purple-500/5 border-purple-200 dark:border-purple-900 active:scale-[0.99] transition-transform overflow-hidden"
-                    style={{ backgroundColor: "rgba(168,85,247,0.05)" }}
+                    className="rounded-[32px] bg-teal-500/5 border-teal-200 dark:border-teal-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(20,184,166,0.05)" }}
                   >
                     <CardContent className="p-4 flex-row items-center justify-between">
                       <View className="flex-row items-center gap-4 flex-1">
-                        <View className="bg-purple-500 rounded-full w-12 h-12 items-center justify-center">
-                          <Users size={24} color="white" />
+                        <View className="bg-teal-500 rounded-full w-12 h-12 items-center justify-center">
+                          <Wallet size={24} color="white" />
                         </View>
                         <View className="flex-1 justify-center">
                           <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
-                            Gérer l'équipe
+                            Heures & Encaissement
                           </Text>
-                          <Text className="text-sm text-muted-foreground leading-tight">
-                            Horaires, Reset MDP...
+                          <Text
+                            className="text-sm text-muted-foreground leading-tight"
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                          >
+                            Pointages, heures sup, cash
                           </Text>
                         </View>
                       </View>
@@ -468,7 +490,7 @@ export default function ParametresScreen() {
                     </CardContent>
                   </Card>
                 </Pressable>
-                {/* Zones géographiques */}
+                {/* Tournées récurrentes */}
                 <Pressable
                   onPress={() => router.push("/(app)/tournees" as any)}
                   className="mb-3"
@@ -491,7 +513,71 @@ export default function ParametresScreen() {
                           </Text>
                         </View>
                       </View>
-                      <ChevronRight size={20} color={isDark ? "white" : "black"} />
+                      <ChevronRight
+                        size={20}
+                        color={isDark ? "white" : "black"}
+                      />
+                    </CardContent>
+                  </Card>
+                </Pressable>
+                {/* Gérer Équipe */}
+                <Pressable
+                  onPress={() => router.push("/(app)/parametres/team" as any)}
+                  className="mb-3"
+                >
+                  {/* ✅ Card arrondie */}
+                  <Card
+                    className="rounded-[32px] bg-purple-500/5 border-purple-200 dark:border-purple-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(168,85,247,0.05)" }}
+                  >
+                    <CardContent className="p-4 flex-row items-center justify-between">
+                      <View className="flex-row items-center gap-4 flex-1">
+                        <View className="bg-purple-500 rounded-full w-12 h-12 items-center justify-center">
+                          <Users size={24} color="white" />
+                        </View>
+                        <View className="flex-1 justify-center">
+                          <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                            Gérer l'équipe
+                          </Text>
+                          <Text className="text-sm text-muted-foreground leading-tight">
+                            Ajouter, horaires, reset MDP...
+                          </Text>
+                        </View>
+                      </View>
+                      <ChevronRight
+                        size={20}
+                        color={isDark ? "white" : "black"}
+                      />
+                    </CardContent>
+                  </Card>
+                </Pressable>
+                {/* Taux horaires */}
+                <Pressable
+                  onPress={() => router.push("/(app)/parametres/tarifs" as any)}
+                  className="mb-3"
+                >
+                  <Card
+                    className="rounded-[32px] bg-blue-500/5 border-blue-200 dark:border-blue-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(59,130,246,0.05)" }}
+                  >
+                    <CardContent className="p-4 flex-row items-center justify-between">
+                      <View className="flex-row items-center gap-4 flex-1">
+                        <View className="bg-blue-500 rounded-full w-12 h-12 items-center justify-center">
+                          <Clock size={24} color="white" />
+                        </View>
+                        <View className="flex-1 justify-center">
+                          <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                            Taux horaires
+                          </Text>
+                          <Text className="text-sm text-muted-foreground leading-tight">
+                            Gérer les tarifs €/h
+                          </Text>
+                        </View>
+                      </View>
+                      <ChevronRight
+                        size={20}
+                        color={isDark ? "white" : "black"}
+                      />
                     </CardContent>
                   </Card>
                 </Pressable>
@@ -515,66 +601,6 @@ export default function ParametresScreen() {
                           </Text>
                           <Text className="text-sm text-muted-foreground leading-tight">
                             Gérer les sous-zones et villes
-                          </Text>
-                        </View>
-                      </View>
-                      <ChevronRight
-                        size={20}
-                        color={isDark ? "white" : "black"}
-                      />
-                    </CardContent>
-                  </Card>
-                </Pressable>
-                {/* Taux horaires */}
-                <Pressable
-                  onPress={() => router.push("/(app)/parametres/tarifs" as any)}
-                  className="mb-3"
-                >
-                  <Card
-                    className="rounded-[32px] bg-orange-500/5 border-orange-200 dark:border-orange-900 active:scale-[0.99] transition-transform overflow-hidden"
-                    style={{ backgroundColor: "rgba(249,115,22,0.05)" }}
-                  >
-                    <CardContent className="p-4 flex-row items-center justify-between">
-                      <View className="flex-row items-center gap-4 flex-1">
-                        <View className="bg-orange-500 rounded-full w-12 h-12 items-center justify-center">
-                          <Clock size={24} color="white" />
-                        </View>
-                        <View className="flex-1 justify-center">
-                          <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
-                            Taux horaires
-                          </Text>
-                          <Text className="text-sm text-muted-foreground leading-tight">
-                            Gérer les tarifs €/h
-                          </Text>
-                        </View>
-                      </View>
-                      <ChevronRight
-                        size={20}
-                        color={isDark ? "white" : "black"}
-                      />
-                    </CardContent>
-                  </Card>
-                </Pressable>
-                {/* Heures & Encaissement */}
-                <Pressable
-                  onPress={() => router.push("/(app)/parametres/heures" as any)}
-                  className="mb-3"
-                >
-                  <Card
-                    className="rounded-[32px] bg-teal-500/5 border-teal-200 dark:border-teal-900 active:scale-[0.99] transition-transform overflow-hidden"
-                    style={{ backgroundColor: "rgba(20,184,166,0.05)" }}
-                  >
-                    <CardContent className="p-4 flex-row items-center justify-between">
-                      <View className="flex-row items-center gap-4 flex-1">
-                        <View className="bg-teal-500 rounded-full w-12 h-12 items-center justify-center">
-                          <Wallet size={24} color="white" />
-                        </View>
-                        <View className="flex-1 justify-center">
-                          <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
-                            Heures & Encaissement
-                          </Text>
-                          <Text className="text-sm text-muted-foreground leading-tight">
-                            Pointages, heures sup, cash à remettre
                           </Text>
                         </View>
                       </View>
@@ -715,11 +741,17 @@ export default function ParametresScreen() {
             <View style={{ marginTop: 20, alignItems: "center" }}>
               <Text
                 onPress={() => setPrivacyVisible(true)}
-                style={{ fontSize: 12, color: isDark ? "#475569" : "#94A3B8", paddingVertical: 8 }}
+                style={{
+                  fontSize: 12,
+                  color: isDark ? "#475569" : "#94A3B8",
+                  paddingVertical: 8,
+                }}
               >
                 Politique de confidentialité
               </Text>
-              <Text style={{ fontSize: 11, color: isDark ? "#334155" : "#CBD5E1" }}>
+              <Text
+                style={{ fontSize: 11, color: isDark ? "#334155" : "#CBD5E1" }}
+              >
                 Version {Constants.expoConfig?.version}
               </Text>
             </View>
@@ -731,40 +763,106 @@ export default function ParametresScreen() {
       {privacyVisible && (
         <Dialog open onClose={() => setPrivacyVisible(false)}>
           <View style={{ padding: 20 }}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", marginBottom: 16 }}>
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "700",
+                color: isDark ? "#F8FAFC" : "#09090B",
+                marginBottom: 16,
+              }}
+            >
               Politique de confidentialité
             </Text>
 
-            <Text style={{ fontSize: 13, fontWeight: "700", color: isDark ? "#94A3B8" : "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "700",
+                color: isDark ? "#94A3B8" : "#64748B",
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+                marginBottom: 6,
+              }}
+            >
               Données collectées
             </Text>
-            <Text style={{ fontSize: 13, color: isDark ? "#CBD5E1" : "#475569", lineHeight: 20, marginBottom: 16 }}>
-              Cette application collecte votre adresse e-mail, votre nom et numéro de téléphone dans le cadre de votre compte employé.
+            <Text
+              style={{
+                fontSize: 13,
+                color: isDark ? "#CBD5E1" : "#475569",
+                lineHeight: 20,
+                marginBottom: 16,
+              }}
+            >
+              Cette application collecte votre adresse e-mail, votre nom et
+              numéro de téléphone dans le cadre de votre compte employé.
             </Text>
 
-            <Text style={{ fontSize: 13, fontWeight: "700", color: isDark ? "#94A3B8" : "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "700",
+                color: isDark ? "#94A3B8" : "#64748B",
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+                marginBottom: 6,
+              }}
+            >
               Utilisation
             </Text>
-            <Text style={{ fontSize: 13, color: isDark ? "#CBD5E1" : "#475569", lineHeight: 20, marginBottom: 16 }}>
-              Vos données sont utilisées uniquement pour le fonctionnement de l'application. Elles ne sont pas partagées avec des tiers ni utilisées à des fins publicitaires.
+            <Text
+              style={{
+                fontSize: 13,
+                color: isDark ? "#CBD5E1" : "#475569",
+                lineHeight: 20,
+                marginBottom: 16,
+              }}
+            >
+              Vos données sont utilisées uniquement pour le fonctionnement de
+              l'application. Elles ne sont pas partagées avec des tiers ni
+              utilisées à des fins publicitaires.
             </Text>
 
-            <Text style={{ fontSize: 13, fontWeight: "700", color: isDark ? "#94A3B8" : "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "700",
+                color: isDark ? "#94A3B8" : "#64748B",
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+                marginBottom: 6,
+              }}
+            >
               Suppression
             </Text>
-            <Text style={{ fontSize: 13, color: isDark ? "#CBD5E1" : "#475569", lineHeight: 20, marginBottom: 8 }}>
+            <Text
+              style={{
+                fontSize: 13,
+                color: isDark ? "#CBD5E1" : "#475569",
+                lineHeight: 20,
+                marginBottom: 8,
+              }}
+            >
               Pour supprimer votre compte et vos données, envoyez un email à{" "}
               <Text
                 style={{ fontWeight: "700", color: "#3B82F6" }}
-                onPress={() => Linking.openURL("mailto:max.berdoux@gmail.com?subject=Suppression%20de%20compte%20LVM%20Agenda")}
+                onPress={() =>
+                  Linking.openURL(
+                    "mailto:max.berdoux@gmail.com?subject=Suppression%20de%20compte%20LVM%20Agenda",
+                  )
+                }
               >
                 max.berdoux@gmail.com
-              </Text>
-              {" "}avec l'objet "Suppression de compte LVM Agenda".
+              </Text>{" "}
+              avec l'objet "Suppression de compte LVM Agenda".
             </Text>
             <Text
               style={{ fontSize: 12, color: "#3B82F6", marginBottom: 20 }}
-              onPress={() => Linking.openURL("https://mathieu1704.github.io/lvm-privacy/#suppression")}
+              onPress={() =>
+                Linking.openURL(
+                  "https://mathieu1704.github.io/lvm-privacy/#suppression",
+                )
+              }
             >
               Voir la procédure complète →
             </Text>
@@ -772,12 +870,16 @@ export default function ParametresScreen() {
             <Pressable
               onPress={() => setPrivacyVisible(false)}
               style={({ pressed }) => ({
-                height: 48, borderRadius: 24,
+                height: 48,
+                borderRadius: 24,
                 backgroundColor: pressed ? "#2563EB" : "#3B82F6",
-                alignItems: "center", justifyContent: "center",
+                alignItems: "center",
+                justifyContent: "center",
               })}
             >
-              <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Fermer</Text>
+              <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>
+                Fermer
+              </Text>
             </Pressable>
           </View>
         </Dialog>
@@ -821,7 +923,11 @@ export default function ParametresScreen() {
 
       {/* Photo de profil : prendre/choisir/supprimer */}
       {AVATAR_EDIT_ENABLED && showAvatarSheet && (
-        <Dialog open onClose={() => setShowAvatarSheet(false)} position="bottom">
+        <Dialog
+          open
+          onClose={() => setShowAvatarSheet(false)}
+          position="bottom"
+        >
           <View style={{ padding: 12, gap: 4 }}>
             <Pressable
               onPress={handleTakePhoto}
@@ -835,7 +941,13 @@ export default function ParametresScreen() {
               })}
             >
               <Camera size={20} color={isDark ? "#F8FAFC" : "#09090B"} />
-              <Text style={{ fontSize: 15, fontWeight: "600", color: isDark ? "#F8FAFC" : "#09090B" }}>
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: "600",
+                  color: isDark ? "#F8FAFC" : "#09090B",
+                }}
+              >
                 Prendre une photo
               </Text>
             </Pressable>
@@ -851,7 +963,13 @@ export default function ParametresScreen() {
               })}
             >
               <ImageIcon size={20} color={isDark ? "#F8FAFC" : "#09090B"} />
-              <Text style={{ fontSize: 15, fontWeight: "600", color: isDark ? "#F8FAFC" : "#09090B" }}>
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: "600",
+                  color: isDark ? "#F8FAFC" : "#09090B",
+                }}
+              >
                 Choisir dans la galerie
               </Text>
             </Pressable>
@@ -871,7 +989,9 @@ export default function ParametresScreen() {
                 })}
               >
                 <Trash2 size={20} color="#EF4444" />
-                <Text style={{ fontSize: 15, fontWeight: "600", color: "#EF4444" }}>
+                <Text
+                  style={{ fontSize: 15, fontWeight: "600", color: "#EF4444" }}
+                >
                   Supprimer la photo
                 </Text>
               </Pressable>
@@ -887,7 +1007,13 @@ export default function ParametresScreen() {
                 opacity: pressed ? 0.6 : 1,
               })}
             >
-              <Text style={{ fontSize: 15, fontWeight: "600", color: isDark ? "#F8FAFC" : "#09090B" }}>
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: "600",
+                  color: isDark ? "#F8FAFC" : "#09090B",
+                }}
+              >
                 Annuler
               </Text>
             </Pressable>
@@ -898,54 +1024,92 @@ export default function ParametresScreen() {
       {/* Modale hide_cash (admin, long press sur Mon Profil) */}
       {hideCashModal && (
         <Dialog open onClose={() => setHideCashModal(false)} maxWidth={280}>
-          <View style={{ alignItems: "center", paddingVertical: 28, paddingHorizontal: 32, gap: 28 }}>
+          <View
+            style={{
+              alignItems: "center",
+              paddingVertical: 28,
+              paddingHorizontal: 32,
+              gap: 28,
+            }}
+          >
             {/* Toggle custom natif */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
-              <Text style={{
-                fontSize: 15, fontWeight: "700",
-                color: !hideCash ? (isDark ? "#F1F5F9" : "#0F172A") : "#94A3B8",
-              }}>OFF</Text>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 16 }}
+            >
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: "700",
+                  color: !hideCash
+                    ? isDark
+                      ? "#F1F5F9"
+                      : "#0F172A"
+                    : "#94A3B8",
+                }}
+              >
+                OFF
+              </Text>
               <Pressable
                 onPress={async () => {
                   const next = !hideCash;
-                  await queryClient.cancelQueries({ queryKey: ["company-settings"] });
-                  queryClient.setQueryData(["company-settings"], { hide_cash: next });
+                  await queryClient.cancelQueries({
+                    queryKey: ["company-settings"],
+                  });
+                  queryClient.setQueryData(["company-settings"], {
+                    hide_cash: next,
+                  });
                   try {
-                    await api.patch("/api/settings/company", { hide_cash: next });
+                    await api.patch("/api/settings/company", {
+                      hide_cash: next,
+                    });
                   } catch {
-                    queryClient.setQueryData(["company-settings"], { hide_cash: !next });
+                    queryClient.setQueryData(["company-settings"], {
+                      hide_cash: !next,
+                    });
                     toast.error("Erreur", "Impossible de modifier le réglage.");
                   }
                 }}
                 style={{
-                  width: 58, height: 32, borderRadius: 16,
+                  width: 58,
+                  height: 32,
+                  borderRadius: 16,
                   backgroundColor: hideCash ? "#EF4444" : "#E2E8F0",
                   justifyContent: "center",
                   padding: 3,
                 }}
               >
-                <Animated.View style={{
-                  width: 26, height: 26, borderRadius: 13,
-                  backgroundColor: "white",
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 2,
-                  elevation: 3,
-                  transform: [{
-                    translateX: toggleAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, 26],
-                    }),
-                  }],
-                }} />
+                <Animated.View
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 13,
+                    backgroundColor: "white",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 2,
+                    elevation: 3,
+                    transform: [
+                      {
+                        translateX: toggleAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 26],
+                        }),
+                      },
+                    ],
+                  }}
+                />
               </Pressable>
-              <Text style={{
-                fontSize: 15, fontWeight: "700",
-                color: hideCash ? "#EF4444" : "#94A3B8",
-              }}>ON</Text>
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: "700",
+                  color: hideCash ? "#EF4444" : "#94A3B8",
+                }}
+              >
+                ON
+              </Text>
             </View>
-
           </View>
         </Dialog>
       )}
