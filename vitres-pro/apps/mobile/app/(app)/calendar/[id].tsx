@@ -1573,16 +1573,14 @@ export default function InterventionDetailScreen() {
 
                   {/* Prestation décochée : motif (pourquoi ce n'est pas fait) */}
                   {!checked && (
-                    <View style={{ marginLeft: 32 }}>
-                      <Input
-                        placeholder="Pourquoi ? (optionnel)"
-                        value={notDoneNotes[item.id] || ""}
-                        onChangeText={(t) =>
-                          setNotDoneNotes((prev) => ({ ...prev, [item.id]: t }))
-                        }
-                        style={{ height: 40 }}
-                      />
-                    </View>
+                    <Input
+                      placeholder="Pourquoi ?"
+                      value={notDoneNotes[item.id] || ""}
+                      onChangeText={(t) =>
+                        setNotDoneNotes((prev) => ({ ...prev, [item.id]: t }))
+                      }
+                      style={{ height: 40, width: "100%" }}
+                    />
                   )}
                 </View>
               );
