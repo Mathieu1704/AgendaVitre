@@ -12,11 +12,12 @@ from pydantic import BaseModel
 from app.models.models import (
     get_db, Intervention, Client, Employee, InterventionItem,
     intervention_employees, RawCalendarEvent, AuditLog, InAppNotification,
-    InterventionService
+    InterventionService, InterventionNote
 )
 from app.schemas.schemas import (
     InterventionCreate, InterventionOut,
     InterventionServiceCreate, InterventionServiceOut, InterventionServiceUpdate,
+    InterventionNoteCreate, InterventionNoteOut,
 )
 from app.core.deps import get_current_user
 from app.core.idempotency import already_processed, record_operation
@@ -813,3 +814,71 @@ def no_reprise(
 
     db.commit()
     return {"message": "ok"}
+
+
+# --- NOTES (canal admin <-> employe(s) assigne(s)) ---
+
+def _note_out(n: InterventionNote) -> InterventionNoteOut:
+    return InterventionNoteOut(
+        id=n.id, text=n.text, created_at=n.created_at,
+        author_id=n.author_id,
+        author_name=n.author.full_name or n.author.email,
+        author_color=n.author.color,
+    )
+
+def _assert_note_access(intervention: Intervention, current_user: Employee):
+    if current_user.role == "admin":
+        return
+    if current_user.id not in {e.id for e in intervention.employees}:
+        raise HTTPException(status_code=403, detail="Accès aux notes réservé à l'admin et aux employés assignés")
+
+@router.get("/{intervention_id}/notes", response_model=List[InterventionNoteOut])
+def list_intervention_notes(
+    intervention_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    intervention = db.query(Intervention).options(
+        selectinload(Intervention.employees)
+    ).filter(Intervention.id == intervention_id).first()
+    if not intervention:
+        raise HTTPException(status_code=404, detail="Intervention introuvable")
+    _assert_note_access(intervention, current_user)
+
+    notes = (
+        db.query(InterventionNote)
+        .options(selectinload(InterventionNote.author))
+        .filter(InterventionNote.intervention_id == intervention_id)
+        .order_by(InterventionNote.created_at)
+        .all()
+    )
+    return [_note_out(n) for n in notes]
+
+@router.post("/{intervention_id}/notes", response_model=InterventionNoteOut)
+def create_intervention_note(
+    intervention_id: UUID,
+    payload: InterventionNoteCreate,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    intervention = db.query(Intervention).options(
+        selectinload(Intervention.employees)
+    ).filter(Intervention.id == intervention_id).first()
+    if not intervention:
+        raise HTTPException(status_code=404, detail="Intervention introuvable")
+    _assert_note_access(intervention, current_user)
+
+    text = payload.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Note vide")
+
+    note = InterventionNote(intervention_id=intervention_id, author_id=current_user.id, text=text)
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return InterventionNoteOut(
+        id=note.id, text=note.text, created_at=note.created_at,
+        author_id=note.author_id,
+        author_name=current_user.full_name or current_user.email,
+        author_color=current_user.color,
+    )

@@ -257,6 +257,21 @@ class Intervention(Base):
     employees = relationship("Employee", secondary=intervention_employees, back_populates="interventions")
 
     items = relationship("InterventionItem", back_populates="intervention", cascade="all, delete-orphan")
+    notes = relationship("InterventionNote", back_populates="intervention", cascade="all, delete-orphan", order_by="InterventionNote.created_at")
+
+
+class InterventionNote(Base):
+    """Fil de notes horodatées sur une intervention, canal admin <-> employé(s) assigné(s)."""
+    __tablename__ = "intervention_notes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    intervention_id = Column(UUID(as_uuid=True), ForeignKey("interventions.id", ondelete="CASCADE"), nullable=False)
+    author_id = Column(UUID(as_uuid=True), ForeignKey("employees.id"), nullable=False)
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    intervention = relationship("Intervention", back_populates="notes")
+    author = relationship("Employee")
 
 
 class AuditLog(Base):

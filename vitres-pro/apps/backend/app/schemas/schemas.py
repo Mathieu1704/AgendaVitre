@@ -271,6 +271,20 @@ class InterventionOut(BaseModel):
     class Config:
         from_attributes = True
 
+# --- INTERVENTION NOTES ---
+class InterventionNoteCreate(BaseModel):
+    text: str
+
+class InterventionNoteOut(BaseModel):
+    id: UUID
+    text: str
+    created_at: datetime
+    author_id: UUID
+    author_name: Optional[str] = None
+    author_color: Optional[str] = None
+    class Config:
+        from_attributes = True
+
 # --- CLIENT COMPLET ---
 class ClientOut(ClientOutLite):
     interventions: List[InterventionOutLite] = []

@@ -25,6 +25,8 @@ export const useAuth = () => {
     initial?.zone ?? "hainaut",
   );
   const [userName, setUserName] = useState<string>(initial?.fullName ?? "");
+  const [userColor, setUserColor] = useState<string | null>(initial?.color ?? null);
+  const [employeeId, setEmployeeId] = useState<string | undefined>(initial?.employeeId);
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();
   // Le serveur a-t-il confirmé le profil ? Tant que non, on retente au retour
@@ -38,12 +40,16 @@ export const useAuth = () => {
       role: string;
       zone: "hainaut" | "ardennes";
       fullName: string;
+      color?: string | null;
+      employeeId?: string;
     }) => {
       if (cancelled) return;
       setIsAdmin(p.role === "admin");
       setIsSubcontractor(p.role === "subcontractor");
       setUserZone(p.zone);
       setUserName(p.fullName);
+      setUserColor(p.color ?? null);
+      setEmployeeId(p.employeeId);
     };
 
     // Réhydratation depuis le cache : sur natif la lecture est asynchrone, donc
@@ -158,5 +164,5 @@ export const useAuth = () => {
     };
   }, []);
 
-  return { session, isAdmin, isSubcontractor, userZone, userName, loading };
+  return { session, isAdmin, isSubcontractor, userZone, userName, userColor, employeeId, loading };
 };

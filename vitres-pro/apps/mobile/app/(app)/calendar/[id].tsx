@@ -11,6 +11,7 @@ import {
   Platform,
   Linking,
   Alert,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import {
@@ -38,6 +39,7 @@ import {
   Check,
   Repeat,
   Trash2,
+  ArrowUp,
 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -83,7 +85,7 @@ export default function InterventionDetailScreen() {
 
   const isDesktop = width >= 768;
   const insets = useSafeAreaInsets();
-  const { isAdmin, isSubcontractor } = useAuth();
+  const { isAdmin, isSubcontractor, employeeId } = useAuth();
 
   // 1. TOUS LES STATES
   const [menuVisible, setMenuVisible] = useState(false);
@@ -173,6 +175,30 @@ export default function InterventionDetailScreen() {
     refetchOnMount: true,
   });
   const hideCash = companySettings?.hide_cash ?? false;
+
+  // Fil de notes : canal admin <-> employé(s)/sous-traitant(s) assigné(s) à cette intervention
+  const canSeeNotes =
+    !!intervention &&
+    (isAdmin || (intervention.employees || []).some((e: any) => e.id === employeeId));
+
+  const { data: notes } = useQuery({
+    queryKey: ["intervention-notes", id],
+    queryFn: async () => (await api.get(`/api/interventions/${id}/notes`)).data,
+    enabled: canSeeNotes,
+  });
+
+  const [newNoteText, setNewNoteText] = useState("");
+  const addNoteMutation = useMutation({
+    mutationFn: async (text: string) =>
+      (await api.post(`/api/interventions/${id}/notes`, { text })).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["intervention-notes", id] });
+      setNewNoteText("");
+    },
+    onError: (err: any) => {
+      toast.error("Erreur", err.response?.data?.detail || "Impossible d'ajouter la note");
+    },
+  });
 
   const isFocused = useRef(false);
   useFocusEffect(useCallback(() => {
@@ -670,7 +696,8 @@ export default function InterventionDetailScreen() {
         </View>
       </View>
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} keyboardDismissMode="interactive">
         {/* --- TITRE --- */}
         <View className="px-6 pt-4 pb-2">
           <View>
@@ -1287,8 +1314,88 @@ export default function InterventionDetailScreen() {
               </Card>
             </View>
           )}
+
+          {/* --- FIL DE NOTES (toujours affiché, canal admin <-> assigné(s)) --- */}
+          {canSeeNotes && (
+            <View
+              style={{
+                marginTop: 16,
+                borderWidth: 1,
+                borderColor: isDark ? "#334155" : "#E4E4E7",
+                borderRadius: 20,
+                padding: 14,
+                gap: 10,
+              }}
+            >
+              <Text className="text-xs font-bold uppercase text-muted-foreground tracking-wider">
+                Notes
+              </Text>
+
+              {notes && notes.length > 0 && (
+                <View style={{ gap: 12 }}>
+                  {notes.map((note: any) => (
+                    <View key={note.id} style={{ flexDirection: "row", gap: 10 }}>
+                      <Avatar name={note.author_name} size="sm" color={note.author_color} />
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <Text style={{ fontWeight: "700", color: note.author_color || "#3B82F6" }}>
+                            {note.author_name}
+                          </Text>
+                          <Text className="text-xs text-muted-foreground">
+                            {new Date(note.created_at).toLocaleString("fr-FR", {
+                              day: "numeric",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </Text>
+                        </View>
+                        <Text className="text-foreground dark:text-slate-300 mt-0.5">
+                          {note.text}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
+                <TextInput
+                  value={newNoteText}
+                  onChangeText={setNewNoteText}
+                  placeholder="Écrire une note..."
+                  placeholderTextColor={isDark ? "#64748B" : "#94A3B8"}
+                  multiline
+                  className="text-foreground dark:text-white"
+                  style={{ flex: 1, padding: 0, minHeight: 24, maxHeight: 100, textAlignVertical: "top" }}
+                />
+                <Pressable
+                  onPress={() => {
+                    const text = newNoteText.trim();
+                    if (text) addNoteMutation.mutate(text);
+                  }}
+                  disabled={!newNoteText.trim() || addNoteMutation.isPending}
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 15,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: newNoteText.trim() ? "#3B82F6" : isDark ? "#334155" : "#E4E4E7",
+                  }}
+                >
+                  {addNoteMutation.isPending ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <ArrowUp size={16} color={newNoteText.trim() ? "#fff" : isDark ? "#64748B" : "#94A3B8"} />
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          )}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* --- FOOTER ACTIONS (Fixe en bas, flottant) --- */}
       <View
