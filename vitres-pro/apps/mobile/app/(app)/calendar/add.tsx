@@ -93,7 +93,7 @@ type Item = {
 // signe final. Sert pour une prestation dont on doit rembourser le client
 // (montant à déduire du total, exclu du calcul de taux horaire côté serveur).
 function signedPrice(item: { price: string; negative?: boolean }): number {
-  const base = Math.abs(parseFloat(item.price) || 0);
+  const base = Math.abs(parseFloat(item.price.replace(",", ".")) || 0);
   return item.negative ? -base : base;
 }
 type ClientService = {
@@ -788,7 +788,7 @@ export default function AddInterventionScreen() {
     (serviceId: string, priceText: string) => {
       if (isPendingChainId(serviceId)) return;
       if (!isLiveCatalogService(serviceId)) return;
-      const price = parseFloat(priceText);
+      const price = parseFloat(priceText.replace(",", "."));
       if (!Number.isFinite(price)) return;
       const clientId = selectedClient?.id;
       if (!clientId && !activeChainId) return;
@@ -1143,7 +1143,7 @@ export default function AddInterventionScreen() {
     () =>
       allItems.reduce((acc, item) => {
         if ((item as Item).negative) return acc + signedPrice(item as Item);
-        const base = parseFloat(item.price as string) || 0;
+        const base = parseFloat((item.price as string).replace(",", ".")) || 0;
         return acc + (item.on_demand ? onDemandPrice(base) : base);
       }, 0),
     [allItems],
@@ -1282,7 +1282,7 @@ export default function AddInterventionScreen() {
         is_invoice: paymentMode !== "cash",
         items: cleanItems.map((i) => ({
           label: i.label,
-          price: (i as Item).negative ? signedPrice(i as Item) : Number(i.price) || 0,
+          price: (i as Item).negative ? signedPrice(i as Item) : parseFloat(String(i.price).replace(",", ".")) || 0,
           client_service_id: i.client_service_id ?? null,
           intervention_service_id: i.intervention_service_id ?? null,
           on_demand: i.on_demand ?? false,
@@ -2319,7 +2319,7 @@ export default function AddInterventionScreen() {
                       <TextInput
                         placeholder="Prix"
                         placeholderTextColor="#94A3B8"
-                        keyboardType="numeric"
+                        keyboardType="decimal-pad"
                         value={newServicePrice}
                         onChangeText={setNewServicePrice}
                         style={[
@@ -2357,7 +2357,7 @@ export default function AddInterventionScreen() {
                               const service = {
                                 id: tempId,
                                 label: newServiceLabel.trim(),
-                                price: Number(newServicePrice) || 0,
+                                price: parseFloat(newServicePrice.replace(",", ".")) || 0,
                                 position: availableClientServices.length,
                               };
                               applyServiceCreate(
@@ -2389,7 +2389,7 @@ export default function AddInterventionScreen() {
                               const service = {
                                 id: tempId,
                                 label: newServiceLabel.trim(),
-                                price: Number(newServicePrice) || 0,
+                                price: parseFloat(newServicePrice.replace(",", ".")) || 0,
                                 position: availableChainServices.length,
                               };
                               applyChainServiceCreate(
@@ -2541,7 +2541,7 @@ export default function AddInterventionScreen() {
                           <TextInput
                             value={priceVal}
                             placeholder="Prix"
-                            keyboardType="numeric"
+                            keyboardType="decimal-pad"
                             onChangeText={(t) => {
                               setServicePriceOverrides((prev) => ({
                                 ...prev,
@@ -2673,7 +2673,7 @@ export default function AddInterventionScreen() {
                       <View className="flex-1">
                         <Input
                           placeholder="Prix"
-                          keyboardType="numeric"
+                          keyboardType="decimal-pad"
                           value={item.price}
                           onChangeText={(t) =>
                             updateAdHocItem(index, "price", t)
