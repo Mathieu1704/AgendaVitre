@@ -235,6 +235,21 @@ class Intervention(Base):
     # sans client (permet un catalogue de services persistant sans fiche client).
     reprise_chain_id = Column(UUID(as_uuid=True), nullable=True, index=True)
 
+    # Renfort : intervention légère créée pour qu'un employé vienne épauler une
+    # intervention préexistante assignée à un(des) autre(s) employé(s), sans
+    # fusionner les horaires (chaque intervention garde son propre start_time/
+    # time_tbd). NULL = intervention normale. SET NULL si la source est
+    # supprimée : le renfort ne doit pas disparaître avec elle.
+    reinforcement_for_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("interventions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    reinforcement_for = relationship(
+        "Intervention", remote_side=[id], foreign_keys=[reinforcement_for_id]
+    )
+
     # Coordonnées de contact directement sur l'intervention : uniquement pour les
     # interventions sans client lié (même logique que reprise_chain_id ci-dessus,
     # pas de fiche client à créer pour un job ponctuel). Quand un client est lié,

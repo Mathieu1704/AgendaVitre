@@ -266,6 +266,7 @@ class InterventionOut(BaseModel):
     reprise_taken: Optional[bool] = None
     reprise_note: Optional[str] = None
     reprise_chain_id: Optional[UUID] = None
+    reinforcement_for_id: Optional[UUID] = None
     address: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None

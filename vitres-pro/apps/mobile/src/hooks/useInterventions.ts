@@ -50,6 +50,22 @@ export const useAssignEmployees = () => {
   });
 };
 
+// Crée une intervention légère "renfort" liée à interventionId, assignée à un
+// seul employé, avec time_tbd=true côté backend (l'employé fixera son heure
+// d'arrivée quand il aura fini ses propres RDV). Invalidation simple plutôt
+// que patch optimiste : c'est une création de nouvelle entité, pas une mise
+// à jour d'une carte déjà en cache.
+export const useCreateReinforcement = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ interventionId, employeeId }: { interventionId: string; employeeId: string }) =>
+      api.post(`/api/interventions/${interventionId}/reinforcement`, { employee_id: employeeId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["interventions"], type: "active" });
+    },
+  });
+};
+
 export const useBulkAssignEmployees = () => {
   const qc = useQueryClient();
   return useMutation({

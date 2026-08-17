@@ -272,6 +272,22 @@ export const InterventionCard = React.memo(function InterventionCard({
         )}
 
         <View className="flex-1 justify-center">
+          {item.reinforcement_for_id && (
+            <View
+              style={{
+                alignSelf: "flex-start",
+                backgroundColor: "#0EA5E9" + "22",
+                borderRadius: 6,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                marginBottom: 3,
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "#0EA5E9" }}>
+                Renfort
+              </Text>
+            </View>
+          )}
           <Text
             className={`font-extrabold text-foreground dark:text-white ${compact ? "text-sm" : "text-base"}`}
             numberOfLines={compact ? 1 : 2}

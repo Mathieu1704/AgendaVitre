@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, Modal, Pressable, Platform } from "react-native";
-import { Edit2, Copy, Ban, RotateCcw, Trash2, X } from "lucide-react-native";
+import { Edit2, Copy, Ban, RotateCcw, Trash2, X, UserPlus } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface OptionsModalProps {
@@ -8,6 +8,7 @@ interface OptionsModalProps {
   onClose: () => void;
   onEdit: () => void;
   onDuplicate?: () => void;
+  onAddReinforcement?: () => void;
   onCancelIntervention?: () => void;
   isCancelled?: boolean;
   onDelete: () => void;
@@ -18,6 +19,7 @@ export const OptionsModal = ({
   onClose,
   onEdit,
   onDuplicate,
+  onAddReinforcement,
   onCancelIntervention,
   isCancelled = false,
   onDelete,
@@ -76,6 +78,26 @@ export const OptionsModal = ({
               />
               <Text className="font-semibold text-foreground dark:text-white">
                 Dupliquer
+              </Text>
+            </Pressable>
+          )}
+
+          {/* Option AJOUTER UN RENFORT */}
+          {onAddReinforcement && (
+            <Pressable
+              onPress={() => {
+                onClose();
+                onAddReinforcement();
+              }}
+              className="flex-row items-center p-4 border-b border-border dark:border-slate-800 active:bg-muted/50 hover:bg-muted/50"
+            >
+              <UserPlus
+                size={20}
+                className="text-foreground dark:text-white mr-3"
+                color="#0EA5E9"
+              />
+              <Text className="font-semibold text-foreground dark:text-white">
+                Ajouter un renfort
               </Text>
             </Pressable>
           )}

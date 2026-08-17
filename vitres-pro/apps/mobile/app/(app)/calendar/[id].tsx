@@ -65,6 +65,8 @@ import { StatusBadge } from "../../../src/ui/components/StatusBadge";
 import { Avatar } from "../../../src/ui/components/Avatar";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useAuth } from "../../../src/hooks/useAuth";
+import { useEmployees } from "../../../src/hooks/useEmployees";
+import { useCreateReinforcement } from "../../../src/hooks/useInterventions";
 import { OptionsModal } from "../../../src/ui/components/OptionsModal";
 import { ConfirmModal } from "../../../src/ui/components/ConfirmModal";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
@@ -88,6 +90,8 @@ export default function InterventionDetailScreen() {
   const isDesktop = width >= 768;
   const insets = useSafeAreaInsets();
   const { isAdmin, isSubcontractor, employeeId } = useAuth();
+  const { employees: allEmployeesForReinforcement } = useEmployees();
+  const createReinforcement = useCreateReinforcement();
   const scrollRef = useRef<ScrollView>(null);
   const noteFocusedRef = useRef(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -113,6 +117,8 @@ export default function InterventionDetailScreen() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDeleteScopeDialog, setShowDeleteScopeDialog] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showReinforcementDialog, setShowReinforcementDialog] = useState(false);
+  const [reinforcementEmployeeId, setReinforcementEmployeeId] = useState<string | null>(null);
   const [editingPayment, setEditingPayment] = useState(false);
   const [pendingPaymentMode, setPendingPaymentMode] = useState<"cash" | "invoice" | "invoice_cash">("cash");
   const [showAllDoneConfirm, setShowAllDoneConfirm] = useState(false);
@@ -1534,6 +1540,17 @@ export default function InterventionDetailScreen() {
             params: { duplicate_of: id, from_view, from_date, from_zone },
           });
         }}
+        onAddReinforcement={
+          isAdmin &&
+          intervention &&
+          !["done", "cancelled"].includes(intervention.status) &&
+          !intervention.reinforcement_for_id
+            ? () => {
+                setReinforcementEmployeeId(null);
+                setShowReinforcementDialog(true);
+              }
+            : undefined
+        }
         onCancelIntervention={handleCancelRequest}
         isCancelled={intervention?.status === "cancelled"}
         onDelete={handleDeleteRequest}
@@ -1609,6 +1626,91 @@ export default function InterventionDetailScreen() {
             Toutes les occurrences
           </Button>
           <Button variant="outline" onPress={() => setShowDeleteScopeDialog(false)}>
+            Annuler
+          </Button>
+        </View>
+      </Dialog>
+
+      {/* Ajout d'un renfort : l'employé choisi rejoindra dès qu'il aura fini
+          ses propres RDV du jour (heure à définir, comportement time_tbd déjà
+          existant), sans toucher aux employés déjà assignés à cette tâche. */}
+      <Dialog
+        open={showReinforcementDialog}
+        onClose={() => setShowReinforcementDialog(false)}
+        position="center"
+      >
+        <View style={{ padding: 20, gap: 12 }}>
+          <Text style={{ fontSize: 17, fontWeight: "700", textAlign: "center", color: isDark ? "#F8FAFC" : "#09090B" }}>
+            Ajouter un renfort
+          </Text>
+          <Text style={{ fontSize: 13, textAlign: "center", color: isDark ? "#94A3B8" : "#64748B" }}>
+            L'employé choisi rejoindra dès qu'il aura fini ses propres RDV du jour.
+          </Text>
+          <ScrollView style={{ maxHeight: 320 }}>
+            {allEmployeesForReinforcement
+              .filter((e: any) => e.role !== "subcontractor" && e.role !== "admin")
+              .map((emp: any) => {
+                const isSelected = reinforcementEmployeeId === emp.id;
+                return (
+                  <Pressable
+                    key={emp.id}
+                    onPress={() => setReinforcementEmployeeId(emp.id)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingVertical: 10,
+                      paddingHorizontal: 4,
+                      gap: 12,
+                      borderBottomWidth: 1,
+                      borderBottomColor: isDark ? "#1E293B" : "#F1F5F9",
+                    }}
+                  >
+                    <Avatar
+                      name={emp.full_name ?? emp.email ?? "?"}
+                      color={emp.color}
+                      imageUrl={emp.avatar_url}
+                      className="w-9 h-9"
+                    />
+                    <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: isDark ? "#fff" : "#0F172A" }}>
+                      {emp.full_name ?? emp.email}
+                    </Text>
+                    <View
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 11,
+                        borderWidth: 2,
+                        borderColor: isSelected ? "#3B82F6" : "#CBD5E1",
+                        backgroundColor: isSelected ? "#3B82F6" : "transparent",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {isSelected && <Text style={{ color: "#fff", fontSize: 12, fontWeight: "800" }}>✓</Text>}
+                    </View>
+                  </Pressable>
+                );
+              })}
+          </ScrollView>
+          <Button
+            disabled={!reinforcementEmployeeId || createReinforcement.isPending}
+            onPress={async () => {
+              if (!reinforcementEmployeeId || !intervention) return;
+              try {
+                await createReinforcement.mutateAsync({
+                  interventionId: intervention.id,
+                  employeeId: reinforcementEmployeeId,
+                });
+                setShowReinforcementDialog(false);
+                toast.success("Renfort ajouté", "L'employé le verra en fin de son planning du jour.");
+              } catch {
+                toast.error("Erreur", "Impossible d'ajouter le renfort.");
+              }
+            }}
+          >
+            {createReinforcement.isPending ? "Ajout..." : "Ajouter en renfort"}
+          </Button>
+          <Button variant="outline" onPress={() => setShowReinforcementDialog(false)}>
             Annuler
           </Button>
         </View>

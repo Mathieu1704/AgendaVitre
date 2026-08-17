@@ -41,6 +41,9 @@ class BulkAssignBody(BaseModel):
     employee_ids: List[UUID] = []
     skip_assigned: bool = True
 
+class ReinforcementCreate(BaseModel):
+    employee_id: UUID
+
 def is_admin(user_id: str, db: Session) -> bool:
     emp = db.query(Employee).filter(Employee.id == user_id).first()
     return emp.role == 'admin' if emp else False
@@ -468,6 +471,83 @@ def bulk_assign_employees(
 
     db.commit()
     return {"ok": True, "updated": updated, "skipped": len(interventions) - updated}
+
+
+@router.post("/{intervention_id}/reinforcement", response_model=InterventionOut)
+def create_reinforcement(
+    intervention_id: UUID,
+    body: ReinforcementCreate,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Crée une intervention légère 'renfort' liée à intervention_id : même
+    client/adresse/zone, assignée uniquement à l'employé de renfort, avec
+    time_tbd=True (l'employé fixera son heure d'arrivée quand il aura fini
+    ses propres RDV du jour — même mécanisme que toute intervention non
+    planifiée, cf. tri time_tbd du planning mobile)."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Réservé aux admins.")
+
+    source = db.query(Intervention).options(selectinload(Intervention.employees)).filter(
+        Intervention.id == intervention_id
+    ).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Introuvable")
+    if source.status in ("done", "cancelled"):
+        raise HTTPException(
+            status_code=409,
+            detail="Impossible d'ajouter un renfort sur une intervention terminée ou annulée.",
+        )
+
+    employee = db.query(Employee).filter(Employee.id == body.employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+
+    reinforcement = Intervention(
+        id=uuid.uuid4(),
+        type="intervention",
+        title=source.title,
+        description=source.description,
+        client_id=source.client_id,
+        address=source.address,
+        phone=source.phone,
+        email=source.email,
+        zone=source.zone,
+        sub_zone=source.sub_zone,
+        # Placeholder temporel : même jour que la source, valeurs non-nulles
+        # requises en base mais ignorées côté affichage tant que time_tbd=True.
+        start_time=source.start_time,
+        end_time=source.end_time,
+        time_tbd=True,
+        status="planned",
+        payment_mode=source.payment_mode,
+        reinforcement_for_id=source.id,
+        # Volontairement vide : le prix reste entièrement porté par la source,
+        # pas de duplication de chiffre d'affaires.
+        price_estimated=None,
+        hourly_rate_id=None,
+    )
+    reinforcement.employees = [employee]
+    db.add(reinforcement)
+
+    _add_audit(
+        db, "created", current_user.id, reinforcement.id,
+        f"Renfort ajouté pour {employee.full_name or employee.email} sur « {source.title} »",
+        {"reinforcement_for_id": str(source.id)},
+    )
+
+    for emp in source.employees:
+        db.add(InAppNotification(
+            recipient_id=emp.id,
+            type="reinforcement_added",
+            title="Renfort planifié",
+            message=f"{employee.full_name or employee.email} viendra en renfort sur « {source.title} ».",
+            metadata_={"intervention_id": str(source.id), "reinforcement_id": str(reinforcement.id)},
+        ))
+
+    db.commit()
+    db.refresh(reinforcement)
+    return reinforcement
 
 
 @router.patch("/{intervention_id}", response_model=InterventionOut)
