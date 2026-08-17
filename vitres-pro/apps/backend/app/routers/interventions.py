@@ -31,7 +31,7 @@ ON_DEMAND_MULTIPLIER = 1.33
 
 def _item_effective_price(item) -> float:
     price = float(item.price)
-    if not item.on_demand:
+    if not item.on_demand or price <= 0:
         return price
     return math.ceil((price * ON_DEMAND_MULTIPLIER) / 5) * 5
 

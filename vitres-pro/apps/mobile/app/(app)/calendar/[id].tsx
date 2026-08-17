@@ -584,7 +584,16 @@ export default function InterventionDetailScreen() {
     const rate = intervention?.hourly_rate;
     if (!rate || rate.time_only) return null;
     if (!intervention?.price_estimated || rate.rate <= 0) return null;
-    return (intervention.price_estimated / rate.rate) * 3600000;
+    // Les prestations à prix négatif (remboursement dû au client) réduisent
+    // le total facturé mais ne doivent pas réduire les heures de taux
+    // horaire — on les réintègre ici (miroir de planning.py::intervention_hours).
+    const negativeTotal = (intervention.items || []).reduce(
+      (s: number, it: any) => s + (Number(it.price) < 0 ? Number(it.price) : 0),
+      0,
+    );
+    const rateEligiblePrice = intervention.price_estimated - negativeTotal;
+    if (rateEligiblePrice <= 0) return null;
+    return (rateEligiblePrice / rate.rate) * 3600000;
   })();
 
   const openTimeEdit = () => {

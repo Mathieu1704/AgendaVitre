@@ -74,13 +74,20 @@ def intervention_hours(interv) -> float:
             return (interv.end_time - interv.start_time).total_seconds() / 3600
         return 0.0
 
-    if (interv.price_estimated
-            and float(interv.price_estimated) > 0
-            and rate.rate > 0):
+    # Les prestations à prix négatif (remboursement dû au client) réduisent
+    # le prix_estimated facturé mais ne doivent pas réduire les heures
+    # comptabilisées : on les réintègre avant division par le taux.
+    price_estimated = float(interv.price_estimated or 0)
+    negative_total = sum(
+        float(it.price) for it in interv.items if float(it.price) < 0
+    )
+    rate_eligible = price_estimated - negative_total
+
+    if rate_eligible > 0 and rate.rate > 0:
         # Arrondi au quart d'heure, comme côté mobile (rate-session.tsx,
         # Math.round(x*4)/4) — sans ça, le total du jour (ici) et le total
         # affiché dans "Session taux" divergent légèrement.
-        return round((float(interv.price_estimated) / rate.rate) * 4) / 4
+        return round((rate_eligible / rate.rate) * 4) / 4
 
     return 0.0
 

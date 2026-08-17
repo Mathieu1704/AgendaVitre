@@ -80,7 +80,16 @@ export const InterventionCard = React.memo(function InterventionCard({
       return rate.fixed_hours && rate.fixed_hours > 0 ? rate.fixed_hours : null;
     }
     if (!item.price_estimated || rate.rate <= 0) return null;
-    return Math.round((item.price_estimated / rate.rate) * 4) / 4;
+    // Les prestations à prix négatif (remboursement dû au client) réduisent
+    // le total facturé mais ne doivent pas réduire les heures de taux
+    // horaire — on les réintègre ici (miroir de planning.py::intervention_hours).
+    const negativeTotal = (item.items || []).reduce(
+      (s: number, it: any) => s + (Number(it.price) < 0 ? Number(it.price) : 0),
+      0,
+    );
+    const rateEligiblePrice = item.price_estimated - negativeTotal;
+    if (rateEligiblePrice <= 0) return null;
+    return Math.round((rateEligiblePrice / rate.rate) * 4) / 4;
   })();
   const computedDurationLabel =
     computedDurationH != null

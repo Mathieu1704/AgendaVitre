@@ -224,6 +224,15 @@ export default function RateSessionScreen() {
   const selectedRate = rates.find((r: any) => r.id === selectedRateId) ?? null;
 
   const price = current ? parseFloat(current.price_estimated) || 0 : 0;
+  // Les prestations à prix négatif (remboursement dû au client) réduisent le
+  // total facturé (`price`, affiché tel quel) mais ne doivent pas réduire les
+  // heures de taux horaire — on les réintègre ici pour ce calcul, en miroir
+  // du backend (planning.py::intervention_hours).
+  const negativeTotal = (current?.items || []).reduce(
+    (s: number, it: any) => s + (Number(it.price) < 0 ? Number(it.price) : 0),
+    0,
+  );
+  const rateEligiblePrice = price - negativeTotal;
   const durationFromIntervention =
     current?.start_time && current?.end_time
       ? (new Date(current.end_time).getTime() -
@@ -233,8 +242,8 @@ export default function RateSessionScreen() {
   const computedHoursRaw = selectedRate
     ? selectedRate.time_only
       ? (selectedRate.fixed_hours ?? durationFromIntervention)
-      : price > 0
-        ? Math.round((price / selectedRate.rate) * 4) / 4
+      : rateEligiblePrice > 0
+        ? Math.round((rateEligiblePrice / selectedRate.rate) * 4) / 4
         : null
     : null;
   const computedHoursStr =
@@ -260,7 +269,11 @@ export default function RateSessionScreen() {
         }
         return sum;
       }
-      const p = parseFloat(i.price_estimated) || 0;
+      const negTotal = (i.items || []).reduce(
+        (s: number, it: any) => s + (Number(it.price) < 0 ? Number(it.price) : 0),
+        0,
+      );
+      const p = (parseFloat(i.price_estimated) || 0) - negTotal;
       if (p <= 0 || rate.rate <= 0) return sum;
       return sum + Math.round((p / rate.rate) * 4) / 4;
     }, 0);
@@ -671,7 +684,7 @@ export default function RateSessionScreen() {
                   <Text className="text-xs text-muted-foreground">
                     {selectedRate?.time_only
                       ? "Repris des horaires"
-                      : `${price.toFixed(0)} € ÷ ${selectedRate?.rate} €/h`}
+                      : `${rateEligiblePrice.toFixed(0)} € ÷ ${selectedRate?.rate} €/h`}
                   </Text>
                 </View>
                 <Text

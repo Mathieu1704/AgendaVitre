@@ -86,7 +86,16 @@ type Item = {
   client_service_id?: string | null;
   intervention_service_id?: string | null;
   on_demand?: boolean;
+  negative?: boolean;
 };
+
+// L'utilisateur tape toujours un montant positif ; le toggle "+/−" décide du
+// signe final. Sert pour une prestation dont on doit rembourser le client
+// (montant à déduire du total, exclu du calcul de taux horaire côté serveur).
+function signedPrice(item: { price: string; negative?: boolean }): number {
+  const base = Math.abs(parseFloat(item.price) || 0);
+  return item.negative ? -base : base;
+}
 type ClientService = {
   id: string;
   label: string;
@@ -127,6 +136,7 @@ function pendingChainServices(
   return (source?.items ?? [])
     .filter((item: any) => !item.client_service_id && !item.intervention_service_id)
     .filter((item: any) => !excludeAdjustments || !item.is_adjustment)
+    .filter((item: any) => Number(item.price) >= 0)
     .map((item: any, i: number) => ({
       id: pendingChainId(item.label),
       label: item.label,
@@ -1132,6 +1142,7 @@ export default function AddInterventionScreen() {
   const totalPrice = useMemo(
     () =>
       allItems.reduce((acc, item) => {
+        if ((item as Item).negative) return acc + signedPrice(item as Item);
         const base = parseFloat(item.price as string) || 0;
         return acc + (item.on_demand ? onDemandPrice(base) : base);
       }, 0),
@@ -1203,6 +1214,15 @@ export default function AddInterventionScreen() {
       return n;
     });
   };
+  const toggleAdHocNegative = (index: number) => {
+    setAdHocItems((prev) => {
+      const n = [...prev];
+      const negative = !n[index].negative;
+      // Un remboursement ne peut pas être majoré "à la demande".
+      n[index] = { ...n[index], negative, on_demand: negative ? false : n[index].on_demand };
+      return n;
+    });
+  };
 
   const NO_CLIENT_ID = "__none__";
   const clientItems = useMemo(
@@ -1262,7 +1282,7 @@ export default function AddInterventionScreen() {
         is_invoice: paymentMode !== "cash",
         items: cleanItems.map((i) => ({
           label: i.label,
-          price: Number(i.price) || 0,
+          price: (i as Item).negative ? signedPrice(i as Item) : Number(i.price) || 0,
           client_service_id: i.client_service_id ?? null,
           intervention_service_id: i.intervention_service_id ?? null,
           on_demand: i.on_demand ?? false,
@@ -2680,6 +2700,28 @@ export default function AddInterventionScreen() {
                           }}
                         >
                           +33%
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => toggleAdHocNegative(index)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                          borderWidth: 1.5,
+                          borderColor: item.negative ? "#EF4444" : "#CBD5E1",
+                          backgroundColor: item.negative ? "#EF4444" : "transparent",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: "700",
+                            color: item.negative ? "#fff" : "#64748B",
+                          }}
+                        >
+                          {item.negative ? "−" : "+"}
                         </Text>
                       </Pressable>
                       <Pressable
