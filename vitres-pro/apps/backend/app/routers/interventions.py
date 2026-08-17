@@ -43,6 +43,12 @@ class BulkAssignBody(BaseModel):
 
 class ReinforcementCreate(BaseModel):
     employee_id: UUID
+    # True (défaut) : l'employé rejoint dès qu'il a fini ses propres RDV
+    # (heure à définir, placé en fin de planning). False : l'admin connaît
+    # déjà un créneau précis (ex: l'employé a de l'avance et a un trou entre
+    # deux de ses propres RDV) — start_time est alors requis.
+    time_tbd: bool = True
+    start_time: Optional[datetime] = None
 
 def is_admin(user_id: str, db: Session) -> bool:
     emp = db.query(Employee).filter(Employee.id == user_id).first()
@@ -503,6 +509,17 @@ def create_reinforcement(
     if not employee:
         raise HTTPException(status_code=404, detail="Employé introuvable")
 
+    if body.time_tbd:
+        # Placeholder temporel : même jour que la source, valeurs non-nulles
+        # requises en base mais ignorées côté affichage tant que time_tbd=True.
+        start_time = source.start_time
+        end_time = source.end_time
+    else:
+        if not body.start_time:
+            raise HTTPException(status_code=400, detail="start_time requis quand time_tbd=false")
+        start_time = body.start_time
+        end_time = body.start_time + (source.end_time - source.start_time)
+
     reinforcement = Intervention(
         id=uuid.uuid4(),
         type="intervention",
@@ -514,11 +531,9 @@ def create_reinforcement(
         email=source.email,
         zone=source.zone,
         sub_zone=source.sub_zone,
-        # Placeholder temporel : même jour que la source, valeurs non-nulles
-        # requises en base mais ignorées côté affichage tant que time_tbd=True.
-        start_time=source.start_time,
-        end_time=source.end_time,
-        time_tbd=True,
+        start_time=start_time,
+        end_time=end_time,
+        time_tbd=body.time_tbd,
         status="planned",
         payment_mode=source.payment_mode,
         reinforcement_for_id=source.id,

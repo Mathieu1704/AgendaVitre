@@ -51,15 +51,30 @@ export const useAssignEmployees = () => {
 };
 
 // Crée une intervention légère "renfort" liée à interventionId, assignée à un
-// seul employé, avec time_tbd=true côté backend (l'employé fixera son heure
-// d'arrivée quand il aura fini ses propres RDV). Invalidation simple plutôt
-// que patch optimiste : c'est une création de nouvelle entité, pas une mise
-// à jour d'une carte déjà en cache.
+// seul employé. timeTbd=true (défaut) : l'employé fixera son heure d'arrivée
+// quand il aura fini ses propres RDV. timeTbd=false + startTimeIso : l'admin
+// connaît déjà un créneau précis (ex: l'employé a un trou entre deux de ses
+// propres RDV). Invalidation simple plutôt que patch optimiste : c'est une
+// création de nouvelle entité, pas une mise à jour d'une carte déjà en cache.
 export const useCreateReinforcement = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ interventionId, employeeId }: { interventionId: string; employeeId: string }) =>
-      api.post(`/api/interventions/${interventionId}/reinforcement`, { employee_id: employeeId }),
+    mutationFn: ({
+      interventionId,
+      employeeId,
+      timeTbd = true,
+      startTimeIso,
+    }: {
+      interventionId: string;
+      employeeId: string;
+      timeTbd?: boolean;
+      startTimeIso?: string;
+    }) =>
+      api.post(`/api/interventions/${interventionId}/reinforcement`, {
+        employee_id: employeeId,
+        time_tbd: timeTbd,
+        start_time: timeTbd ? undefined : startTimeIso,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["interventions"], type: "active" });
     },

@@ -119,6 +119,8 @@ export default function InterventionDetailScreen() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showReinforcementDialog, setShowReinforcementDialog] = useState(false);
   const [reinforcementEmployeeId, setReinforcementEmployeeId] = useState<string | null>(null);
+  const [reinforcementTimeMode, setReinforcementTimeMode] = useState<"asap" | "precise">("asap");
+  const [reinforcementTimeStr, setReinforcementTimeStr] = useState("");
   const [editingPayment, setEditingPayment] = useState(false);
   const [pendingPaymentMode, setPendingPaymentMode] = useState<"cash" | "invoice" | "invoice_cash">("cash");
   const [showAllDoneConfirm, setShowAllDoneConfirm] = useState(false);
@@ -1547,6 +1549,15 @@ export default function InterventionDetailScreen() {
           !intervention.reinforcement_for_id
             ? () => {
                 setReinforcementEmployeeId(null);
+                setReinforcementTimeMode("asap");
+                // Pré-remplissage : date de la source, heure actuelle arrondie
+                // au 1/4 d'heure — utile si l'admin bascule en "heure précise".
+                const datePart = toBrusselsDateTimeString(new Date(intervention.start_time)).split("T")[0];
+                const now = new Date();
+                let h = now.getHours();
+                let m = Math.round(now.getMinutes() / 15) * 15;
+                if (m === 60) { m = 0; h = Math.min(h + 1, 23); }
+                setReinforcementTimeStr(`${datePart}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
                 setShowReinforcementDialog(true);
               }
             : undefined
@@ -1644,8 +1655,32 @@ export default function InterventionDetailScreen() {
             Ajouter un renfort
           </Text>
           <Text style={{ fontSize: 13, textAlign: "center", color: isDark ? "#94A3B8" : "#64748B" }}>
-            L'employé choisi rejoindra dès qu'il aura fini ses propres RDV du jour.
+            {reinforcementTimeMode === "asap"
+              ? "L'employé choisi rejoindra dès qu'il aura fini ses propres RDV du jour."
+              : "Utile s'il a de l'avance et a un trou entre deux de ses propres RDV."}
           </Text>
+          <SlidingPillSelector
+            options={[
+              { id: "asap", label: "Dès qu'il a fini", pillColor: "#3B82F6", activeTextColor: "#fff" },
+              { id: "precise", label: "Heure précise", pillColor: "#3B82F6", activeTextColor: "#fff" },
+            ]}
+            selected={reinforcementTimeMode}
+            onSelect={(idVal) => setReinforcementTimeMode(idVal as "asap" | "precise")}
+            pillColor="#3B82F6"
+            bgColor={isDark ? "#0F172A" : "#E2E8F0"}
+            activeTextColor="#fff"
+            inactiveTextColor={isDark ? "#94A3B8" : "#64748B"}
+            fontSize={12}
+            itemPy={8}
+          />
+          {reinforcementTimeMode === "precise" && (
+            <DateTimePicker
+              value={reinforcementTimeStr}
+              onChange={setReinforcementTimeStr}
+              label="Heure du renfort"
+              timeOnly
+            />
+          )}
           <ScrollView style={{ maxHeight: 320 }}>
             {allEmployeesForReinforcement
               .filter((e: any) => e.role !== "subcontractor" && e.role !== "admin")
@@ -1697,12 +1732,22 @@ export default function InterventionDetailScreen() {
             onPress={async () => {
               if (!reinforcementEmployeeId || !intervention) return;
               try {
+                const precise = reinforcementTimeMode === "precise";
                 await createReinforcement.mutateAsync({
                   interventionId: intervention.id,
                   employeeId: reinforcementEmployeeId,
+                  timeTbd: !precise,
+                  startTimeIso: precise
+                    ? parseBrusselsDateTimeString(reinforcementTimeStr).toISOString()
+                    : undefined,
                 });
                 setShowReinforcementDialog(false);
-                toast.success("Renfort ajouté", "L'employé le verra en fin de son planning du jour.");
+                toast.success(
+                  "Renfort ajouté",
+                  precise
+                    ? "L'employé le verra à l'heure choisie dans son planning."
+                    : "L'employé le verra en fin de son planning du jour.",
+                );
               } catch {
                 toast.error("Erreur", "Impossible d'ajouter le renfort.");
               }
