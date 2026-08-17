@@ -26,6 +26,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "../../../src/lib/api";
+import { parseBrusselsDateTimeString } from "../../../src/lib/date";
 import { Card, CardContent } from "../../../src/ui/components/Card";
 import { Avatar } from "../../../src/ui/components/Avatar";
 import { Button } from "../../../src/ui/components/Button";
@@ -601,8 +602,11 @@ export default function TeamManagementScreen() {
                       onPress={() =>
                         absenceMutation.mutate({
                           employee_id: editingEmp.id,
-                          start_date: absStart + "T00:00:00",
-                          end_date: absEnd + "T23:59:59",
+                          // absStart/absEnd sont des dates "murales" Bruxelles : il faut les
+                          // convertir en UTC (pas les envoyer telles quelles) sinon la fin de
+                          // journée déborde de ~1-2h sur le lendemain selon l'heure d'été/hiver.
+                          start_date: parseBrusselsDateTimeString(absStart + "T00:00").toISOString(),
+                          end_date: parseBrusselsDateTimeString(absEnd + "T23:59").toISOString(),
                           type: absType,
                         })
                       }

@@ -358,8 +358,10 @@ export default function HeuresEncaissementScreen() {
               {/* Grille des jours ouvrés (lun-ven) */}
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                 {emp.daily_entries.slice(0, 5).map((day, i) => {
-                  const punched = !!(day.clock_in_at && day.clock_out_at);
-                  const ok = punched || day.is_absence;
+                  // Vert = pointé (début + fin réels). Un congé n'est par définition
+                  // pas un pointage, donc il reste rouge comme n'importe quel jour
+                  // sans pointage — même si l'absence est parfaitement légitime.
+                  const ok = !!(day.clock_in_at && day.clock_out_at);
                   return (
                     <Pressable
                       key={day.date}
