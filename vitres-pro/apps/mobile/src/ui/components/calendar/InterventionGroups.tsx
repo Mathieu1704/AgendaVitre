@@ -22,11 +22,148 @@ export type InterventionGroupsCtx = {
 // ─── renderInterventionGroups ─────────────────────────────────────────────────
 
 const STATUS_ORDER: Record<string, number> = { in_progress: 0, planned: 1, done: 2, cancelled: 3 };
-export const STATUS_LABELS: Record<string, string> = { in_progress: "En cours", planned: "Planifié", done: "Terminé", cancelled: "Annulé", unscheduled: "À planifier" };
-export const STATUS_COLORS: Record<string, string> = { in_progress: "#F97316", planned: "#3B82F6", done: "#22C55E", cancelled: "#EF4444", unscheduled: "#94A3B8" };
-const TYPE_ORDER: Record<string, number> = { intervention: 0, devis: 1, tournee: 2, note: 3 };
+export const STATUS_LABELS: Record<string, string> = { in_progress: "En cours", planned: "Planifié", done: "Terminé", cancelled: "Annulé", unscheduled: "À planifier", note: "Note" };
+export const STATUS_COLORS: Record<string, string> = { in_progress: "#F97316", planned: "#3B82F6", done: "#22C55E", cancelled: "#EF4444", unscheduled: "#94A3B8", note: "#64748B" };
 export const TYPE_LABELS: Record<string, string> = { intervention: "Intervention", devis: "Devis", tournee: "Tournée", note: "Note" };
 export const TYPE_COLORS: Record<string, string> = { intervention: "#3B82F6", devis: "#8B5CF6", tournee: "#F97316", note: "#64748B" };
+
+// Ordonne les interventions d'un statut en suivant, pour chaque employé, son
+// fil chronologique complet. Quand un rdv a plusieurs employés, on continue
+// avec celui dont le PROCHAIN rdv commence le plus tôt (égalité → alphabétique
+// sur le prénom) ; les autres sont mis en attente et repris dès que le fil
+// suivi est épuisé — jamais interrompus par une chaîne d'employés différente.
+function orderByEmployeeChains(items: any[]): any[] {
+  const byTime = (a: any, b: any) =>
+    new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
+
+  const queues = new Map<string, any[]>();
+  const labels = new Map<string, string>();
+  for (const item of items) {
+    const emps: any[] = item.employees ?? [];
+    if (emps.length === 0) {
+      const key = `__none__${item.id}`;
+      queues.set(key, [item]);
+      labels.set(key, "");
+      continue;
+    }
+    for (const e of emps) {
+      const key = e.id ?? e.full_name ?? "?";
+      const arr = queues.get(key);
+      if (arr) arr.push(item);
+      else {
+        queues.set(key, [item]);
+        labels.set(key, e.full_name ?? "");
+      }
+    }
+  }
+  for (const arr of queues.values()) arr.sort(byTime);
+
+  const emitted = new Set<any>();
+  const output: any[] = [];
+
+  const nextOf = (key: string): any | undefined => {
+    const q = queues.get(key);
+    if (!q) return undefined;
+    while (q.length > 0 && emitted.has(q[0])) q.shift();
+    return q[0];
+  };
+
+  const pickEarliest = (keys: string[]): string | undefined => {
+    let best: string | undefined;
+    let bestItem: any;
+    for (const k of keys) {
+      const it = nextOf(k);
+      if (!it) continue;
+      if (!bestItem) {
+        best = k;
+        bestItem = it;
+        continue;
+      }
+      const t = new Date(it.start_time).getTime();
+      const bt = new Date(bestItem.start_time).getTime();
+      if (t < bt || (t === bt && (labels.get(k) ?? "").localeCompare(labels.get(best!) ?? "") < 0)) {
+        best = k;
+        bestItem = it;
+      }
+    }
+    return best;
+  };
+
+  for (;;) {
+    const starters = [...queues.keys()].filter((k) => nextOf(k) !== undefined);
+    if (starters.length === 0) break;
+    let active: string | undefined = pickEarliest(starters);
+    const waiting = new Set<string>();
+
+    while (active) {
+      const item = nextOf(active);
+      if (!item) {
+        active = pickEarliest([...waiting]);
+        if (active) waiting.delete(active);
+        continue;
+      }
+      if (!emitted.has(item)) {
+        emitted.add(item);
+        output.push(item);
+      }
+      const emps: any[] = item.employees ?? [];
+      if (emps.length > 1) {
+        const memberKeys = emps.map((e: any) => e.id ?? e.full_name ?? "?");
+        for (const k of memberKeys) if (k !== active) waiting.add(k);
+        const candidates = memberKeys.filter((k) => nextOf(k) !== undefined);
+        const chosen = pickEarliest(candidates);
+        if (chosen) waiting.delete(chosen);
+        active = chosen;
+      }
+    }
+  }
+
+  return output;
+}
+
+// Une note n'a pas de statut de planification propre : jamais affichée sous
+// "À planifier"/"Planifié"/etc. Elle est insérée juste avant le premier rdv
+// (n'importe quel statut) qui implique tous ses employés ; à défaut, avant le
+// premier rdv impliquant au moins un de ses employés. Si aucun de ses employés
+// n'a de rdv ce jour-là, elle atterrit dans une section "Note" à part.
+function placeNotes(
+  notes: any[],
+  statusGroups: { status: string; items: any[] }[],
+  rest: any[],
+): void {
+  const byTime = (a: any, b: any) =>
+    new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
+  const orphans: any[] = [];
+
+  for (const note of notes) {
+    const empIds: string[] = (note.employees ?? []).map((e: any) => e.id).filter(Boolean);
+    let target: any | undefined;
+    if (empIds.length > 0) {
+      const withAll = rest.filter((it) =>
+        empIds.every((id) => (it.employees ?? []).some((e: any) => e.id === id)),
+      );
+      const pool = withAll.length > 0
+        ? withAll
+        : rest.filter((it) => (it.employees ?? []).some((e: any) => empIds.includes(e.id)));
+      if (pool.length > 0) target = [...pool].sort(byTime)[0];
+    }
+    if (!target) {
+      orphans.push(note);
+      continue;
+    }
+    for (const sg of statusGroups) {
+      const idx = sg.items.indexOf(target);
+      if (idx !== -1) {
+        sg.items.splice(idx, 0, note);
+        break;
+      }
+    }
+  }
+
+  if (orphans.length > 0) {
+    statusGroups.push({ status: "note", items: [...orphans].sort(byTime) });
+  }
+}
 
 // ─── FlatList support ─────────────────────────────────────────────────────────
 
@@ -43,38 +180,40 @@ export function buildFlatRows(
 ): FlatRow[] {
   if (list.length === 0) return [];
 
-  const scheduled = list.filter((i) => !i.time_tbd);
-  const unscheduled = list.filter((i) => i.time_tbd);
+  const byTime = (a: any, b: any) =>
+    new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
 
-  const employeeKey = (item: any) =>
-    (item.employees ?? [])
-      .map((e: any) => e.full_name ?? e.id ?? "")
-      .sort()
-      .join("|");
+  // Les notes n'ont pas de statut de planification propre — voir placeNotes.
+  const notes = list.filter((i) => i.type === "note");
+  const nonNotes = list.filter((i) => i.type !== "note");
 
-  const sortItems = (items: any[]) => [...items].sort((a, b) => {
-    const sd = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
-    if (sd !== 0) return sd;
-    const td = (TYPE_ORDER[a.type ?? "intervention"] ?? 9) - (TYPE_ORDER[b.type ?? "intervention"] ?? 9);
-    if (td !== 0) return td;
-    const ed = employeeKey(a).localeCompare(employeeKey(b));
-    if (ed !== 0) return ed;
-    return new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
-  });
-
-  const sorted = sortItems(scheduled);
+  // Annulé prime sur le reste (même sans heure définie) — ne doit jamais
+  // atterrir dans "À planifier" à cause de time_tbd.
+  const cancelled = nonNotes.filter((i) => i.status === "cancelled");
+  const rest = nonNotes.filter((i) => i.status !== "cancelled");
+  const scheduled = rest.filter((i) => !i.time_tbd);
+  const unscheduled = rest.filter((i) => i.time_tbd);
 
   const rows: FlatRow[] = [];
 
-  const statusGroups: { status: string; items: any[] }[] = [];
-  for (const item of sorted) {
-    const last = statusGroups[statusGroups.length - 1];
-    if (last && last.status === item.status) last.items.push(item);
-    else statusGroups.push({ status: item.status, items: [item] });
+  const byStatus = new Map<string, any[]>();
+  for (const item of scheduled) {
+    const arr = byStatus.get(item.status);
+    if (arr) arr.push(item);
+    else byStatus.set(item.status, [item]);
+  }
+  const statusGroups: { status: string; items: any[] }[] = [...byStatus.entries()]
+    .sort(([sa], [sb]) => (STATUS_ORDER[sa] ?? 9) - (STATUS_ORDER[sb] ?? 9))
+    .map(([status, items]) => ({ status, items: orderByEmployeeChains(items) }));
+
+  if (cancelled.length > 0) {
+    statusGroups.push({ status: "cancelled", items: [...cancelled].sort(byTime) });
   }
   if (unscheduled.length > 0) {
-    statusGroups.push({ status: "unscheduled", items: sortItems(unscheduled) });
+    statusGroups.push({ status: "unscheduled", items: [...unscheduled].sort(byTime) });
   }
+
+  placeNotes(notes, statusGroups, nonNotes);
 
   // Comme pour renderInterventionGroups : les blocs sont des suites
   // consécutives, un même couple (statut, type) peut donc revenir plus loin.
@@ -145,41 +284,44 @@ export function renderInterventionGroups(
 
   const { isDark, isAdmin, subZoneMap, viewMode, selectedDate, effectiveZone, setAssignModal, setSelectedAssignIds, setInitialAssignIds } = ctx;
 
-  const employeeKey = (item: any) =>
-    (item.employees ?? [])
-      .map((e: any) => e.full_name ?? e.id ?? "")
-      .sort()
-      .join("|");
+  const byTime = (a: any, b: any) =>
+    new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
 
-  const sortItems = (items: any[]) => [...items].sort((a, b) => {
-    const sd = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
-    if (sd !== 0) return sd;
-    const td = (TYPE_ORDER[a.type ?? "intervention"] ?? 9) - (TYPE_ORDER[b.type ?? "intervention"] ?? 9);
-    if (td !== 0) return td;
-    const ed = employeeKey(a).localeCompare(employeeKey(b));
-    if (ed !== 0) return ed;
-    return new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
-  });
+  // Les notes n'ont pas de statut de planification propre — voir placeNotes.
+  const notes = list.filter((i) => i.type === "note");
+  const nonNotes = list.filter((i) => i.type !== "note");
 
-  const scheduled = list.filter((i) => !i.time_tbd);
-  const unscheduled = list.filter((i) => i.time_tbd);
-  const sorted = sortItems(scheduled);
+  // Annulé prime sur le reste (même sans heure définie) — ne doit jamais
+  // atterrir dans "À planifier" à cause de time_tbd.
+  const cancelled = nonNotes.filter((i) => i.status === "cancelled");
+  const rest = nonNotes.filter((i) => i.status !== "cancelled");
+  const scheduled = rest.filter((i) => !i.time_tbd);
+  const unscheduled = rest.filter((i) => i.time_tbd);
 
-  const groups: { status: string; items: typeof sorted }[] = [];
-  for (const item of sorted) {
-    const last = groups[groups.length - 1];
-    if (last && last.status === item.status) last.items.push(item);
-    else groups.push({ status: item.status, items: [item] });
+  const byStatus = new Map<string, any[]>();
+  for (const item of scheduled) {
+    const arr = byStatus.get(item.status);
+    if (arr) arr.push(item);
+    else byStatus.set(item.status, [item]);
+  }
+  const groups: { status: string; items: any[] }[] = [...byStatus.entries()]
+    .sort(([sa], [sb]) => (STATUS_ORDER[sa] ?? 9) - (STATUS_ORDER[sb] ?? 9))
+    .map(([status, items]) => ({ status, items: orderByEmployeeChains(items) }));
+
+  if (cancelled.length > 0) {
+    groups.push({ status: "cancelled", items: [...cancelled].sort(byTime) });
   }
   if (unscheduled.length > 0) {
-    groups.push({ status: "unscheduled", items: sortItems(unscheduled) });
+    groups.push({ status: "unscheduled", items: [...unscheduled].sort(byTime) });
   }
+
+  placeNotes(notes, groups, nonNotes);
 
   // Les blocs sont construits par suites consécutives, pas par valeur unique :
   // dans le groupe « À planifier », qui mélange tous les statuts, un même type
   // peut réapparaître dans un bloc ultérieur. La position rend la clé unique.
   return groups.map((group, groupIdx) => {
-    const typeGroups: { type: string; items: typeof sorted }[] = [];
+    const typeGroups: { type: string; items: any[] }[] = [];
     for (const item of group.items) {
       const t = item.type ?? "intervention";
       const last = typeGroups[typeGroups.length - 1];
@@ -204,7 +346,7 @@ export function renderInterventionGroups(
           // trie déjà par heure, l'affichage par zone n'apporte plus rien.
           const timeDefined = group.status !== "unscheduled";
 
-          const szGroups: { code: string | null; items: typeof sorted }[] = [];
+          const szGroups: { code: string | null; items: any[] }[] = [];
           for (const item of tg.items) {
             const code = timeDefined ? null : (item.sub_zone ?? null);
             const last = szGroups[szGroups.length - 1];
