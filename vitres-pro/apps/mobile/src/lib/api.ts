@@ -48,6 +48,23 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// Un seul refreshSession() en vol même si plusieurs requêtes tombent en 401
+// en même temps (ex: plusieurs appels lancés au même instant) : elles
+// partagent la même promesse au lieu de déclencher chacune leur refresh.
+let _refreshPromise: Promise<string | null> | null = null;
+function refreshSessionOnce(): Promise<string | null> {
+  if (!_refreshPromise) {
+    _refreshPromise = supabase.auth
+      .refreshSession()
+      .then(({ data, error }) => (error ? null : (data.session?.access_token ?? null)))
+      .catch(() => null)
+      .finally(() => {
+        _refreshPromise = null;
+      });
+  }
+  return _refreshPromise;
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -74,8 +91,29 @@ api.interceptors.response.use(
       }
     }
 
+    // Un 401 isolé ne veut pas forcément dire "session morte" : il peut
+    // s'agir d'un token expiré juste avant que le rafraîchissement
+    // automatique n'ait eu le temps de tourner (course entre timer et
+    // requête). On tente un refreshSession() explicite et on rejoue la
+    // requête une seule fois avant de conclure à une vraie déconnexion —
+    // sinon un simple aller-retour d'1h renvoyait l'employé au login alors
+    // que sa session (refresh token, valable ~60 jours) était toujours bonne.
+    if (error.response?.status === 401 && !config?._authRetried) {
+      config._authRetried = true;
+      const newToken = await refreshSessionOnce();
+      if (newToken) {
+        _cachedToken = newToken;
+        try {
+          return await api(config);
+        } catch (retryError) {
+          error = retryError;
+        }
+      }
+    }
+
     if (error.response?.status === 401) {
       _cachedToken = null;
+      void supabase.auth.signOut();
       router.replace("/(auth)/login");
     } else if (isNetworkIssue) {
       // Pas de toast par requête : hors réseau, le planning et les sondages
