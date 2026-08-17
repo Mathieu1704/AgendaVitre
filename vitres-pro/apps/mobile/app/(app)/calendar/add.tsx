@@ -267,6 +267,36 @@ function getRecurrenceLabel(rec: Recurrence, startStr: string): string {
   return `Tous les ${rec.interval} ${unitLabels[rec.unit]}${s}`;
 }
 
+// Inverse de la conversion faite à la création (voir handleSubmit) : un rule
+// stocké avec freq="day"/"week"/"month"/"year" vient du mode "custom"
+// (freq = l'unité choisie), les autres valeurs sont des préréglages simples.
+function parseStoredRecurrence(rule: any): Recurrence {
+  if (!rule || !rule.freq) return DEFAULT_RECURRENCE;
+  const bareUnits: RecurrenceUnit[] = ["day", "week", "month", "year"];
+  const interval = Math.max(1, Number(rule.interval) || 1);
+  if (bareUnits.includes(rule.freq)) {
+    return {
+      ...DEFAULT_RECURRENCE,
+      freq: "custom",
+      unit: rule.freq as RecurrenceUnit,
+      interval,
+      endType: "count",
+      count: DEFAULT_RECURRENCE.count,
+    };
+  }
+  const simpleFreqs: RecurrenceFreq[] = ["daily", "weekly", "monthly", "yearly", "weekdays"];
+  if (simpleFreqs.includes(rule.freq)) {
+    return {
+      ...DEFAULT_RECURRENCE,
+      freq: rule.freq as RecurrenceFreq,
+      interval: 1,
+      endType: "count",
+      count: DEFAULT_RECURRENCE.count,
+    };
+  }
+  return DEFAULT_RECURRENCE;
+}
+
 function generateDates(
   startStr: string,
   durationHours: number,
@@ -608,6 +638,12 @@ export default function AddInterventionScreen() {
 
   // --- Récurrence ---
   const [recurrence, setRecurrence] = useState<Recurrence>(DEFAULT_RECURRENCE);
+  // Motif d'origine d'une série en cours d'édition, pour détecter un
+  // changement (voir isRecurringSeries / handleSubmit) — reste `null` tant
+  // que ce n'est pas une édition de série récurrente.
+  const originalRecurrenceRef = useRef<Recurrence | null>(null);
+  const [showChangeRecurrenceDialog, setShowChangeRecurrenceDialog] = useState(false);
+  const [isChangingRecurrence, setIsChangingRecurrence] = useState(false);
   const [showRecurrenceDropdown, setShowRecurrenceDropdown] = useState(false);
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customIntervalStr, setCustomIntervalStr] = useState("1");
@@ -921,6 +957,11 @@ export default function AddInterventionScreen() {
       setStartDateStr(toBrusselsDateTimeString(start));
       setEndDateStr(toBrusselsDateTimeString(end));
       setTimeTbd(interventionData.time_tbd ?? false);
+      if (interventionData.recurrence_group_id) {
+        const parsed = parseStoredRecurrence(interventionData.recurrence_rule);
+        originalRecurrenceRef.current = parsed;
+        setRecurrence(parsed);
+      }
       const interventionClientId = interventionData.client_id ?? interventionData.client?.id;
       const foundClient = clients?.find((c) => c.id === interventionClientId);
       if (foundClient) setSelectedClient(foundClient);
@@ -1250,6 +1291,13 @@ export default function AddInterventionScreen() {
   const [showRecurrenceScopeDialog, setShowRecurrenceScopeDialog] = useState(false);
   const isRecurringSeries =
     isAdmin && isEditMode && !!interventionData?.recurrence_group_id;
+  const original = originalRecurrenceRef.current;
+  const recurrencePatternChanged =
+    isRecurringSeries &&
+    !!original &&
+    (recurrence.freq !== original.freq ||
+      recurrence.interval !== original.interval ||
+      recurrence.unit !== original.unit);
 
   const handleSubmit = async (scope: "this" | "following" | "all" = "this") => {
     if (!title) return toast.error("Titre", "Titre requis.");
@@ -1516,6 +1564,112 @@ export default function AddInterventionScreen() {
     }
   };
 
+  // Changement du motif de récurrence d'une série existante : le backend ne
+  // sait pas modifier recurrence_rule en place (bloqué explicitement côté
+  // scope d'édition), donc on supprime cette occurrence et celles qui suivent
+  // (endpoint existant, déjà utilisé pour la suppression de série) puis on
+  // les recrée avec le nouveau motif — même logique que la création d'une
+  // série neuve. Les occurrences passées ne sont jamais touchées.
+  const handleChangeRecurrence = async () => {
+    if (!id || !interventionData?.recurrence_group_id) return;
+    if (!title) return toast.error("Titre", "Titre requis.");
+    const datePart = startDateStr.split("T")[0];
+    let startParsed: Date, endParsed: Date, dur: number;
+    if (timeTbd) {
+      startParsed = parseBrusselsDateTimeString(`${datePart}T00:00`);
+      endParsed = parseBrusselsDateTimeString(`${datePart}T01:00`);
+      dur = 1;
+    } else {
+      startParsed = parseBrusselsDateTimeString(startDateStr);
+      endParsed = parseBrusselsDateTimeString(endDateStr);
+      if (!startParsed || !endParsed) return toast.error("Date", "Vérifie les horaires.");
+      dur = (endParsed.getTime() - startParsed.getTime()) / 3600000;
+      if (dur <= 0) return toast.error("Horaires", "L'heure de fin doit être après l'heure de début.");
+    }
+
+    setIsChangingRecurrence(true);
+    try {
+      const groupId = interventionData.recurrence_group_id;
+      const cleanItems = allItems.filter((i) => i.label.trim() !== "");
+      const basePayload = {
+        type: intervType,
+        title,
+        description,
+        zone: isAdmin ? zone : userZone,
+        client_id: selectedClient?.id ?? null,
+        employee_ids: selectedEmployeeIds,
+        price_estimated: totalPrice,
+        payment_mode: paymentMode,
+        is_invoice: paymentMode !== "cash",
+        items: cleanItems.map((i) => ({
+          label: i.label,
+          price: (i as Item).negative ? signedPrice(i as Item) : parseFloat(String(i.price).replace(",", ".")) || 0,
+          client_service_id: i.client_service_id ?? null,
+          intervention_service_id: i.intervention_service_id ?? null,
+          on_demand: i.on_demand ?? false,
+        })),
+        hourly_rate_id: isAdmin ? (selectedRateId ?? null) : null,
+      };
+
+      await enqueue({
+        kind: "delete-intervention-scope",
+        method: "DELETE",
+        url: `/api/interventions/${id}/recurrence-scope?scope=following`,
+        label: "Suppression des occurrences à venir (changement de récurrence)",
+      });
+
+      const occurrences = generateDates(startDateStr, dur, recurrence, false);
+      if (occurrences.length === 0) return toast.error("Date", "Vérifie la date.");
+
+      for (const occ of occurrences) {
+        const payload = {
+          ...basePayload,
+          start_time: occ.start.toISOString(),
+          end_time: occ.end.toISOString(),
+          time_tbd: isAdmin ? timeTbd : true,
+          recurrence_rule:
+            occurrences.length > 1
+              ? {
+                  freq: recurrence.freq === "custom" ? recurrence.unit : recurrence.freq,
+                  interval: recurrence.freq === "custom" ? recurrence.interval : 1,
+                  count: occurrences.length,
+                }
+              : null,
+          recurrence_group_id: occurrences.length > 1 ? groupId : null,
+        };
+        applyCreateReprise(queryClient, newTempId(), payload);
+        await enqueue({
+          kind: "create-reprise",
+          method: "POST",
+          url: "/api/interventions",
+          body: payload,
+          label: "Occurrence recréée (nouvelle récurrence)",
+        });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      toast.success(
+        "Récurrence modifiée",
+        isOnlineNow()
+          ? "Les occurrences à venir ont été recréées."
+          : "Sera synchronisé au retour du réseau.",
+      );
+      router.dismissTo({
+        pathname: "/(app)/calendar",
+        params: {
+          date: from_date ?? startDateStr.split("T")[0],
+          ...(from_view ? { view: from_view } : {}),
+          ...(from_zone ? { zone: from_zone } : {}),
+        },
+      });
+    } catch (err: any) {
+      toast.error("Erreur", err.response?.data?.detail || "Erreur inconnue");
+    } finally {
+      setIsChangingRecurrence(false);
+      setShowChangeRecurrenceDialog(false);
+    }
+  };
+
   // --- "RDV non repris" ---
   const [isSubmittingNoReprise, setIsSubmittingNoReprise] = useState(false);
 
@@ -1707,7 +1861,7 @@ export default function AddInterventionScreen() {
                         letterSpacing: 0.3,
                       }}
                     >
-                      RDV non repris
+                      Pas de reprise ?
                     </Text>
                   </Pressable>
                 ) : (
@@ -1804,6 +1958,8 @@ export default function AddInterventionScreen() {
               </View>
             )}
 
+            {!noRepriseMode && (
+            <>
             <CardHeader className="p-6 pb-2">
               <Text className="text-2xl font-extrabold text-foreground dark:text-white text-center">
                 {isRepriseMode
@@ -2072,8 +2228,8 @@ export default function AddInterventionScreen() {
                 )}
               </View>
 
-              {/* RÉCURRENCE (pas en mode édition) */}
-              {!isEditMode && (
+              {/* RÉCURRENCE (pas en mode édition, sauf pour changer le motif d'une série) */}
+              {(!isEditMode || isRecurringSeries) && (
                 <View style={{ gap: 4, marginTop: (!isAdmin && isRepriseMode) ? -8 : 0 }}>
                   <Text className="text-sm font-semibold text-foreground dark:text-white">
                     Récurrence
@@ -2940,7 +3096,8 @@ export default function AddInterventionScreen() {
                 <View style={{ flex: 1, marginRight: isWeb ? 0 : 16 }}>
                   <Button
                     onPress={() => {
-                      if (isRecurringSeries) setShowRecurrenceScopeDialog(true);
+                      if (recurrencePatternChanged) setShowChangeRecurrenceDialog(true);
+                      else if (isRecurringSeries) setShowRecurrenceScopeDialog(true);
                       else handleSubmit("this");
                     }}
                     disabled={isSubmitting}
@@ -2960,6 +3117,8 @@ export default function AddInterventionScreen() {
                 </View>
               </View>
             </CardContent>
+            </>
+            )}
           </Card>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -2999,6 +3158,37 @@ export default function AddInterventionScreen() {
             }}
           >
             Toutes les occurrences
+          </Button>
+        </View>
+      </Dialog>
+
+      {/* MODAL CHANGEMENT DE RÉCURRENCE */}
+      <Dialog
+        open={showChangeRecurrenceDialog}
+        onClose={() => !isChangingRecurrence && setShowChangeRecurrenceDialog(false)}
+        position="center"
+      >
+        <View style={{ padding: 20, gap: 12 }}>
+          <Text style={{ fontSize: 17, fontWeight: "700", textAlign: "center" }}>
+            Changer la récurrence
+          </Text>
+          <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center" }}>
+            Les occurrences à venir de cette série (à partir de celle-ci) vont être
+            supprimées et recréées selon le nouveau motif. Les occurrences déjà
+            passées ne sont pas touchées.
+          </Text>
+          <Button
+            onPress={handleChangeRecurrence}
+            disabled={isChangingRecurrence}
+          >
+            {isChangingRecurrence ? "Modification..." : "Confirmer le changement"}
+          </Button>
+          <Button
+            variant="outline"
+            onPress={() => setShowChangeRecurrenceDialog(false)}
+            disabled={isChangingRecurrence}
+          >
+            Annuler
           </Button>
         </View>
       </Dialog>
