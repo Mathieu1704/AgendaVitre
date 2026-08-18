@@ -48,12 +48,10 @@ import {
   saveProfile as saveCachedProfile,
 } from "../../../src/lib/offline/profileCache";
 
-// Le binaire natif en prod n'a pas encore ete rebuild avec expo-image-picker :
-// appeler ses fonctions natives peut faire planter l'app au niveau OS (ex.
-// permission camera/photos absente d'Info.plist), un cas qu'un try/catch JS
-// ne peut pas rattraper. On masque donc l'entree "changer la photo" tant que
-// le nouveau binaire (avec le plugin expo-image-picker) n'est pas deploye.
-const AVATAR_EDIT_ENABLED = false;
+// Reactive a partir du build 1.0.6 : le binaire natif inclut desormais le
+// plugin expo-image-picker (cf. app.json), donc plus de risque de crash OS
+// par permission camera/photos absente d'Info.plist.
+const AVATAR_EDIT_ENABLED = true;
 
 // Chargement paresseux : sur un build natif publié avant l'ajout de ce module
 // (avant rebuild EAS), un `import` statique fait planter tout l'écran dès son
