@@ -1402,13 +1402,47 @@ export default function InterventionDetailScreen() {
                           </View>
                           {intervention.payment_mode === "invoice_cash" &&
                             intervention.amount_cash != null && (
-                              <View className="flex-row justify-between items-center mt-1">
-                                <Text className="text-sm text-muted-foreground">
-                                  dont Cash / Facture
-                                </Text>
-                                <Text className="text-sm font-semibold text-foreground dark:text-white">
-                                  {formatPrice(intervention.amount_cash)} / {formatPrice(intervention.amount_invoice)}
-                                </Text>
+                              <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                                <View
+                                  style={{
+                                    flex: 1,
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    borderRadius: 10,
+                                    paddingVertical: 6,
+                                    paddingHorizontal: 10,
+                                    backgroundColor: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2",
+                                  }}
+                                >
+                                  <Banknote size={13} color={isDark ? "#F87171" : "#B91C1C"} />
+                                  <Text style={{ fontSize: 11, fontWeight: "700", color: isDark ? "#F87171" : "#B91C1C" }}>
+                                    Cash
+                                  </Text>
+                                  <Text style={{ fontSize: 13, fontWeight: "800", color: isDark ? "#FCA5A5" : "#DC2626", marginLeft: "auto" }}>
+                                    {formatPrice(intervention.amount_cash)}
+                                  </Text>
+                                </View>
+                                <View
+                                  style={{
+                                    flex: 1,
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    borderRadius: 10,
+                                    paddingVertical: 6,
+                                    paddingHorizontal: 10,
+                                    backgroundColor: isDark ? "rgba(21,128,61,0.15)" : "#F0FDF4",
+                                  }}
+                                >
+                                  <FileText size={13} color={isDark ? "#4ADE80" : "#15803D"} />
+                                  <Text style={{ fontSize: 11, fontWeight: "700", color: isDark ? "#4ADE80" : "#15803D" }}>
+                                    Facture
+                                  </Text>
+                                  <Text style={{ fontSize: 13, fontWeight: "800", color: isDark ? "#86EFAC" : "#16A34A", marginLeft: "auto" }}>
+                                    {formatPrice(intervention.amount_invoice)}
+                                  </Text>
+                                </View>
                               </View>
                             )}
                         </View>
