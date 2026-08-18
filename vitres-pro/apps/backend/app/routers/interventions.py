@@ -357,8 +357,6 @@ def create_intervention(
 ):
     if current_user.role == 'subcontractor':
         raise HTTPException(status_code=403, detail="Réservé aux admins et employés.")
-    if intervention.type == "tournee":
-        raise HTTPException(status_code=409, detail="Créez les nouvelles tournees depuis le module Tournees.")
     # Rejeu d'une operation hors-connexion deja traitee : on renvoie l'existante
     # au lieu d'en creer une seconde.
     seen = already_processed(db, intervention.client_operation_id)
