@@ -1400,6 +1400,17 @@ export default function InterventionDetailScreen() {
                               {formatPrice(intervention.price_estimated)}
                             </Text>
                           </View>
+                          {intervention.payment_mode === "invoice_cash" &&
+                            intervention.amount_cash != null && (
+                              <View className="flex-row justify-between items-center mt-1">
+                                <Text className="text-sm text-muted-foreground">
+                                  dont Cash / Facture
+                                </Text>
+                                <Text className="text-sm font-semibold text-foreground dark:text-white">
+                                  {formatPrice(intervention.amount_cash)} / {formatPrice(intervention.amount_invoice)}
+                                </Text>
+                              </View>
+                            )}
                         </View>
                       ) : (
                         <View className="flex-row justify-between items-center mb-4">
