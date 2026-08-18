@@ -35,6 +35,19 @@ def _item_effective_price(item) -> float:
         return price
     return math.ceil((price * ON_DEMAND_MULTIPLIER) / 5) * 5
 
+def _validate_payment_split(payment_mode, price_estimated, amount_cash, amount_invoice) -> None:
+    """En mode FAC+ESP, la somme cash + facture doit egaler exactement le
+    prix total : evite un montant "perdu" ou double-compte a la cloture."""
+    if payment_mode != "invoice_cash":
+        return
+    total = round(float(price_estimated or 0), 2)
+    split = round(float(amount_cash or 0) + float(amount_invoice or 0), 2)
+    if split != total:
+        raise HTTPException(
+            status_code=400,
+            detail=f"La somme Cash + Facture ({split}€) doit être égale au total ({total}€).",
+        )
+
 class BulkAssignBody(BaseModel):
     date: date
     sub_zone: str
@@ -429,6 +442,11 @@ def create_intervention(
     if not new_intervention.price_estimated or new_intervention.price_estimated == 0:
         new_intervention.price_estimated = total_price
 
+    _validate_payment_split(
+        new_intervention.payment_mode, new_intervention.price_estimated,
+        new_intervention.amount_cash, new_intervention.amount_invoice,
+    )
+
     db.add(new_intervention)
     db.flush()  # pour avoir l'id avant le commit
 
@@ -599,7 +617,7 @@ def update_intervention(
         SUBCONTRACTOR_ALLOWED = {"status", "real_start_time", "real_end_time"}
         intervention_update = {k: v for k, v in intervention_update.items() if k in SUBCONTRACTOR_ALLOWED}
     elif current_user.role != 'admin':
-        EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time", "payment_mode", "is_invoice"}
+        EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time", "payment_mode", "is_invoice", "amount_cash", "amount_invoice"}
         intervention_update = {k: v for k, v in intervention_update.items() if k in EMPLOYEE_ALLOWED}
 
     old_status = db_intervention.status
@@ -633,6 +651,11 @@ def update_intervention(
                 ))
         elif hasattr(db_intervention, key):
             setattr(db_intervention, key, value)
+
+    _validate_payment_split(
+        db_intervention.payment_mode, db_intervention.price_estimated,
+        db_intervention.amount_cash, db_intervention.amount_invoice,
+    )
 
     # Audit log
     new_status = intervention_update.get("status")
@@ -782,6 +805,15 @@ def update_items_done(
     db_intervention.price_estimated = sum(
         _item_effective_price(item) for item in db_intervention.items if item.done
     ) + sum(float(row.price) for row in new_rows)
+
+    # Le recalcul ci-dessus peut invalider un split cash/facture deja saisi
+    # (la somme ne correspond plus au nouveau total) : on le reinitialise
+    # plutot que de bloquer la cloture, ca forcera une re-saisie cote mobile.
+    if db_intervention.payment_mode == "invoice_cash":
+        split = round(float(db_intervention.amount_cash or 0) + float(db_intervention.amount_invoice or 0), 2)
+        if split != round(float(db_intervention.price_estimated or 0), 2):
+            db_intervention.amount_cash = None
+            db_intervention.amount_invoice = None
 
     _add_audit(
         db, "items_adjusted", current_user.id, intervention_id,

@@ -201,7 +201,14 @@ def _weekly_cash_amount(db: Session, emp: Employee, week_start: date, week_end: 
     )
     total = 0.0
     for iv in interventions:
-        if any(e.id == emp.id for e in iv.employees):
+        if not any(e.id == emp.id for e in iv.employees):
+            continue
+        if iv.payment_mode == "invoice_cash":
+            # Part cash uniquement. NULL (ancienne ligne, ou split reinitialise
+            # par une cloture qui a change le total) : on retombe sur le prix
+            # total pour ne pas sous-declarer silencieusement le cash du.
+            total += float(iv.amount_cash) if iv.amount_cash is not None else float(iv.price_estimated or 0)
+        else:  # "cash"
             total += float(iv.price_estimated or 0)
     return round(total, 2)
 

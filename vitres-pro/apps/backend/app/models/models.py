@@ -221,6 +221,10 @@ class Intervention(Base):
     price_estimated = Column(Numeric(10, 2), nullable=True)
     is_invoice = Column(Boolean, default=False)
     payment_mode = Column(String(20), default="cash", nullable=False)  # "cash" | "invoice" | "invoice_cash"
+    # Split du montant quand payment_mode == "invoice_cash" : part payée en especes
+    # vs part facturee. NULL = pas encore renseigne (ancienne ligne ou reset par cloture).
+    amount_cash = Column(Numeric(10, 2), nullable=True)
+    amount_invoice = Column(Numeric(10, 2), nullable=True)
     google_event_id = Column(String, nullable=True, unique=True, index=True)
     zone = Column(String(20), nullable=True)      # "hainaut" ou "ardennes"
     sub_zone = Column(String(60), nullable=True)  # code sous-zone ex: "HAINAUT_BRAINE_TUBIZE"

@@ -41,6 +41,8 @@ import {
   applyChainServiceDelete,
 } from "../../../src/lib/offline/optimistic";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
+import { PaymentSplitInputs } from "../../../src/ui/components/PaymentSplitInputs";
+import { validatePaymentSplit } from "../../../src/lib/payment";
 import {
   PlusCircle,
   Trash2,
@@ -604,6 +606,16 @@ export default function AddInterventionScreen() {
   const [paymentMode, setPaymentMode] = useState<
     "cash" | "invoice" | "invoice_cash"
   >("cash");
+  const [amountCash, setAmountCash] = useState("");
+  const [amountInvoice, setAmountInvoice] = useState("");
+
+  useEffect(() => {
+    if (hideCash && paymentMode === "invoice_cash") {
+      setPaymentMode("invoice");
+      setAmountCash("");
+      setAmountInvoice("");
+    }
+  }, [hideCash, paymentMode]);
 
   const defaultStart = useMemo(() => {
     const tomorrow = new Date();
@@ -948,6 +960,8 @@ export default function AddInterventionScreen() {
         (interventionData.payment_mode as any) ??
           (interventionData.is_invoice ? "invoice" : "cash"),
       );
+      setAmountCash(interventionData.amount_cash != null ? String(interventionData.amount_cash) : "");
+      setAmountInvoice(interventionData.amount_invoice != null ? String(interventionData.amount_invoice) : "");
       if (interventionData.type)
         setIntervType(interventionData.type as IntervType);
       if (interventionData.zone)
@@ -1147,6 +1161,8 @@ export default function AddInterventionScreen() {
         setOnDemandServiceIds(new Set());
         setAdHocItems([]);
         setPaymentMode(hideCash ? "invoice" : "cash");
+        setAmountCash("");
+        setAmountInvoice("");
         setStartDateStr(defaultStart);
         setEndDateStr(defaultEnd);
         setTimeTbd(true);
@@ -1301,6 +1317,8 @@ export default function AddInterventionScreen() {
 
   const handleSubmit = async (scope: "this" | "following" | "all" = "this") => {
     if (!title) return toast.error("Titre", "Titre requis.");
+    const splitError = validatePaymentSplit(paymentMode, totalPrice, amountCash, amountInvoice);
+    if (splitError) return toast.error("Paiement", splitError);
     const datePart = startDateStr.split("T")[0];
     let startParsed: Date, endParsed: Date, dur: number;
     if (timeTbd) {
@@ -1328,6 +1346,8 @@ export default function AddInterventionScreen() {
         price_estimated: totalPrice,
         payment_mode: paymentMode,
         is_invoice: paymentMode !== "cash",
+        amount_cash: paymentMode === "invoice_cash" ? parseFloat(amountCash.replace(",", ".")) || 0 : null,
+        amount_invoice: paymentMode === "invoice_cash" ? parseFloat(amountInvoice.replace(",", ".")) || 0 : null,
         items: cleanItems.map((i) => ({
           label: i.label,
           price: (i as Item).negative ? signedPrice(i as Item) : parseFloat(String(i.price).replace(",", ".")) || 0,
@@ -1601,6 +1621,8 @@ export default function AddInterventionScreen() {
         price_estimated: totalPrice,
         payment_mode: paymentMode,
         is_invoice: paymentMode !== "cash",
+        amount_cash: paymentMode === "invoice_cash" ? parseFloat(amountCash.replace(",", ".")) || 0 : null,
+        amount_invoice: paymentMode === "invoice_cash" ? parseFloat(amountInvoice.replace(",", ".")) || 0 : null,
         items: cleanItems.map((i) => ({
           label: i.label,
           price: (i as Item).negative ? signedPrice(i as Item) : parseFloat(String(i.price).replace(",", ".")) || 0,
@@ -1991,7 +2013,7 @@ export default function AddInterventionScreen() {
                   <View
                     style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
                   >
-                    {(Object.keys(TYPE_CONFIG) as IntervType[]).filter((t) => t !== "tournee" || isEditMode).map((t) => {
+                    {(Object.keys(TYPE_CONFIG) as IntervType[]).map((t) => {
                       const cfg = TYPE_CONFIG[t];
                       const active = intervType === t;
                       return (
@@ -3017,7 +3039,7 @@ export default function AddInterventionScreen() {
                         activeTextColor: "#fff",
                         icon: (c: string) => <FileText size={14} color={c} />,
                       },
-                      {
+                      !hideCash && {
                         id: "invoice_cash",
                         label: "FAC+Esp.",
                         pillColor: "#F97316",
@@ -3051,11 +3073,20 @@ export default function AddInterventionScreen() {
                     </Text>
                   )}
                   {paymentMode === "invoice_cash" && (
-                    <Text
-                      style={{ fontSize: 11, color: "#F97316", marginTop: 5 }}
-                    >
-                      L'employé encaisse sur place et une facture sera émise
-                    </Text>
+                    <>
+                      <Text
+                        style={{ fontSize: 11, color: "#F97316", marginTop: 5 }}
+                      >
+                        L'employé encaisse sur place et une facture sera émise
+                      </Text>
+                      <PaymentSplitInputs
+                        total={totalPrice}
+                        amountCash={amountCash}
+                        amountInvoice={amountInvoice}
+                        onChangeCash={setAmountCash}
+                        onChangeInvoice={setAmountInvoice}
+                      />
+                    </>
                   )}
                 </View>
               )}

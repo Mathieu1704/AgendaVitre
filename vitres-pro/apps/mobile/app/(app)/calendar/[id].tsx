@@ -70,6 +70,8 @@ import { useCreateReinforcement } from "../../../src/hooks/useInterventions";
 import { OptionsModal } from "../../../src/ui/components/OptionsModal";
 import { ConfirmModal } from "../../../src/ui/components/ConfirmModal";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
+import { PaymentSplitInputs } from "../../../src/ui/components/PaymentSplitInputs";
+import { isCashRelated, validatePaymentSplit } from "../../../src/lib/payment";
 import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
 import { Dialog } from "../../../src/ui/components/Dialog";
 import { Input } from "../../../src/ui/components/Input";
@@ -123,6 +125,8 @@ export default function InterventionDetailScreen() {
   const [reinforcementTimeStr, setReinforcementTimeStr] = useState("");
   const [editingPayment, setEditingPayment] = useState(false);
   const [pendingPaymentMode, setPendingPaymentMode] = useState<"cash" | "invoice" | "invoice_cash">("cash");
+  const [pendingAmountCash, setPendingAmountCash] = useState("");
+  const [pendingAmountInvoice, setPendingAmountInvoice] = useState("");
   const [showAllDoneConfirm, setShowAllDoneConfirm] = useState(false);
   const [showItemsChecklist, setShowItemsChecklist] = useState(false);
   const [notDoneIds, setNotDoneIds] = useState<Set<string>>(new Set());
@@ -265,8 +269,7 @@ export default function InterventionDetailScreen() {
 
   useEffect(() => {
     if (!intervention || !isFocused.current) return;
-    const isCash = intervention.payment_mode === "cash" || !intervention.payment_mode;
-    if (hideCash && isCash) {
+    if (hideCash && isCashRelated(intervention.payment_mode)) {
       router.replace({
         pathname: "/(app)/calendar",
         params: {
@@ -468,13 +471,23 @@ export default function InterventionDetailScreen() {
   // qui garantit l'ordre d'envoi et permet de travailler sans réseau. Le retour
   // visuel vient de la mise à jour optimiste, plus de la réponse du serveur.
   const paymentMutation = useMutation({
-    mutationFn: async (mode: "cash" | "invoice" | "invoice_cash") => {
-      applyPaymentMode(queryClient, String(id), mode);
+    mutationFn: async (payload: {
+      mode: "cash" | "invoice" | "invoice_cash";
+      amountCash: number | null;
+      amountInvoice: number | null;
+    }) => {
+      const { mode, amountCash, amountInvoice } = payload;
+      applyPaymentMode(queryClient, String(id), mode, amountCash, amountInvoice);
       await enqueue({
         kind: "payment-mode",
         method: "PATCH",
         url: `/api/interventions/${id}`,
-        body: { payment_mode: mode, is_invoice: mode !== "cash" },
+        body: {
+          payment_mode: mode,
+          is_invoice: mode !== "cash",
+          amount_cash: amountCash,
+          amount_invoice: amountInvoice,
+        },
         label: "Mode de paiement",
       });
     },
@@ -824,7 +837,7 @@ export default function InterventionDetailScreen() {
               const mode = intervention.payment_mode || (intervention.is_invoice ? "invoice" : "cash");
               const cfg = {
                 cash:         { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FCA5A5" : "#DC2626" },
-                invoice_cash: { bg: isDark ? "rgba(154,52,18,0.2)" : "#FFEDD5", border: isDark ? "rgba(154,52,18,0.5)" : "#FED7AA", iconBg: "#F97316", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#FB923C" : "#C2410C", sub: `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FDBA74" : "#EA580C" },
+                invoice_cash: { bg: isDark ? "rgba(154,52,18,0.2)" : "#FFEDD5", border: isDark ? "rgba(154,52,18,0.5)" : "#FED7AA", iconBg: "#F97316", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#FB923C" : "#C2410C", sub: intervention.amount_cash != null ? `Le client doit payer ${formatPrice(intervention.amount_cash)} en espèces (+ facture ${formatPrice(intervention.amount_invoice ?? 0)}).` : `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FDBA74" : "#EA580C" },
                 invoice:      { bg: isDark ? "rgba(21,128,61,0.15)" : "#F0FDF4", border: isDark ? "rgba(21,128,61,0.4)" : "#BBF7D0", iconBg: "#22C55E", title: "PAIEMENT PAR FACTURE", titleColor: isDark ? "#4ADE80" : "#15803D", sub: "Le client sera facturé.", subColor: isDark ? "#86EFAC" : "#16A34A" },
               }[mode as string] ?? { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FCA5A5" : "#DC2626" };
 
@@ -856,6 +869,8 @@ export default function InterventionDetailScreen() {
                     <Pressable
                       onPress={() => {
                         setPendingPaymentMode(mode as any);
+                        setPendingAmountCash(intervention.amount_cash != null ? String(intervention.amount_cash) : "");
+                        setPendingAmountInvoice(intervention.amount_invoice != null ? String(intervention.amount_invoice) : "");
                         setEditingPayment((v) => !v);
                       }}
                       style={{ padding: 8, borderRadius: 20, backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }}
@@ -882,7 +897,7 @@ export default function InterventionDetailScreen() {
                         options={[
                           !hideCash && { id: "cash",         label: "Espèces",  pillColor: "#EF4444", activeTextColor: "#fff", icon: (c: string) => <Banknote size={13} color={c} /> },
                           { id: "invoice",      label: "Facture",  pillColor: "#22C55E", activeTextColor: "#fff", icon: (c: string) => <FileText size={13} color={c} /> },
-                          { id: "invoice_cash", label: "FAC+Esp.", pillColor: "#F97316", activeTextColor: "#fff", icon: (c: string) => <Wallet  size={13} color={c} /> },
+                          !hideCash && { id: "invoice_cash", label: "FAC+Esp.", pillColor: "#F97316", activeTextColor: "#fff", icon: (c: string) => <Wallet  size={13} color={c} /> },
                         ].filter(Boolean) as any}
                         selected={pendingPaymentMode}
                         onSelect={(id) => setPendingPaymentMode(id as any)}
@@ -893,21 +908,46 @@ export default function InterventionDetailScreen() {
                         fontSize={12}
                         itemPy={8}
                       />
-                      <Pressable
-                        onPress={() => paymentMutation.mutate(pendingPaymentMode)}
-                        disabled={paymentMutation.isPending}
-                        style={{
-                          backgroundColor: "#3B82F6",
-                          borderRadius: 12,
-                          paddingVertical: 10,
-                          alignItems: "center",
-                          opacity: paymentMutation.isPending ? 0.6 : 1,
-                        }}
-                      >
-                        {paymentMutation.isPending
-                          ? <ActivityIndicator color="white" size="small" />
-                          : <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>Confirmer</Text>}
-                      </Pressable>
+                      {pendingPaymentMode === "invoice_cash" && (
+                        <PaymentSplitInputs
+                          total={intervention.price_estimated ?? 0}
+                          amountCash={pendingAmountCash}
+                          amountInvoice={pendingAmountInvoice}
+                          onChangeCash={setPendingAmountCash}
+                          onChangeInvoice={setPendingAmountInvoice}
+                        />
+                      )}
+                      {(() => {
+                        const splitError = validatePaymentSplit(
+                          pendingPaymentMode,
+                          intervention.price_estimated ?? 0,
+                          pendingAmountCash,
+                          pendingAmountInvoice,
+                        );
+                        return (
+                          <Pressable
+                            onPress={() =>
+                              paymentMutation.mutate({
+                                mode: pendingPaymentMode,
+                                amountCash: pendingPaymentMode === "invoice_cash" ? parseFloat(pendingAmountCash.replace(",", ".")) || 0 : null,
+                                amountInvoice: pendingPaymentMode === "invoice_cash" ? parseFloat(pendingAmountInvoice.replace(",", ".")) || 0 : null,
+                              })
+                            }
+                            disabled={paymentMutation.isPending || !!splitError}
+                            style={{
+                              backgroundColor: "#3B82F6",
+                              borderRadius: 12,
+                              paddingVertical: 10,
+                              alignItems: "center",
+                              opacity: paymentMutation.isPending || splitError ? 0.6 : 1,
+                            }}
+                          >
+                            {paymentMutation.isPending
+                              ? <ActivityIndicator color="white" size="small" />
+                              : <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>Confirmer</Text>}
+                          </Pressable>
+                        );
+                      })()}
                     </View>
                   )}
                 </View>

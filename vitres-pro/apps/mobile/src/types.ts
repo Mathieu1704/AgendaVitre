@@ -19,6 +19,8 @@ export interface Client {
   address: string;
 }
 
+export type PaymentMode = "cash" | "invoice" | "invoice_cash";
+
 export interface Intervention {
   id: string;
   title: string;
@@ -27,6 +29,11 @@ export interface Intervention {
   end_time: string; // ISO String
   status: "planned" | "in_progress" | "done" | "cancelled" | string;
   price_estimated?: number;
+  payment_mode?: PaymentMode;
+  is_invoice?: boolean;
+  // Split cash/facture, utilisé uniquement quand payment_mode === "invoice_cash".
+  amount_cash?: number | null;
+  amount_invoice?: number | null;
   zone: "hainaut" | "ardennes";
   recurrence_rule?: {
     freq?: string;

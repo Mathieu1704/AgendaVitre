@@ -89,11 +89,15 @@ export function applyPaymentMode(
   qc: QueryClient,
   interventionId: string,
   mode: "cash" | "invoice" | "invoice_cash",
+  amountCash: number | null = null,
+  amountInvoice: number | null = null,
 ): void {
   patchIntervention(qc, interventionId, (current) => ({
     ...current,
     payment_mode: mode,
     is_invoice: mode !== "cash",
+    amount_cash: amountCash,
+    amount_invoice: amountInvoice,
   }));
 }
 
