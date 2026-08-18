@@ -174,6 +174,12 @@ function RootLayout() {
         void flushPersistedQueryCache();
       }
     });
+    // AppState "change" ne se déclenche que sur une transition depuis un état
+    // précédent : au tout premier lancement après une install fraîche, il n'y
+    // en a pas encore, donc le check ci-dessus ne s'arme jamais tant que
+    // l'app n'a pas été mise en arrière-plan puis rouverte une fois. On
+    // vérifie donc aussi explicitement au montage pour couvrir ce cas.
+    void checkForOtaUpdate();
     return () => subscription.remove();
   }, []);
 
