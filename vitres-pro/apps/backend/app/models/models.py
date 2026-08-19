@@ -238,6 +238,16 @@ class Intervention(Base):
     # Identité stable partagée par toutes les reprises d'une même intervention
     # sans client (permet un catalogue de services persistant sans fiche client).
     reprise_chain_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    # Lien persiste vers l'intervention source de la reprise : permet de savoir
+    # après coup qu'une intervention est issue d'une reprise (restriction
+    # d'édition employé) et de retrouver son solde cash reporté éventuel.
+    reprise_of_id = Column(UUID(as_uuid=True), ForeignKey("interventions.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    # Report de paiement cash (client absent au passage) : le montant reste
+    # "en attente" tant que deferred_settled_by_intervention_id est NULL, et
+    # n'est alors compté dans aucun total cash hebdomadaire.
+    deferred_cash_amount = Column(Numeric(10, 2), nullable=True)
+    deferred_settled_by_intervention_id = Column(UUID(as_uuid=True), ForeignKey("interventions.id", ondelete="SET NULL"), nullable=True)
 
     # Renfort : intervention légère créée pour qu'un employé vienne épauler une
     # intervention préexistante assignée à un(des) autre(s) employé(s), sans

@@ -203,6 +203,12 @@ def _weekly_cash_amount(db: Session, emp: Employee, week_start: date, week_end: 
     for iv in interventions:
         if not any(e.id == emp.id for e in iv.employees):
             continue
+        if iv.deferred_cash_amount is not None:
+            # Paiement reporte (client absent) : cette intervention ne compte
+            # jamais dans le total cash de SA semaine, meme une fois reglee —
+            # l'argent est compte plus tard, sur l'intervention qui l'encaisse
+            # reellement (son propre amount_cash/price_estimated normal).
+            continue
         if iv.payment_mode == "invoice_cash":
             # Part cash uniquement. NULL (ancienne ligne, ou split reinitialise
             # par une cloture qui a change le total) : on retombe sur le prix

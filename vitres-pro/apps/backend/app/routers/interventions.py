@@ -86,6 +86,26 @@ def _load_intervention(intervention_id: UUID, db: Session) -> Intervention:
     ).filter(Intervention.id == intervention_id).first()
 
 
+def _pending_deferred_amount(db: Session, intervention: Intervention):
+    """Cherche, sur la chaine de reprise de cette intervention, le dernier
+    montant cash reporte (client absent) pas encore encaisse. Utilise pour
+    afficher un bandeau "Solde precedent du" et prerempir le split cash au
+    RDV suivant."""
+    if not intervention.reprise_chain_id:
+        return None
+    pending = (
+        db.query(Intervention)
+        .filter(
+            Intervention.reprise_chain_id == intervention.reprise_chain_id,
+            Intervention.deferred_cash_amount.isnot(None),
+            Intervention.deferred_settled_by_intervention_id.is_(None),
+        )
+        .order_by(Intervention.start_time.desc())
+        .first()
+    )
+    return float(pending.deferred_cash_amount) if pending else None
+
+
 def _migrate_orphan_items_to_chain(db: Session, intervention: Intervention, chain_id) -> dict:
     """Convertit les items ad-hoc existants d'une intervention (label+prix
     seuls, sans catalogue) en entrées intervention_services au moment où sa
@@ -346,6 +366,7 @@ def read_intervention(
             raise HTTPException(status_code=403, detail="Tournee non assignee ou non publiee.")
     if current_user.role == 'subcontractor':
         _strip_prices([intervention])
+    intervention.pending_deferred_amount = _pending_deferred_amount(db, intervention)
     return intervention
 
 
@@ -371,7 +392,7 @@ def create_intervention(
             raise HTTPException(status_code=404, detail="Client introuvable")
 
     data = intervention.model_dump(
-        exclude={"employee_ids", "items", "reprise_of_id", "client_operation_id"}
+        exclude={"employee_ids", "items", "reprise_of_id", "client_operation_id", "settle_deferred_intervention_id"}
     )
     if current_user.role != 'admin':
         data["zone"] = current_user.zone
@@ -385,6 +406,7 @@ def create_intervention(
     new_intervention = Intervention(**data)
     if new_intervention.id is None:
         new_intervention.id = uuid.uuid4()
+    new_intervention.reprise_of_id = intervention.reprise_of_id
 
     # Chaîne de reprises : identité stable reliant une intervention sans
     # client à ses reprises suivantes (sert de catalogue "intervention_services").
@@ -440,6 +462,21 @@ def create_intervention(
     if not new_intervention.price_estimated or new_intervention.price_estimated == 0:
         new_intervention.price_estimated = total_price
 
+    # Solde cash reporte (client absent au RDV precedent de la chaine) que
+    # cette nouvelle intervention absorbe : ajoute au prix total pour que le
+    # split cash/facture et les totaux (semaine, CA) refletent le montant
+    # reellement du/encaisse, sans jamais avoir compte le report deux fois
+    # (l'intervention source reste exclue en permanence, voir _weekly_cash_amount).
+    deferred_source = None
+    if intervention.settle_deferred_intervention_id:
+        deferred_source = db.query(Intervention).filter(
+            Intervention.id == intervention.settle_deferred_intervention_id,
+            Intervention.deferred_cash_amount.isnot(None),
+            Intervention.deferred_settled_by_intervention_id.is_(None),
+        ).first()
+        if deferred_source:
+            new_intervention.price_estimated = float(new_intervention.price_estimated or 0) + float(deferred_source.deferred_cash_amount)
+
     _validate_payment_split(
         new_intervention.payment_mode, new_intervention.price_estimated,
         new_intervention.amount_cash, new_intervention.amount_invoice,
@@ -447,6 +484,9 @@ def create_intervention(
 
     db.add(new_intervention)
     db.flush()  # pour avoir l'id avant le commit
+
+    if deferred_source:
+        deferred_source.deferred_settled_by_intervention_id = new_intervention.id
 
     _add_audit(
         db, "created", current_user.id, new_intervention.id,
@@ -615,7 +655,14 @@ def update_intervention(
         SUBCONTRACTOR_ALLOWED = {"status", "real_start_time", "real_end_time"}
         intervention_update = {k: v for k, v in intervention_update.items() if k in SUBCONTRACTOR_ALLOWED}
     elif current_user.role != 'admin':
-        EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time", "payment_mode", "is_invoice", "amount_cash", "amount_invoice"}
+        # Une intervention issue d'une reprise (RDV réattribué en série) ne
+        # doit être modifiable par un employé que sur les prestations (via
+        # /items-done) et sa propre clôture — pas l'horaire, le prix ou le
+        # paiement, qui restent définis par la source de la chaîne.
+        if db_intervention.reprise_of_id:
+            EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note"}
+        else:
+            EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time", "payment_mode", "is_invoice", "amount_cash", "amount_invoice"}
         intervention_update = {k: v for k, v in intervention_update.items() if k in EMPLOYEE_ALLOWED}
 
     old_status = db_intervention.status
@@ -778,11 +825,18 @@ def update_items_done(
     valid_ids = {item.id for item in db_intervention.items}
     not_done_ids = valid_ids.intersection(set(body.not_done_item_ids))
 
+    # Capture avant modif pour detecter les prestations qu'on decoche
+    # vraiment (transition true -> false), et notifier les admins.
+    prev_done_by_id = {item.id: item.done for item in db_intervention.items}
+    newly_unchecked_labels = []
+
     for item in db_intervention.items:
         item.done = item.id not in not_done_ids
         if item.id in not_done_ids:
             note = body.not_done_notes.get(str(item.id), "").strip()
             item.note = note or None
+            if prev_done_by_id.get(item.id) is True:
+                newly_unchecked_labels.append(item.label)
         else:
             item.note = None
 
@@ -822,6 +876,26 @@ def update_items_done(
             "new_price_estimated": db_intervention.price_estimated,
         },
     )
+
+    if newly_unchecked_labels:
+        emp_name = current_user.full_name or current_user.email or "Un employé"
+        client_label = db_intervention.client.name if db_intervention.client else db_intervention.title
+        labels_str = ", ".join(f"« {label} »" for label in newly_unchecked_labels)
+        message = f"{emp_name} a décoché {labels_str} sur « {db_intervention.title} » ({client_label})"
+        admins = db.query(Employee).filter(Employee.role == "admin").all()
+        for admin in admins:
+            db.add(InAppNotification(
+                recipient_id=admin.id,
+                type="service_unchecked",
+                title="Prestation décochée",
+                message=message,
+                metadata_={
+                    "intervention_id": str(intervention_id),
+                    "employee_id": str(current_user.id),
+                    "intervention_title": db_intervention.title,
+                    "item_labels": newly_unchecked_labels,
+                },
+            ))
 
     db.commit()
     db.refresh(db_intervention)
@@ -968,6 +1042,79 @@ def no_reprise(
     record_operation(
         db, op_uuid, current_user.id,
         f"POST /api/interventions/{intervention_id}/no-reprise", intervention_id,
+    )
+
+    db.commit()
+    return {"message": "ok"}
+
+
+@router.post("/{intervention_id}/defer-cash")
+def defer_cash(
+    intervention_id: UUID,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Client absent au passage : le cash prevu n'est pas encaisse maintenant,
+    il est reporte au prochain RDV de la chaine de reprise. Le montant ne doit
+    pas entrer dans le total cash de la semaine tant qu'il n'est pas
+    effectivement encaisse (voir _weekly_cash_amount)."""
+    op_id = payload.get("client_operation_id")
+    op_uuid = UUID(op_id) if isinstance(op_id, str) else op_id
+    if already_processed(db, op_uuid) is not None:
+        return {"message": "ok", "replayed": True}
+
+    intervention = db.query(Intervention).filter(Intervention.id == intervention_id).first()
+    if not intervention:
+        raise HTTPException(status_code=404, detail="Introuvable")
+    if intervention.tour_run:
+        raise HTTPException(status_code=409, detail="Utilisez la checklist Tournees pour ce cas.")
+    if intervention.payment_mode not in ("cash", "invoice_cash"):
+        raise HTTPException(status_code=400, detail="Le report de cash ne s'applique qu'aux modes cash/FAC+ESP.")
+
+    try:
+        amount = float(payload.get("amount"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Montant invalide")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Le montant doit être positif")
+
+    note = (payload.get("note") or "").strip()
+
+    intervention.deferred_cash_amount = amount
+    if intervention.payment_mode == "invoice_cash":
+        intervention.amount_cash = 0
+
+    emp_name = current_user.full_name or current_user.email or "Un employé"
+    client_label = intervention.client.name if intervention.client else intervention.title
+    description = f"{emp_name} a reporté {amount}€ (client absent) sur « {intervention.title} » ({client_label})"
+    if note:
+        description += f" — {note}"
+
+    _add_audit(
+        db, "deferred_cash", current_user.id, intervention_id,
+        description,
+        {"amount": amount, "note": note, "intervention_title": intervention.title},
+    )
+
+    admins = db.query(Employee).filter(Employee.role == "admin").all()
+    for admin in admins:
+        db.add(InAppNotification(
+            recipient_id=admin.id,
+            type="deferred_cash",
+            title="Paiement reporté",
+            message=description,
+            metadata_={
+                "intervention_id": str(intervention_id),
+                "employee_id": str(current_user.id),
+                "intervention_title": intervention.title,
+                "amount": amount,
+            },
+        ))
+
+    record_operation(
+        db, op_uuid, current_user.id,
+        f"POST /api/interventions/{intervention_id}/defer-cash", intervention_id,
     )
 
     db.commit()

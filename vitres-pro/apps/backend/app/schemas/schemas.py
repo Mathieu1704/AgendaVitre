@@ -230,6 +230,10 @@ class InterventionBase(BaseModel):
 
 class InterventionCreate(InterventionBase):
     reprise_of_id: Optional[UUID] = None
+    # Intervention source d'un solde cash reporte (client absent) que cette
+    # nouvelle intervention absorbe des sa creation (montant deja inclus
+    # dans amount_cash/price_estimated cote frontend).
+    settle_deferred_intervention_id: Optional[UUID] = None
     # Id genere par la file d'attente hors-connexion du mobile : permet de
     # detecter un rejeu et d'eviter de creer l'intervention en double.
     client_operation_id: Optional[UUID] = None
@@ -270,6 +274,10 @@ class InterventionOut(BaseModel):
     reprise_taken: Optional[bool] = None
     reprise_note: Optional[str] = None
     reprise_chain_id: Optional[UUID] = None
+    reprise_of_id: Optional[UUID] = None
+    deferred_cash_amount: Optional[float] = None
+    deferred_settled_by_intervention_id: Optional[UUID] = None
+    pending_deferred_amount: Optional[float] = None
     reinforcement_for_id: Optional[UUID] = None
     address: Optional[str] = None
     phone: Optional[str] = None
