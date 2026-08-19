@@ -215,10 +215,12 @@ export default function InterventionDetailScreen() {
   const { data: companySettings } = useCompanySettings();
   const hideCash = companySettings?.hide_cash ?? false;
 
-  // Fil de notes : canal admin <-> employé(s)/sous-traitant(s) assigné(s) à cette intervention
+  // Fil de notes : ouvert à l'admin et à tout employé (assigné ou non — un
+  // employé qui prépare un RDV pas encore assigné doit pouvoir y laisser une
+  // note), un sous-traitant reste restreint aux RDV qui lui sont assignés.
   const canSeeNotes =
     !!intervention &&
-    (isAdmin || (intervention.employees || []).some((e: any) => e.id === employeeId));
+    (!isSubcontractor || (intervention.employees || []).some((e: any) => e.id === employeeId));
 
   const { data: notes, refetch: refetchNotes } = useQuery({
     queryKey: ["intervention-notes", id],

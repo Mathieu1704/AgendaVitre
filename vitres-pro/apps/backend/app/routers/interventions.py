@@ -666,7 +666,11 @@ def update_intervention(
         SUBCONTRACTOR_ALLOWED = {"status", "real_start_time", "real_end_time"}
         intervention_update = {k: v for k, v in intervention_update.items() if k in SUBCONTRACTOR_ALLOWED}
     elif current_user.role != 'admin':
-        EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time", "payment_mode", "is_invoice", "amount_cash", "amount_invoice"}
+        # "items"/"price_estimated" : un employe doit pouvoir preparer un RDV
+        # futur pas encore assigne (cocher/decocher les prestations prevues),
+        # meme depuis l'ecran d'edition classique — pas seulement a la
+        # cloture via /items-done.
+        EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time", "payment_mode", "is_invoice", "amount_cash", "amount_invoice", "items", "price_estimated"}
         intervention_update = {k: v for k, v in intervention_update.items() if k in EMPLOYEE_ALLOWED}
 
     old_status = db_intervention.status
@@ -1136,8 +1140,10 @@ def _note_out(n: InterventionNote) -> InterventionNoteOut:
     )
 
 def _assert_note_access(intervention: Intervention, current_user: Employee):
-    if current_user.role == "admin":
+    if current_user.role in ("admin", "employee"):
         return
+    # Sous-traitant : uniquement si assigné (comportement inchangé, ils ne
+    # doivent pas voir le canal de coordination des RDV qui ne les concernent pas).
     if current_user.id not in {e.id for e in intervention.employees}:
         raise HTTPException(status_code=403, detail="Accès aux notes réservé à l'admin et aux employés assignés")
 

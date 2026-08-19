@@ -56,6 +56,8 @@ import {
   Banknote,
   Wallet,
   Repeat,
+  ChevronRight,
+  CalendarClock,
 } from "lucide-react-native";
 import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
 import { Input } from "../../../src/ui/components/Input";
@@ -64,6 +66,7 @@ import { Select } from "../../../src/ui/components/Select";
 import { MultiSelect } from "../../../src/ui/components/MultiSelect";
 import { toast } from "../../../src/ui/toast";
 import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
+import { MultiDatePicker } from "../../../src/ui/components/MultiDatePicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Dialog } from "../../../src/ui/components/Dialog";
 
@@ -466,6 +469,12 @@ export default function AddInterventionScreen() {
         return (await api.get(`/api/interventions/${id}`)).data;
       },
       enabled: isEditMode,
+      // La mise à jour optimiste après édition (applyEditIntervention) écrit
+      // le payload d'envoi dans le cache, pas la forme exacte renvoyée par le
+      // serveur (ex: items sans id/done) — sans "always", rouvrir le même RDV
+      // dans les 30s (staleTime global) pouvait réhydrater le formulaire
+      // depuis cette forme approximative plutôt que l'état réellement enregistré.
+      refetchOnMount: "always",
     },
   );
 
@@ -626,6 +635,9 @@ export default function AddInterventionScreen() {
   const [startDateStr, setStartDateStr] = useState(defaultStart);
   const [endDateStr, setEndDateStr] = useState(defaultEnd);
   const [timeTbd, setTimeTbd] = useState(true);
+  // Mode reprise uniquement : dates ad hoc sélectionnées dans le calendrier
+  // (une intervention créée par date, pas une récurrence).
+  const [repriseDates, setRepriseDates] = useState<string[]>([]);
   const [selectedRateId, setSelectedRateId] = useState<string | null>(null);
 
   // Sync date part of endDateStr when startDateStr changes, and ensure end > start
@@ -1074,6 +1086,9 @@ export default function AddInterventionScreen() {
       setStartDateStr(toBrusselsDateTimeString(nextDate));
       setEndDateStr(toBrusselsDateTimeString(nextEnd));
       setTimeTbd(isAdmin ? (repriseSource.time_tbd ?? true) : true);
+      if (!isDuplicateMode) {
+        setRepriseDates([toBrusselsDateTimeString(nextDate).split("T")[0]]);
+      }
 
       const repriseClientId = repriseSource.client_id ?? repriseSource.client?.id;
       const foundClient = clients?.find((c) => c.id === repriseClientId);
@@ -1311,6 +1326,10 @@ export default function AddInterventionScreen() {
   const [showRecurrenceScopeDialog, setShowRecurrenceScopeDialog] = useState(false);
   const isRecurringSeries =
     isAdmin && isEditMode && !!interventionData?.recurrence_group_id;
+  // Un employé qui ouvre un RDV futur (pas encore assigné) depuis l'écran de
+  // reprise n'a besoin que de cocher/décocher les prestations et laisser une
+  // note — pas de toucher au client, au titre ou à l'horaire.
+  const isQuickPrepMode = isEditMode && !isAdmin;
   const original = originalRecurrenceRef.current;
   const recurrencePatternChanged =
     isRecurringSeries &&
@@ -1414,21 +1433,42 @@ export default function AddInterventionScreen() {
             ? "Intervention modifiée !"
             : "Modifiée. Sera synchronisée au retour du réseau.",
         );
-        router.dismissTo({
-          pathname: "/(app)/calendar",
-          params: {
-            date: from_date ?? startDateStr.split("T")[0],
-            ...(from_view ? { view: from_view } : {}),
-            ...(from_zone ? { zone: from_zone } : {}),
-          },
-        });
+        // Prep rapide (RDV futur ouvert depuis l'écran de reprise) : on
+        // revient sur cet écran de reprise, pas sur le planning général.
+        if (isQuickPrepMode && router.canGoBack()) {
+          router.back();
+        } else {
+          router.dismissTo({
+            pathname: "/(app)/calendar",
+            params: {
+              date: from_date ?? startDateStr.split("T")[0],
+              ...(from_view ? { view: from_view } : {}),
+              ...(from_zone ? { zone: from_zone } : {}),
+            },
+          });
+        }
         return;
       }
 
-      // Calcul des occurrences (reprise ou création simple avec récurrence)
-      // Non-admin : date-only, pas de récurrence, time_tbd = true
+      // Calcul des occurrences (reprise multi-dates, reprise/employé simple,
+      // ou création admin avec récurrence)
       let occurrences: { start: Date; end: Date }[];
-      if (!isAdmin) {
+      if (isRepriseMode) {
+        // Dates ad hoc sélectionnées dans le calendrier, pas une récurrence :
+        // une occurrence indépendante par date, même heure/durée pour toutes.
+        const timePart = startDateStr.split("T")[1] || "09:00";
+        occurrences = repriseDates
+          .map((dateStr) => {
+            if (!isAdmin) {
+              const startUtc = new Date(`${dateStr}T00:00:00Z`);
+              return { start: startUtc, end: new Date(startUtc.getTime() + dur * 3600000) };
+            }
+            const base = parseBrusselsDateTimeString(`${dateStr}T${timePart}`);
+            return base ? { start: base, end: new Date(base.getTime() + dur * 3600000) } : null;
+          })
+          .filter((o): o is { start: Date; end: Date } => o !== null);
+      } else if (!isAdmin) {
+        // Non-admin : date-only, pas de récurrence, time_tbd = true
         const datePart = startDateStr.split("T")[0];
         const startUtc = new Date(`${datePart}T00:00:00Z`);
         const endUtc = new Date(startUtc.getTime() + dur * 3600000);
@@ -1442,7 +1482,7 @@ export default function AddInterventionScreen() {
         );
       }
       if (occurrences.length === 0)
-        return toast.error("Date", "Vérifie la date.");
+        return toast.error("Date", isRepriseMode ? "Sélectionne au moins une date." : "Vérifie la date.");
 
       // En duplication, l'intervention source existe déjà et représente la
       // première occurrence de la série : elle doit donc en faire partie
@@ -1452,8 +1492,10 @@ export default function AddInterventionScreen() {
       const sourceGroupId = isDuplicateMode
         ? (repriseSource?.recurrence_group_id ?? undefined)
         : undefined;
+      // Les dates de reprise multi-sélectionnées sont des RDV indépendants,
+      // pas une série récurrente : jamais de recurrence_group_id pour elles.
       const groupId =
-        occurrences.length > 1 ? sourceGroupId ?? newUuidV4() : undefined;
+        !isRepriseMode && occurrences.length > 1 ? sourceGroupId ?? newUuidV4() : undefined;
 
       if (isDuplicateMode && repriseSourceId && groupId && !sourceGroupId) {
         const sourceRecurrenceRule = {
@@ -1490,7 +1532,7 @@ export default function AddInterventionScreen() {
             ? { reprise_of_id: repriseSourceId }
             : {}),
           recurrence_rule:
-            occurrences.length > 1
+            !isRepriseMode && occurrences.length > 1
               ? {
                   freq:
                     recurrence.freq === "custom"
@@ -1859,7 +1901,7 @@ export default function AddInterventionScreen() {
           <Card className="max-w-2xl w-full self-center rounded-[40px] overflow-hidden">
             {/* BANNIÈRE "RDV NON REPRIS" (mode reprise uniquement) */}
             {isRepriseMode && (
-              <View style={{ padding: 16, paddingBottom: 0 }}>
+              <View style={{ padding: 16 }}>
                 {!noRepriseMode ? (
                   <Pressable
                     onPress={() => setNoRepriseMode(true)}
@@ -1932,29 +1974,96 @@ export default function AddInterventionScreen() {
                         <X size={18} color="#94A3B8" />
                       </Pressable>
                     </View>
-                    <TextInput
-                      value={noRepriseNote}
-                      onChangeText={setNoRepriseNote}
-                      placeholder="Note optionnelle (raison, contexte...)"
-                      placeholderTextColor="#94A3B8"
-                      multiline
-                      numberOfLines={3}
-                      style={[
-                        {
-                          fontSize: 14,
-                          color: isDark ? "#F1F5F9" : "#0f172a",
-                          backgroundColor: isDark ? "#0F172A" : "#FFF7ED",
-                          borderRadius: 12,
-                          padding: 12,
-                          minHeight: 70,
-                          borderWidth: 1.5,
-                          borderColor: "#FED7AA",
-                        },
-                        Platform.OS === "web"
-                          ? ({ outlineStyle: "none" } as any)
-                          : {},
-                      ]}
-                    />
+                    {upcomingClientInterventions.length > 0 ? (
+                      <View style={{ gap: 6 }}>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#C2410C" }}>
+                          {upcomingClientInterventions.length > 1
+                            ? `Ce client a déjà ${upcomingClientInterventions.length} RDV prévus`
+                            : "Ce client a déjà un RDV prévu"}
+                        </Text>
+                        <ScrollView style={{ maxHeight: 340 }} nestedScrollEnabled>
+                          <View style={{ gap: 6 }}>
+                            {upcomingClientInterventions.map((it: any) => (
+                              <Pressable
+                                key={it.id}
+                                onPress={() =>
+                                  router.push({
+                                    pathname: "/(app)/calendar/add",
+                                    params: { id: it.id },
+                                  } as any)
+                                }
+                                style={({ pressed }) => ({
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 10,
+                                  paddingVertical: 8,
+                                  paddingHorizontal: 10,
+                                  borderRadius: 12,
+                                  backgroundColor: pressed
+                                    ? (isDark ? "rgba(249,115,22,0.2)" : "#FFEDD5")
+                                    : (isDark ? "rgba(15,23,42,0.4)" : "#FFFFFF"),
+                                  borderWidth: 1,
+                                  borderColor: isDark ? "rgba(249,115,22,0.25)" : "#FED7AA",
+                                })}
+                              >
+                                <View
+                                  style={{
+                                    width: 30,
+                                    height: 30,
+                                    borderRadius: 9,
+                                    backgroundColor: "#F97316",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  <CalendarClock size={15} color="#fff" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ fontSize: 12, fontWeight: "700", color: isDark ? "#FDBA74" : "#C2410C" }}>
+                                    {new Date(it.start_time).toLocaleDateString("fr-FR", {
+                                      weekday: "short",
+                                      day: "numeric",
+                                      month: "short",
+                                    })}
+                                  </Text>
+                                  <Text
+                                    style={{ fontSize: 12, color: isDark ? "#CBD5E1" : "#78716C" }}
+                                    numberOfLines={1}
+                                  >
+                                    {it.title}
+                                  </Text>
+                                </View>
+                                <ChevronRight size={16} color={isDark ? "#FDBA74" : "#EA580C"} />
+                              </Pressable>
+                            ))}
+                          </View>
+                        </ScrollView>
+                      </View>
+                    ) : (
+                      <TextInput
+                        value={noRepriseNote}
+                        onChangeText={setNoRepriseNote}
+                        placeholder="Note optionnelle (raison, contexte...)"
+                        placeholderTextColor="#94A3B8"
+                        multiline
+                        numberOfLines={3}
+                        style={[
+                          {
+                            fontSize: 14,
+                            color: isDark ? "#F1F5F9" : "#0f172a",
+                            backgroundColor: isDark ? "#0F172A" : "#FFF7ED",
+                            borderRadius: 12,
+                            padding: 12,
+                            minHeight: 70,
+                            borderWidth: 1.5,
+                            borderColor: "#FED7AA",
+                          },
+                          Platform.OS === "web"
+                            ? ({ outlineStyle: "none" } as any)
+                            : {},
+                        ]}
+                      />
+                    )}
                     <Pressable
                       onPress={handleNoReprise}
                       disabled={isSubmittingNoReprise}
@@ -2113,7 +2222,7 @@ export default function AddInterventionScreen() {
               )}
 
               {/* CLIENT */}
-              {typeNeedsClient && (
+              {!isQuickPrepMode && typeNeedsClient && (
                 <View style={{ gap: 4 }}>
                   <Text className="text-sm font-semibold text-foreground dark:text-white">
                     Pour qui ?
@@ -2167,7 +2276,7 @@ export default function AddInterventionScreen() {
                     </Pressable>
                   </View>
 
-                  {upcomingClientInterventions.length > 0 && (
+                  {!isEditMode && upcomingClientInterventions.length > 0 && (
                     <View
                       style={{
                         marginTop: 8,
@@ -2188,20 +2297,65 @@ export default function AddInterventionScreen() {
                             : "Ce client a déjà un RDV prévu"}
                         </Text>
                         <ScrollView
-                          style={{ maxHeight: 160 }}
+                          style={{ maxHeight: 220 }}
                           nestedScrollEnabled
-                          showsVerticalScrollIndicator={upcomingClientInterventions.length > 4}
+                          showsVerticalScrollIndicator={upcomingClientInterventions.length > 3}
                         >
-                          {upcomingClientInterventions.map((it: any) => (
-                            <Text key={it.id} style={{ fontSize: 12, color: "#C2410C", paddingVertical: 1 }}>
-                              {new Date(it.start_time).toLocaleDateString("fr-FR", {
-                                day: "numeric",
-                                month: "short",
-                              })}
-                              {" — "}
-                              {it.title}
-                            </Text>
-                          ))}
+                          <View style={{ gap: 6 }}>
+                            {upcomingClientInterventions.map((it: any) => (
+                              <Pressable
+                                key={it.id}
+                                onPress={() =>
+                                  router.push({
+                                    pathname: "/(app)/calendar/add",
+                                    params: { id: it.id },
+                                  } as any)
+                                }
+                                style={({ pressed }) => ({
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 10,
+                                  paddingVertical: 8,
+                                  paddingHorizontal: 10,
+                                  borderRadius: 12,
+                                  backgroundColor: pressed
+                                    ? (isDark ? "rgba(249,115,22,0.2)" : "#FFEDD5")
+                                    : (isDark ? "rgba(15,23,42,0.4)" : "#FFFFFF"),
+                                  borderWidth: 1,
+                                  borderColor: isDark ? "rgba(249,115,22,0.25)" : "#FED7AA",
+                                })}
+                              >
+                                <View
+                                  style={{
+                                    width: 30,
+                                    height: 30,
+                                    borderRadius: 9,
+                                    backgroundColor: "#F97316",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  <CalendarClock size={15} color="#fff" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ fontSize: 12, fontWeight: "700", color: isDark ? "#FDBA74" : "#C2410C" }}>
+                                    {new Date(it.start_time).toLocaleDateString("fr-FR", {
+                                      weekday: "short",
+                                      day: "numeric",
+                                      month: "short",
+                                    })}
+                                  </Text>
+                                  <Text
+                                    style={{ fontSize: 12, color: isDark ? "#CBD5E1" : "#78716C" }}
+                                    numberOfLines={1}
+                                  >
+                                    {it.title}
+                                  </Text>
+                                </View>
+                                <ChevronRight size={16} color={isDark ? "#FDBA74" : "#EA580C"} />
+                              </Pressable>
+                            ))}
+                          </View>
                         </ScrollView>
                       </View>
                     </View>
@@ -2224,6 +2378,7 @@ export default function AddInterventionScreen() {
               )}
 
               {/* TITRE + DATE + DURÉE */}
+              {!isQuickPrepMode && (
               <View style={{ gap: 16 }}>
                 <Input
                   label="Titre"
@@ -2256,15 +2411,34 @@ export default function AddInterventionScreen() {
                   </View>
                 )}
 
-                {timeTbd ? (
+                {isRepriseMode ? (
+                  <>
+                    <MultiDatePicker
+                      values={repriseDates}
+                      onChange={setRepriseDates}
+                      label="Date(s) de la reprise"
+                      dayColors={dayColors}
+                      onMonthChange={setCalendarMonth}
+                      minDate={new Date().toISOString().split("T")[0]}
+                    />
+                    {isAdmin && !timeTbd && (
+                      <DateTimePicker
+                        value={startDateStr}
+                        onChange={setStartDateStr}
+                        label="Heure"
+                        timeOnly
+                      />
+                    )}
+                  </>
+                ) : timeTbd ? (
                   <DateTimePicker
                     value={startDateStr}
                     onChange={setStartDateStr}
                     label="Date de l'intervention"
                     dateOnly
-                    dayColors={(isRepriseMode || isDuplicateMode) ? dayColors : undefined}
-                    onMonthChange={(isRepriseMode || isDuplicateMode) ? setCalendarMonth : undefined}
-                    minDate={(isRepriseMode || isDuplicateMode) ? new Date().toISOString().split("T")[0] : undefined}
+                    dayColors={isDuplicateMode ? dayColors : undefined}
+                    onMonthChange={isDuplicateMode ? setCalendarMonth : undefined}
+                    minDate={isDuplicateMode ? new Date().toISOString().split("T")[0] : undefined}
                   />
                 ) : (
                   <>
@@ -2286,9 +2460,11 @@ export default function AddInterventionScreen() {
                   </>
                 )}
               </View>
+              )}
 
-              {/* RÉCURRENCE (pas en mode édition, sauf pour changer le motif d'une série) */}
-              {(!isEditMode || isRecurringSeries) && (
+              {/* RÉCURRENCE (pas en mode édition sauf série, pas en reprise
+                  — les dates multiples remplacent la récurrence) */}
+              {!isRepriseMode && (!isEditMode || isRecurringSeries) && (
                 <View style={{ gap: 4, marginTop: (!isAdmin && isRepriseMode) ? -8 : 0 }}>
                   <Text className="text-sm font-semibold text-foreground dark:text-white">
                     Récurrence
@@ -2477,7 +2653,7 @@ export default function AddInterventionScreen() {
                     <Text className="text-sm font-semibold text-foreground dark:text-white">
                       Prestations
                     </Text>
-                    {!isAddingService && (
+                    {isAdmin && !isAddingService && (
                       <Pressable
                         onPress={() => {
                           setIsAddingService(true);
@@ -2722,6 +2898,7 @@ export default function AddInterventionScreen() {
                           <TextInput
                             value={serviceLabelDrafts[svc.id] ?? svc.label}
                             placeholder="Nom du service"
+                            editable={isAdmin}
                             onChangeText={(t) => {
                               setServiceLabelDrafts((prev) => ({
                                 ...prev,
@@ -2757,6 +2934,7 @@ export default function AddInterventionScreen() {
                             value={priceVal}
                             placeholder="Prix"
                             keyboardType="decimal-pad"
+                            editable={isAdmin}
                             onChangeText={(t) => {
                               setServicePriceOverrides((prev) => ({
                                 ...prev,
@@ -2807,65 +2985,67 @@ export default function AddInterventionScreen() {
                             +33%
                           </Text>
                         </Pressable>
-                        <Pressable
-                          onPress={async () => {
-                            try {
-                              // "En attente" : rien n'existe encore côté
-                              // catalogue, décocher suffit (revient à ne pas
-                              // inclure cette prestation cette fois-ci).
-                              if (isPendingChainId(svc.id)) {
+                        {isAdmin && (
+                          <Pressable
+                            onPress={async () => {
+                              try {
+                                // "En attente" : rien n'existe encore côté
+                                // catalogue, décocher suffit (revient à ne pas
+                                // inclure cette prestation cette fois-ci).
+                                if (isPendingChainId(svc.id)) {
+                                  setCheckedServiceIds((prev) => {
+                                    const n = new Set(prev);
+                                    n.delete(svc.id);
+                                    return n;
+                                  });
+                                  return;
+                                }
+                                if (selectedClient?.id) {
+                                  applyServiceDelete(
+                                    queryClient,
+                                    selectedClient.id,
+                                    svc.id,
+                                  );
+                                } else if (activeChainId) {
+                                  applyChainServiceDelete(
+                                    queryClient,
+                                    activeChainId,
+                                    svc.id,
+                                  );
+                                }
                                 setCheckedServiceIds((prev) => {
                                   const n = new Set(prev);
                                   n.delete(svc.id);
                                   return n;
                                 });
-                                return;
+                                setServicePriceOverrides((prev) => {
+                                  const n = { ...prev };
+                                  delete n[svc.id];
+                                  return n;
+                                });
+                                setOnDemandServiceIds((prev) => {
+                                  const n = new Set(prev);
+                                  n.delete(svc.id);
+                                  return n;
+                                });
+                                const deleteUrl = selectedClient?.id
+                                  ? `/api/clients/${selectedClient.id}/services/${svc.id}`
+                                  : `/api/interventions/chain-services/${svc.id}`;
+                                await enqueue({
+                                  kind: "service-delete",
+                                  method: "DELETE",
+                                  url: deleteUrl,
+                                  label: `Suppression « ${svc.label} »`,
+                                });
+                              } catch {
+                                toast.error("Erreur", "Impossible de supprimer");
                               }
-                              if (selectedClient?.id) {
-                                applyServiceDelete(
-                                  queryClient,
-                                  selectedClient.id,
-                                  svc.id,
-                                );
-                              } else if (activeChainId) {
-                                applyChainServiceDelete(
-                                  queryClient,
-                                  activeChainId,
-                                  svc.id,
-                                );
-                              }
-                              setCheckedServiceIds((prev) => {
-                                const n = new Set(prev);
-                                n.delete(svc.id);
-                                return n;
-                              });
-                              setServicePriceOverrides((prev) => {
-                                const n = { ...prev };
-                                delete n[svc.id];
-                                return n;
-                              });
-                              setOnDemandServiceIds((prev) => {
-                                const n = new Set(prev);
-                                n.delete(svc.id);
-                                return n;
-                              });
-                              const deleteUrl = selectedClient?.id
-                                ? `/api/clients/${selectedClient.id}/services/${svc.id}`
-                                : `/api/interventions/chain-services/${svc.id}`;
-                              await enqueue({
-                                kind: "service-delete",
-                                method: "DELETE",
-                                url: deleteUrl,
-                                label: `Suppression « ${svc.label} »`,
-                              });
-                            } catch {
-                              toast.error("Erreur", "Impossible de supprimer");
-                            }
-                          }}
-                          style={{ padding: 6 }}
-                        >
-                          <Trash2 size={18} color="#EF4444" />
-                        </Pressable>
+                            }}
+                            style={{ padding: 6 }}
+                          >
+                            <Trash2 size={18} color="#EF4444" />
+                          </Pressable>
+                        )}
                       </View>
                     );
                   })}
@@ -2880,6 +3060,7 @@ export default function AddInterventionScreen() {
                         <Input
                           placeholder="Ex: RDC, Velux..."
                           value={item.label}
+                          editable={isAdmin}
                           onChangeText={(t) =>
                             updateAdHocItem(index, "label", t)
                           }
@@ -2890,6 +3071,7 @@ export default function AddInterventionScreen() {
                           placeholder="Prix"
                           keyboardType="decimal-pad"
                           value={item.price}
+                          editable={isAdmin}
                           onChangeText={(t) =>
                             updateAdHocItem(index, "price", t)
                           }
@@ -3130,13 +3312,7 @@ export default function AddInterventionScreen() {
 
               {/* ACTIONS */}
               <View className="mt-6 flex-row gap-3">
-                <View
-                  style={{
-                    flex: 1,
-                    marginLeft: isWeb ? 0 : -22,
-                    marginRight: isWeb ? 0 : 15,
-                  }}
-                >
+                <View style={{ flex: 1 }}>
                   <Button
                     variant="outline"
                     onPress={() => {
@@ -3161,7 +3337,7 @@ export default function AddInterventionScreen() {
                     Annuler
                   </Button>
                 </View>
-                <View style={{ flex: 1, marginRight: isWeb ? 0 : 16 }}>
+                <View style={{ flex: 1 }}>
                   <Button
                     onPress={() => {
                       if (recurrencePatternChanged) setShowChangeRecurrenceDialog(true);
@@ -3179,7 +3355,7 @@ export default function AddInterventionScreen() {
                         : isDuplicateMode
                           ? "Dupliquer"
                           : isEditMode
-                            ? "Mettre à jour"
+                            ? (isQuickPrepMode ? "Confirmer" : "Mettre à jour")
                             : "Valider"}
                   </Button>
                 </View>
