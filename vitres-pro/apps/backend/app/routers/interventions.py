@@ -102,6 +102,20 @@ def _pending_deferred_amount(db: Session, intervention: Intervention):
     return None
 
 
+def _settled_deferred_amount(db: Session, intervention: Intervention):
+    """Ce RDV a-t-il absorbe un solde cash reporte du RDV precedent (deja
+    reglee) ? Utilise pour afficher une ligne "Solde reporte" dans le detail
+    de la prestation, en plus des services rendus."""
+    if not intervention.reprise_of_id:
+        return None
+    source = db.query(Intervention).filter(
+        Intervention.id == intervention.reprise_of_id,
+        Intervention.deferred_cash_amount.isnot(None),
+        Intervention.deferred_settled_by_intervention_id == intervention.id,
+    ).first()
+    return float(source.deferred_cash_amount) if source else None
+
+
 def _migrate_orphan_items_to_chain(db: Session, intervention: Intervention, chain_id) -> dict:
     """Convertit les items ad-hoc existants d'une intervention (label+prix
     seuls, sans catalogue) en entrées intervention_services au moment où sa
@@ -363,6 +377,7 @@ def read_intervention(
     if current_user.role == 'subcontractor':
         _strip_prices([intervention])
     intervention.pending_deferred_amount = _pending_deferred_amount(db, intervention)
+    intervention.settled_deferred_amount = _settled_deferred_amount(db, intervention)
     return intervention
 
 
@@ -651,14 +666,7 @@ def update_intervention(
         SUBCONTRACTOR_ALLOWED = {"status", "real_start_time", "real_end_time"}
         intervention_update = {k: v for k, v in intervention_update.items() if k in SUBCONTRACTOR_ALLOWED}
     elif current_user.role != 'admin':
-        # Une intervention issue d'une reprise (RDV réattribué en série) ne
-        # doit être modifiable par un employé que sur les prestations (via
-        # /items-done) et sa propre clôture — pas l'horaire, le prix ou le
-        # paiement, qui restent définis par la source de la chaîne.
-        if db_intervention.reprise_of_id:
-            EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note"}
-        else:
-            EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time", "payment_mode", "is_invoice", "amount_cash", "amount_invoice"}
+        EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time", "payment_mode", "is_invoice", "amount_cash", "amount_invoice"}
         intervention_update = {k: v for k, v in intervention_update.items() if k in EMPLOYEE_ALLOWED}
 
     old_status = db_intervention.status
