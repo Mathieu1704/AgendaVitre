@@ -87,23 +87,19 @@ def _load_intervention(intervention_id: UUID, db: Session) -> Intervention:
 
 
 def _pending_deferred_amount(db: Session, intervention: Intervention):
-    """Cherche, sur la chaine de reprise de cette intervention, le dernier
-    montant cash reporte (client absent) pas encore encaisse. Utilise pour
-    afficher un bandeau "Solde precedent du" et prerempir le split cash au
-    RDV suivant."""
-    if not intervention.reprise_chain_id:
+    """Le RDV precedent direct (reprise_of_id) porte-t-il un montant cash
+    reporte (client absent) pas encore encaisse ? Utilise pour afficher un
+    bandeau "Solde precedent du" sur le RDV suivant.
+
+    Base sur reprise_of_id (toujours persiste, avec ou sans client) plutot
+    que reprise_chain_id : ce dernier n'existe que pour les interventions
+    sans client, il ne doit pas servir a detecter un solde reporte."""
+    if not intervention.reprise_of_id:
         return None
-    pending = (
-        db.query(Intervention)
-        .filter(
-            Intervention.reprise_chain_id == intervention.reprise_chain_id,
-            Intervention.deferred_cash_amount.isnot(None),
-            Intervention.deferred_settled_by_intervention_id.is_(None),
-        )
-        .order_by(Intervention.start_time.desc())
-        .first()
-    )
-    return float(pending.deferred_cash_amount) if pending else None
+    source = db.query(Intervention).filter(Intervention.id == intervention.reprise_of_id).first()
+    if source and source.deferred_cash_amount is not None and source.deferred_settled_by_intervention_id is None:
+        return float(source.deferred_cash_amount)
+    return None
 
 
 def _migrate_orphan_items_to_chain(db: Session, intervention: Intervention, chain_id) -> dict:
