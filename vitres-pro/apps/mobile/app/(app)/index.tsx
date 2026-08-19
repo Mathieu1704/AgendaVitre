@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../src/ui/components/ThemeToggle";
 import {
@@ -20,7 +20,7 @@ import {
   ArrowDownRight,
 } from "lucide-react-native";
 import { LineChart } from "react-native-gifted-charts";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { format, isToday, parseISO, formatISO } from "date-fns";
 
 import {
@@ -30,12 +30,14 @@ import {
   CardTitle,
 } from "../../src/ui/components/Card";
 import { StatusBadge } from "../../src/ui/components/StatusBadge";
+import { GhostText, ChartSkeleton } from "../../src/ui/components/Skeleton";
 import { Avatar } from "../../src/ui/components/Avatar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Redirect, useFocusEffect, useRouter } from "expo-router";
 import { useInterventions } from "../../src/hooks/useInterventions";
 import { useClients } from "../../src/hooks/useClients";
 import { useAuth } from "../../src/hooks/useAuth";
+import { monthRangeStart, monthRangeEnd } from "../../src/lib/calendarRange";
 import { supabase } from "../../src/lib/supabase";
 import { api } from "../../src/lib/api";
 
@@ -60,19 +62,34 @@ export default function Dashboard() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
 
+  // Même plage — donc même clé de cache — que le prefetch du planning
+  // (app/(app)/_layout.tsx) : les deux écrans partagent une seule requête au
+  // lieu d'en lancer deux en parallèle au démarrage. Surtout, cette clé bornée
+  // est persistée sur disque (voir src/lib/offline/persist.ts), contrairement à
+  // la requête sans bornes utilisée avant : les chiffres du dernier lancement
+  // s'affichent donc immédiatement, puis se rafraîchissent en arrière-plan.
+  const dashboardRange = useMemo(() => {
+    const today = new Date();
+    return { start: monthRangeStart(today), end: monthRangeEnd(today) };
+  }, []);
   const {
     interventions,
     isLoading: interventionsLoading,
     refetch: refetchInterventions,
-  } = useInterventions();
-  const { clients } = useClients();
+  } = useInterventions(dashboardRange);
+  const { clients, isLoading: clientsLoading } = useClients();
+  const statsLoading = interventionsLoading || clientsLoading;
   const { width } = useWindowDimensions();
 
   useFocusEffect(
     useCallback(() => {
-      const state = queryClient.getQueryState(["interventions"]);
+      const state = queryClient.getQueryState([
+        "interventions",
+        dashboardRange.start,
+        dashboardRange.end,
+      ]);
       if (state?.isInvalidated) void refetchInterventions();
-    }, [queryClient, refetchInterventions]),
+    }, [queryClient, refetchInterventions, dashboardRange]),
   );
 
   const openIntervention = useCallback((item: any) => {
@@ -127,6 +144,18 @@ export default function Dashboard() {
   });
   const hideCash = companySettings?.hide_cash ?? false;
 
+  // Revenus des 6 derniers mois, agrégés côté serveur. Auparavant le graphique
+  // était recalculé côté mobile, ce qui obligeait le dashboard à charger tout
+  // l'historique des interventions. Les revenus passés ne bougeant plus, un
+  // staleTime long évite de le redemander à chaque passage sur l'écran.
+  const { data: monthlyRevenue, isLoading: revenueLoading } = useQuery({
+    queryKey: ["monthly-revenue", 6],
+    queryFn: async () =>
+      (await api.get("/api/planning/monthly-revenue", { params: { months: 6 } }))
+        .data as { month: string; revenue: number }[],
+    staleTime: 10 * 60 * 1000,
+  });
+
   if (userRole === "employee")
     return <Redirect href="/(app)/calendar?view=day" />;
 
@@ -138,42 +167,16 @@ export default function Dashboard() {
       return true;
     }) || [];
 
-  const upcomingInterventions =
-    interventions?.filter((i: any) => {
-      if (!i.start_time) return false;
-      const startDate = parseISO(i.start_time);
-
-      // Exclure aujourd'hui (déjà dans "Aujourd'hui")
-      return startDate >= new Date() && !isToday(startDate);
-    }) || [];
-
   // Tendances mois-sur-mois
   const now = new Date();
-  // Graphique : 6 derniers mois de revenus réels
-  const chartData: ChartItem[] = Array.from({ length: 6 }, (_, i) => {
-    const monthStart = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
-    const monthEnd = new Date(
-      now.getFullYear(),
-      now.getMonth() - 4 + i,
-      0,
-      23,
-      59,
-      59,
-    );
-    const revenue =
-      interventions
-        ?.filter((int: any) => {
-          if (int.status !== "done" || !int.start_time) return false;
-          const d = new Date(int.start_time);
-          return d >= monthStart && d <= monthEnd;
-        })
-        .reduce(
-          (acc: number, int: any) => acc + (Number(int.price_estimated) || 0),
-          0,
-        ) || 0;
-    const label = monthStart.toLocaleDateString("fr-FR", { month: "short" });
+  // Graphique : 6 derniers mois de revenus réels, agrégés par le serveur.
+  const chartData: ChartItem[] = (monthlyRevenue ?? []).map((m) => {
+    const [year, month] = m.month.split("-").map(Number);
+    const label = new Date(year, month - 1, 1).toLocaleDateString("fr-FR", {
+      month: "short",
+    });
     return {
-      value: revenue,
+      value: m.revenue,
       label: label.charAt(0).toUpperCase() + label.slice(1, 4),
     };
   });
@@ -189,7 +192,8 @@ export default function Dashboard() {
     59,
   );
 
-  const revenueThisMonth =
+  // CA mois en cours (interventions done)
+  const revenueThisMonthDone =
     interventions
       ?.filter(
         (i: any) =>
@@ -214,41 +218,13 @@ export default function Dashboard() {
   const caTrendPct =
     revenueLastMonth > 0
       ? Math.round(
-          ((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100,
+          ((revenueThisMonthDone - revenueLastMonth) / revenueLastMonth) * 100,
         )
-      : revenueThisMonth > 0
-        ? 100
-        : 0;
-
-  const intThisMonth =
-    interventions?.filter((i: any) => new Date(i.start_time) >= startThisMonth)
-      .length || 0;
-  const intLastMonth =
-    interventions?.filter(
-      (i: any) =>
-        new Date(i.start_time) >= startLastMonth &&
-        new Date(i.start_time) <= endLastMonth,
-    ).length || 0;
-  const intTrendPct =
-    intLastMonth > 0
-      ? Math.round(((intThisMonth - intLastMonth) / intLastMonth) * 100)
-      : intThisMonth > 0
+      : revenueThisMonthDone > 0
         ? 100
         : 0;
 
   const fmtPct = (n: number) => `${n > 0 ? "+" : ""}${n}%`;
-
-  // CA mois en cours (interventions done)
-  const revenueThisMonthDone =
-    interventions
-      ?.filter(
-        (i: any) =>
-          i.status === "done" && new Date(i.start_time) >= startThisMonth,
-      )
-      .reduce(
-        (acc: number, i: any) => acc + (Number(i.price_estimated) || 0),
-        0,
-      ) || 0;
 
   // CA journalier (aujourd'hui, interventions done)
   const revenueToday =
@@ -404,10 +380,19 @@ export default function Dashboard() {
 
                       {/* 2. Valeur + Trend (même ligne) */}
                       <View className="flex-row items-end">
-                        <Text className="text-2xl font-extrabold text-foreground dark:text-white leading-none">
-                          {stat.value}
-                        </Text>
-                        {stat.trend ? (
+                        {statsLoading ? (
+                          <GhostText className="text-2xl font-extrabold leading-none">
+                            {stat.label.includes("CA") ? "---- €" : "----"}
+                          </GhostText>
+                        ) : (
+                          <Animated.Text
+                            entering={FadeIn.duration(250)}
+                            className="text-2xl font-extrabold text-foreground dark:text-white leading-none"
+                          >
+                            {stat.value}
+                          </Animated.Text>
+                        )}
+                        {!statsLoading && stat.trend ? (
                           <View className="flex-row items-center ml-2 mb-0.5 gap-0.5">
                             {stat.trendPositive !== undefined ? (
                               stat.trendPositive ? (
@@ -467,54 +452,60 @@ export default function Dashboard() {
                     setChartWidth(Math.max(containerWidth - 20, 250));
                   }}
                 >
-                  <LineChart
-                    data={chartData}
-                    color="#3B82F6"
-                    thickness={2}
-                    startFillColor={
-                      Platform.OS === "web"
-                        ? "rgba(59, 130, 246, 0.55)"
-                        : "rgba(59, 130, 246, 0.2)"
-                    }
-                    endFillColor={
-                      Platform.OS === "web"
-                        ? "rgba(59, 130, 246, 0.12)"
-                        : "rgba(59, 130, 246, 0.02)"
-                    }
-                    startOpacity={Platform.OS === "web" ? 1 : 0.8}
-                    endOpacity={Platform.OS === "web" ? 1 : 0.1}
-                    areaChart
-                    curved
-                    hideDataPoints={false}
-                    dataPointsColor="#3B82F6"
-                    dataPointsRadius={4}
-                    width={chartWidth}
-                    height={180}
-                    adjustToWidth={true}
-                    spacing={(chartWidth - 10) / chartData.length}
-                    initialSpacing={15}
-                    endSpacing={15}
-                    showVerticalLines={false}
-                    rulesType="solid"
-                    rulesColor="#E4E4E7"
-                    rulesThickness={1}
-                    yAxisTextStyle={{
-                      color: "#71717A",
-                      fontSize: 10,
-                    }}
-                    xAxisLabelTextStyle={{
-                      color: "#71717A",
-                      fontSize: 10,
-                      fontWeight: "500",
-                    }}
-                    xAxisLabelsHeight={35}
-                    xAxisLabelsVerticalShift={20}
-                    hideYAxisText={false}
-                    yAxisThickness={0}
-                    xAxisThickness={0}
-                    noOfSections={4}
-                    maxValue={Math.ceil(chartMax / 500) * 500}
-                  />
+                  {revenueLoading || chartData.length === 0 ? (
+                    <ChartSkeleton height={180} />
+                  ) : (
+                    <Animated.View entering={FadeIn.duration(300)}>
+                    <LineChart
+                      data={chartData}
+                      color="#3B82F6"
+                      thickness={2}
+                      startFillColor={
+                        Platform.OS === "web"
+                          ? "rgba(59, 130, 246, 0.55)"
+                          : "rgba(59, 130, 246, 0.2)"
+                      }
+                      endFillColor={
+                        Platform.OS === "web"
+                          ? "rgba(59, 130, 246, 0.12)"
+                          : "rgba(59, 130, 246, 0.02)"
+                      }
+                      startOpacity={Platform.OS === "web" ? 1 : 0.8}
+                      endOpacity={Platform.OS === "web" ? 1 : 0.1}
+                      areaChart
+                      curved
+                      hideDataPoints={false}
+                      dataPointsColor="#3B82F6"
+                      dataPointsRadius={4}
+                      width={chartWidth}
+                      height={180}
+                      adjustToWidth={true}
+                      spacing={(chartWidth - 10) / chartData.length}
+                      initialSpacing={15}
+                      endSpacing={15}
+                      showVerticalLines={false}
+                      rulesType="solid"
+                      rulesColor="#E4E4E7"
+                      rulesThickness={1}
+                      yAxisTextStyle={{
+                        color: "#71717A",
+                        fontSize: 10,
+                      }}
+                      xAxisLabelTextStyle={{
+                        color: "#71717A",
+                        fontSize: 10,
+                        fontWeight: "500",
+                      }}
+                      xAxisLabelsHeight={35}
+                      xAxisLabelsVerticalShift={20}
+                      hideYAxisText={false}
+                      yAxisThickness={0}
+                      xAxisThickness={0}
+                      noOfSections={4}
+                      maxValue={Math.ceil(chartMax / 500) * 500}
+                    />
+                    </Animated.View>
+                  )}
                 </View>
               </CardContent>
             </Card>
@@ -606,82 +597,6 @@ export default function Dashboard() {
           </Card>
         </Animated.View>
 
-        {/* ========== À venir (Employés) ========== */}
-        {!isAdmin && upcomingInterventions.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(200)} className="mb-6">
-            <Card className="rounded-3xl">
-              <CardHeader className="p-4 pb-3">
-                <CardTitle className="flex-row items-center gap-2">
-                  <CalendarIcon size={18} color="#3B82F6" />
-                  <Text className="text-base font-semibold text-foreground dark:text-white">
-                    À venir
-                  </Text>
-                  <View className="bg-blue-500/10 px-2 py-0.5 rounded-full ml-2">
-                    <Text className="text-xs font-bold text-blue-600">
-                      {upcomingInterventions.length}
-                    </Text>
-                  </View>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-0">
-                <View className="gap-3">
-                  {upcomingInterventions
-                    .slice(0, 5)
-                    .map((item: any, i: number) => (
-                      <View
-                        key={i}
-                        className="flex-row items-center gap-3 p-3 rounded-2xl bg-muted/40 dark:bg-slate-800/50"
-                      >
-                        <View className="bg-blue-500/10 p-2 rounded-xl">
-                          <CalendarIcon size={16} color="#3B82F6" />
-                        </View>
-                        {/* ✅ CORRECTION ICI : flex-1 et justify-center */}
-                        <View className="flex-1 justify-center">
-                          <Text
-                            className="text-sm font-semibold text-foreground dark:text-white"
-                            numberOfLines={1}
-                          >
-                            {item.title}
-                          </Text>
-                          <Text className="text-xs text-muted-foreground dark:text-slate-400 mt-0.5">
-                            {item.start_time
-                              ? format(
-                                  parseISO(item.start_time),
-                                  "dd/MM • HH:mm",
-                                )
-                              : "--/-- • --:--"}{" "}
-                            • {item.client?.name || "Client"}
-                          </Text>
-                        </View>
-                        <StatusBadge status={item.status} />
-                      </View>
-                    ))}
-                </View>
-              </CardContent>
-            </Card>
-          </Animated.View>
-        )}
-
-        {/* Message vide (Employés) */}
-        {!isAdmin &&
-          upcomingInterventions.length === 0 &&
-          todayInterventions.length === 0 && (
-            <Animated.View entering={FadeInDown.delay(200)}>
-              <Card className="rounded-3xl">
-                <CardContent className="p-8 items-center">
-                  <View className="bg-green-500/10 p-4 rounded-full mb-4">
-                    <CalendarIcon size={32} color="#22C55E" />
-                  </View>
-                  <Text className="text-lg font-bold text-foreground dark:text-white text-center">
-                    Tout est à jour !
-                  </Text>
-                  <Text className="text-sm text-muted-foreground dark:text-slate-400 text-center mt-2">
-                    Vous n'avez pas d'interventions planifiées pour le moment.
-                  </Text>
-                </CardContent>
-              </Card>
-            </Animated.View>
-          )}
       </ScrollView>
     );
   }
@@ -720,9 +635,18 @@ export default function Dashboard() {
                     <Text className="text-sm font-medium text-muted-foreground dark:text-slate-400 mb-1">
                       {stat.label}
                     </Text>
-                    <Text className="text-3xl font-bold text-foreground dark:text-white tracking-tight">
-                      {stat.value}
-                    </Text>
+                    {statsLoading ? (
+                      <GhostText className="text-3xl font-bold tracking-tight">
+                        {stat.label.includes("CA") ? "---- €" : "----"}
+                      </GhostText>
+                    ) : (
+                      <Animated.Text
+                        entering={FadeIn.duration(250)}
+                        className="text-3xl font-bold text-foreground dark:text-white tracking-tight"
+                      >
+                        {stat.value}
+                      </Animated.Text>
+                    )}
                   </View>
                   <View
                     className={`${stat.bg} self-start`}
@@ -736,7 +660,7 @@ export default function Dashboard() {
                   className="flex-row items-center mt-2 gap-1"
                   style={{ minHeight: 20 }}
                 >
-                  {stat.trend ? (
+                  {!statsLoading && stat.trend ? (
                     <View
                       style={{
                         flexDirection: "row",
@@ -800,72 +724,78 @@ export default function Dashboard() {
                   setChartWidth(Math.max(containerWidth - 20, 250));
                 }}
               >
-                <LineChart
-                  data={chartData}
-                  color="#3B82F6"
-                  thickness={3}
-                  startFillColor={
-                    Platform.OS === "web"
-                      ? "rgba(59, 130, 246, 0.55)"
-                      : "rgba(59, 130, 246, 0.2)"
-                  }
-                  endFillColor={
-                    Platform.OS === "web"
-                      ? "rgba(59, 130, 246, 0.12)"
-                      : "rgba(59, 130, 246, 0.02)"
-                  }
-                  startOpacity={1}
-                  endOpacity={1}
-                  areaChart
-                  curved
-                  hideDataPoints={false}
-                  dataPointsColor="#3B82F6"
-                  dataPointsRadius={6}
-                  width={chartWidth}
-                  height={280}
-                  adjustToWidth={true}
-                  spacing={(chartWidth - 10) / chartData.length}
-                  initialSpacing={20}
-                  endSpacing={20}
-                  showVerticalLines={false}
-                  rulesType="solid"
-                  rulesColor="#E4E4E7"
-                  rulesThickness={1}
-                  yAxisTextStyle={{
-                    color: "#71717A",
-                    fontSize: 11,
-                    fontWeight: "400",
-                  }}
-                  xAxisLabelTextStyle={{
-                    color: "#71717A",
-                    fontSize: 12,
-                    fontWeight: "500",
-                  }}
-                  hideYAxisText={false}
-                  yAxisThickness={0}
-                  xAxisThickness={1}
-                  xAxisColor="#E4E4E7"
-                  noOfSections={4}
-                  maxValue={Math.ceil(chartMax / 500) * 500}
-                  pointerConfig={{
-                    pointerStripHeight: 200,
-                    pointerStripColor: "#CBD5E1",
-                    pointerStripWidth: 2,
-                    pointerColor: "#3B82F6",
-                    radius: 6,
-                    pointerLabelWidth: 100,
-                    pointerLabelHeight: 90,
-                    activatePointersOnLongPress: false,
-                    autoAdjustPointerLabelPosition: true,
-                    pointerLabelComponent: (items: any) => (
-                      <View className="bg-slate-900 dark:bg-slate-800 px-3 py-2 rounded-lg">
-                        <Text className="text-white text-xs font-bold">
-                          {items[0].value} €
-                        </Text>
-                      </View>
-                    ),
-                  }}
-                />
+                {revenueLoading || chartData.length === 0 ? (
+                  <ChartSkeleton height={280} />
+                ) : (
+                  <Animated.View entering={FadeIn.duration(300)}>
+                  <LineChart
+                    data={chartData}
+                    color="#3B82F6"
+                    thickness={3}
+                    startFillColor={
+                      Platform.OS === "web"
+                        ? "rgba(59, 130, 246, 0.55)"
+                        : "rgba(59, 130, 246, 0.2)"
+                    }
+                    endFillColor={
+                      Platform.OS === "web"
+                        ? "rgba(59, 130, 246, 0.12)"
+                        : "rgba(59, 130, 246, 0.02)"
+                    }
+                    startOpacity={1}
+                    endOpacity={1}
+                    areaChart
+                    curved
+                    hideDataPoints={false}
+                    dataPointsColor="#3B82F6"
+                    dataPointsRadius={6}
+                    width={chartWidth}
+                    height={280}
+                    adjustToWidth={true}
+                    spacing={(chartWidth - 10) / chartData.length}
+                    initialSpacing={20}
+                    endSpacing={20}
+                    showVerticalLines={false}
+                    rulesType="solid"
+                    rulesColor="#E4E4E7"
+                    rulesThickness={1}
+                    yAxisTextStyle={{
+                      color: "#71717A",
+                      fontSize: 11,
+                      fontWeight: "400",
+                    }}
+                    xAxisLabelTextStyle={{
+                      color: "#71717A",
+                      fontSize: 12,
+                      fontWeight: "500",
+                    }}
+                    hideYAxisText={false}
+                    yAxisThickness={0}
+                    xAxisThickness={1}
+                    xAxisColor="#E4E4E7"
+                    noOfSections={4}
+                    maxValue={Math.ceil(chartMax / 500) * 500}
+                    pointerConfig={{
+                      pointerStripHeight: 200,
+                      pointerStripColor: "#CBD5E1",
+                      pointerStripWidth: 2,
+                      pointerColor: "#3B82F6",
+                      radius: 6,
+                      pointerLabelWidth: 100,
+                      pointerLabelHeight: 90,
+                      activatePointersOnLongPress: false,
+                      autoAdjustPointerLabelPosition: true,
+                      pointerLabelComponent: (items: any) => (
+                        <View className="bg-slate-900 dark:bg-slate-800 px-3 py-2 rounded-lg">
+                          <Text className="text-white text-xs font-bold">
+                            {items[0].value} €
+                          </Text>
+                        </View>
+                      ),
+                    }}
+                  />
+                  </Animated.View>
+                )}
               </View>
             </CardContent>
           </Card>

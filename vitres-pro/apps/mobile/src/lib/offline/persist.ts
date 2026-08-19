@@ -71,6 +71,10 @@ function isPersistableKey(key: readonly unknown[]): boolean {
     // interventions complètes — donc peu coûteuses à conserver.
     root === "horizon-stats" ||
     root === "initial-stats-reprise" ||
+    // Six lignes {mois, CA} agrégées par le serveur pour le graphique du
+    // dashboard. Sans persistance, la courbe repartait vide à chaque
+    // démarrage alors que les revenus passés ne changent plus.
+    root === "monthly-revenue" ||
     root === "tour-run"
   );
 }

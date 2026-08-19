@@ -10,7 +10,7 @@ import { Sidebar } from "../../src/ui/layout/Sidebar";
 import { Header } from "../../src/ui/layout/Header";
 import { CustomTabBar } from "../../src/ui/layout/CustomTabBar";
 import { useNotifications } from "../../src/hooks/useNotifications";
-import { useAuth } from "../../src/hooks/useAuth";
+import { useAuth, AuthProvider } from "../../src/hooks/useAuth";
 import { useTheme } from "../../src/ui/components/ThemeToggle";
 import { monthRangeStart, monthRangeEnd } from "../../src/lib/calendarRange";
 // OfflineBanner monte useOutboxSync : c'est lui qui déclenche la reprise de la
@@ -26,7 +26,18 @@ import {
   Search,
 } from "lucide-react-native";
 
+// AuthProvider enveloppe tout l'arbre authentifié : c'est lui qui fait tourner
+// le flux d'authentification, une seule fois, pour tous les `useAuth()` des
+// écrans en dessous (voir src/hooks/useAuth.tsx).
 export default function AppLayout() {
+  return (
+    <AuthProvider>
+      <AppLayoutContent />
+    </AuthProvider>
+  );
+}
+
+function AppLayoutContent() {
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
   const insets = useSafeAreaInsets();

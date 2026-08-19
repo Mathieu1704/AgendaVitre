@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, createContext, useContext, ReactNode } from "react";
 import { supabase, getSessionFast } from "../lib/supabase";
 import { Session } from "@supabase/supabase-js";
 import { api } from "../lib/api";
@@ -14,7 +14,13 @@ import { clearOutbox } from "../lib/offline/outbox";
 import { clearIdMap } from "../lib/offline/idMap";
 import { queryPersister } from "../lib/offline/persist";
 
-export const useAuth = () => {
+// État d'authentification réel. Volontairement NON exporté : ce hook lance un
+// GET /api/employees/me, un listener onAuthStateChange et un abonnement
+// onlineManager. Appelé directement par chaque composant, tout ce travail
+// était refait autant de fois qu'il y avait d'appelants (2 sur mobile, 4+ sur
+// web) — d'où des requêtes réseau identiques en parallèle et un thread JS
+// saturé au démarrage. Il ne tourne désormais qu'une fois, dans AuthProvider.
+const useAuthState = () => {
   const initial = readProfileSync(); // synchrone sur web uniquement
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(initial?.role === "admin");
@@ -174,4 +180,28 @@ export const useAuth = () => {
   }, []);
 
   return { session, isAdmin, isSubcontractor, userZone, userName, userColor, userAvatarUrl, employeeId, loading };
+};
+
+type AuthState = ReturnType<typeof useAuthState>;
+
+const AuthContext = createContext<AuthState | null>(null);
+
+/**
+ * À monter une seule fois, au-dessus de tous les écrans authentifiés (voir
+ * `app/(app)/_layout.tsx`). Tous les `useAuth()` de l'arbre partagent alors le
+ * même état, sans relancer le flux d'authentification chacun de leur côté.
+ */
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const value = useAuthState();
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export const useAuth = (): AuthState => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error(
+      "useAuth() doit être utilisé sous <AuthProvider> (monté dans app/(app)/_layout.tsx).",
+    );
+  }
+  return ctx;
 };
