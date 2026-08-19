@@ -289,6 +289,31 @@ def get_today_entry(
     )
 
 
+@router.get("/day/{work_date}", response_model=TimeEntryOut)
+def get_day_entry(
+    work_date: date,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Comme /today, mais pour une date arbitraire — utilisé pour afficher le
+    pointage d'un jour passé dans l'app employé (le jour courant continue de
+    passer par /today, qui reste la source pour le pointage en cours)."""
+    if work_date > _today_brussels():
+        raise HTTPException(status_code=400, detail="Date future")
+    entry = (
+        db.query(EmployeeTimeEntry)
+        .filter(EmployeeTimeEntry.employee_id == current_user.id, EmployeeTimeEntry.work_date == work_date)
+        .first()
+    )
+    return TimeEntryOut(
+        work_date=work_date,
+        clock_in_at=entry.clock_in_at if entry else None,
+        clock_out_at=entry.clock_out_at if entry else None,
+        status=_entry_status(entry),
+        worked_hours=_worked_hours(entry) if entry else None,
+    )
+
+
 @router.post("/clock-in", response_model=TimeEntryOut)
 def clock_in(
     db: Session = Depends(get_db),

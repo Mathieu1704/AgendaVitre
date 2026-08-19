@@ -4,6 +4,7 @@ import { Play, Square, CheckCircle2 } from "lucide-react-native";
 import { useAuth } from "../../../hooks/useAuth";
 import {
   useTodayTimeEntry,
+  useDayTimeEntry,
   useClockIn,
   useClockOut,
 } from "../../../hooks/useTimeTracking";
@@ -33,15 +34,21 @@ function PathLine({ isDark }: { isDark: boolean }) {
 
 /**
  * Nœud "Commencer ma journée" — à placer juste avant la 1ère intervention
- * du jour, uniquement pour le jour courant.
+ * du jour. Pour le jour courant : bouton d'action. Pour un jour passé :
+ * simple rappel en lecture seule de l'heure déjà pointée (rien si la
+ * journée n'a pas été pointée du tout ce jour-là).
  */
 export function DayStartRow({ date }: { date: string }) {
   const { isAdmin } = useAuth();
   const { isDark } = useTheme();
-  const { data, isLoading } = useTodayTimeEntry();
+  const isToday = date === toISODate(new Date());
+  const todayEntry = useTodayTimeEntry();
+  const pastEntry = useDayTimeEntry(date, !isToday);
+  const { data, isLoading } = isToday ? todayEntry : pastEntry;
   const clockIn = useClockIn();
 
-  if (isAdmin || isLoading || !data || date !== toISODate(new Date())) return null;
+  if (isAdmin || isLoading || !data) return null;
+  if (!isToday && data.status === "not_started") return null;
 
   const handleClockIn = async () => {
     try {
@@ -54,7 +61,7 @@ export function DayStartRow({ date }: { date: string }) {
 
   return (
     <View style={{ paddingHorizontal: 4, marginBottom: 10 }}>
-      {data.status === "not_started" ? (
+      {isToday && data.status === "not_started" ? (
         <Pressable
           onPress={handleClockIn}
           disabled={clockIn.isPending}
@@ -103,17 +110,22 @@ export function DayStartRow({ date }: { date: string }) {
 
 /**
  * Nœud "Terminer ma journée" — à placer juste après la dernière intervention
- * du jour, uniquement pour le jour courant, et seulement une fois la journée
- * commencée.
+ * du jour, seulement une fois la journée commencée. Pour le jour courant :
+ * bouton d'action. Pour un jour passé : rappel en lecture seule (heure de
+ * fin si la journée a été clôturée, ou mention si elle ne l'a jamais été —
+ * la correction se fait alors côté admin, pas depuis l'app employé).
  */
 export function DayEndRow({ date }: { date: string }) {
   const { isAdmin } = useAuth();
   const { isDark } = useTheme();
-  const { data, isLoading } = useTodayTimeEntry();
+  const isToday = date === toISODate(new Date());
+  const todayEntry = useTodayTimeEntry();
+  const pastEntry = useDayTimeEntry(date, !isToday);
+  const { data, isLoading } = isToday ? todayEntry : pastEntry;
   const clockOut = useClockOut();
   const [confirmEnd, setConfirmEnd] = useState(false);
 
-  if (isAdmin || isLoading || !data || date !== toISODate(new Date())) return null;
+  if (isAdmin || isLoading || !data) return null;
   if (data.status === "not_started") return null;
 
   const handleClockOut = async () => {
@@ -130,7 +142,7 @@ export function DayEndRow({ date }: { date: string }) {
     <View style={{ paddingHorizontal: 4, marginTop: 10 }}>
       <PathLine isDark={isDark} />
       <View style={{ marginTop: 10 }}>
-        {data.status === "in_progress" ? (
+        {data.status === "in_progress" && isToday ? (
           <Pressable
             onPress={() => setConfirmEnd(true)}
             disabled={clockOut.isPending}
@@ -156,6 +168,21 @@ export function DayEndRow({ date }: { date: string }) {
               </>
             )}
           </Pressable>
+        ) : data.status === "in_progress" ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              paddingVertical: 10,
+            }}
+          >
+            <Square size={14} color="#F97316" />
+            <Text style={{ color: isDark ? "#94A3B8" : "#64748B", fontWeight: "600", fontSize: 13 }}>
+              Journée jamais terminée ce jour-là
+            </Text>
+          </View>
         ) : (
           <View
             style={{

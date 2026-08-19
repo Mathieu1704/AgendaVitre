@@ -19,6 +19,15 @@ export const useTodayTimeEntry = () =>
     refetchOnWindowFocus: true,
   });
 
+export const useDayTimeEntry = (dateStr: string, enabled: boolean = true) =>
+  useQuery({
+    queryKey: ["time-entry", "day", dateStr],
+    queryFn: async () =>
+      (await api.get(`/api/timetracking/day/${dateStr}`)).data as TodayTimeEntry,
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
+
 export const useClockIn = () => {
   const queryClient = useQueryClient();
   return useMutation({
