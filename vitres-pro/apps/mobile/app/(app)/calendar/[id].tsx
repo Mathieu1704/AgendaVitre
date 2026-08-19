@@ -99,17 +99,21 @@ export default function InterventionDetailScreen() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   useEffect(() => {
-    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const willShowEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const showSub = Keyboard.addListener(showEvt, () => {
-      setKeyboardVisible(true);
+    const willShowSub = Keyboard.addListener(willShowEvt, () => setKeyboardVisible(true));
+    // Le scroll se déclenche sur "keyboardDidShow" (clavier déjà entièrement affiché, layout stabilisé)
+    // plutôt que sur "keyboardWillShow" + délai estimé : sur un appareil réel, le bridge JS peut ne pas
+    // avoir encore traité le onFocus (qui arme noteFocusedRef) au moment où "willShow" est émis, ce qui
+    // faisait rater le scroll — "didShow" survient toujours après, une fois le focus déjà pris en compte.
+    const didShowSub = Keyboard.addListener("keyboardDidShow", () => {
       if (!noteFocusedRef.current) return;
-      // Laisse la mise en page se stabiliser (KeyboardAvoidingView + padding réduit) avant de scroller.
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+      scrollRef.current?.scrollToEnd({ animated: true });
     });
     const hideSub = Keyboard.addListener(hideEvt, () => setKeyboardVisible(false));
     return () => {
-      showSub.remove();
+      willShowSub.remove();
+      didShowSub.remove();
       hideSub.remove();
     };
   }, []);
@@ -780,7 +784,7 @@ export default function InterventionDetailScreen() {
         ref={scrollRef}
         className="flex-1"
         showsVerticalScrollIndicator={false}
-        keyboardDismissMode="interactive"
+        keyboardDismissMode="none"
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#3B82F6" />
