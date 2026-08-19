@@ -56,6 +56,7 @@ import {
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { Avatar } from "../../../src/ui/components/Avatar";
 import { useAuth } from "../../../src/hooks/useAuth";
+import { useCompanySettings } from "../../../src/hooks/useCompanySettingsSync";
 import { useSubZones } from "../../../src/hooks/useZones";
 import {
   useAssignEmployees,
@@ -389,16 +390,10 @@ export default function CalendarScreen() {
     placeholderData: (previousData) => previousData,
   });
 
-  const { data: companySettings } = useQuery({
-    queryKey: ["company-settings"],
-    queryFn: async () => (await api.get("/api/settings/company")).data,
-    staleTime: 5 * 60 * 1000,
-  });
+  // Fraîcheur assurée par le canal Realtime (useCompanySettingsSync, monté
+  // dans (app)/_layout) : plus besoin d'invalider à chaque retour sur l'écran.
+  const { data: companySettings } = useCompanySettings();
   const hideCash = companySettings?.hide_cash ?? false;
-
-  useFocusEffect(useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["company-settings"] });
-  }, []));
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);

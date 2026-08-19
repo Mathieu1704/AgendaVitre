@@ -11,6 +11,7 @@ import { Header } from "../../src/ui/layout/Header";
 import { CustomTabBar } from "../../src/ui/layout/CustomTabBar";
 import { useNotifications } from "../../src/hooks/useNotifications";
 import { useAuth, AuthProvider } from "../../src/hooks/useAuth";
+import { useCompanySettingsSync } from "../../src/hooks/useCompanySettingsSync";
 import { useTheme } from "../../src/ui/components/ThemeToggle";
 import { monthRangeStart, monthRangeEnd } from "../../src/lib/calendarRange";
 // OfflineBanner monte useOutboxSync : c'est lui qui déclenche la reprise de la
@@ -53,6 +54,9 @@ function AppLayoutContent() {
   // avant la fin de la restauration : hors réseau, ils ne voient ni cache
   // ni réponse serveur et restent vides jusqu'au prochain remount.
   const isRestoring = useIsRestoring();
+  // Abonnement unique au canal Realtime : c'est lui qui propage hide_cash à
+  // tous les écrans (et à tous les appareils) sans sondage.
+  useCompanySettingsSync();
   const prefetchedRef = useRef(false);
   const prefetchedAdminRef = useRef(false);
   const prefetchedToursRef = useRef(false);

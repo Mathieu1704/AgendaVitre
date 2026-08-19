@@ -74,6 +74,7 @@ import {
 import { useEmployees } from "../../../src/hooks/useEmployees";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useAuth } from "../../../src/hooks/useAuth";
+import { useCompanySettings } from "../../../src/hooks/useCompanySettingsSync";
 import { CityAutocomplete } from "../../../src/ui/components/CityAutocomplete";
 
 type Client = {
@@ -448,14 +449,7 @@ export default function AddInterventionScreen() {
     enabled: isAdmin,
   });
 
-  const { data: companySettings } = useQuery({
-    queryKey: ["company-settings"],
-    queryFn: async () => (await api.get("/api/settings/company")).data,
-    // Un simple drapeau d'affichage : 2 requetes/seconde etaient inutiles et
-    // generaient une rafale d'erreurs hors reseau. Un refetch au montage suffit.
-    staleTime: 30 * 1000,
-    refetchOnMount: true,
-  });
+  const { data: companySettings } = useCompanySettings();
   const hideCash = companySettings?.hide_cash ?? false;
 
   const { data: clients, refetch: refetchClients } = useQuery({

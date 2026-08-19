@@ -35,8 +35,8 @@ import { Avatar } from "../../src/ui/components/Avatar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Redirect, useFocusEffect, useRouter } from "expo-router";
 import { useInterventions } from "../../src/hooks/useInterventions";
-import { useClients } from "../../src/hooks/useClients";
 import { useAuth } from "../../src/hooks/useAuth";
+import { useCompanySettings } from "../../src/hooks/useCompanySettingsSync";
 import { monthRangeStart, monthRangeEnd } from "../../src/lib/calendarRange";
 import { supabase } from "../../src/lib/supabase";
 import { api } from "../../src/lib/api";
@@ -77,7 +77,15 @@ export default function Dashboard() {
     isLoading: interventionsLoading,
     refetch: refetchInterventions,
   } = useInterventions(dashboardRange);
-  const { clients, isLoading: clientsLoading } = useClients();
+  // Le dashboard n'affiche qu'un compteur : charger les ~3000 clients (une
+  // liste jamais conservée hors ligne, donc retéléchargée à chaque démarrage)
+  // retardait toute la rangée de chiffres. On demande juste le nombre.
+  const { data: clientsCount, isLoading: clientsLoading } = useQuery({
+    queryKey: ["clients-count"],
+    queryFn: async () =>
+      ((await api.get("/api/clients/count")).data?.count ?? 0) as number,
+    staleTime: 5 * 60 * 1000,
+  });
   const statsLoading = interventionsLoading || clientsLoading;
   const { width } = useWindowDimensions();
 
@@ -135,13 +143,7 @@ export default function Dashboard() {
     return () => style.remove();
   }, []);
 
-  const { data: companySettings } = useQuery({
-    queryKey: ["company-settings"],
-    queryFn: async () => (await api.get("/api/settings/company")).data,
-    // Simple drapeau d'affichage : 2 requêtes/seconde étaient inutiles.
-    staleTime: 30 * 1000,
-    refetchOnMount: true,
-  });
+  const { data: companySettings } = useCompanySettings();
   const hideCash = companySettings?.hide_cash ?? false;
 
   // Revenus des 6 derniers mois, agrégés côté serveur. Auparavant le graphique
@@ -286,7 +288,7 @@ export default function Dashboard() {
     },
     {
       label: "Clients",
-      value: (clients?.length || 0).toString(),
+      value: (clientsCount ?? 0).toString(),
       icon: Users,
       color: "#F97316",
       bg: "bg-orange-500/10",

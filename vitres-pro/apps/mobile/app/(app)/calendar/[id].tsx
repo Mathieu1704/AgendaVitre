@@ -66,6 +66,7 @@ import { StatusBadge } from "../../../src/ui/components/StatusBadge";
 import { Avatar } from "../../../src/ui/components/Avatar";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useAuth } from "../../../src/hooks/useAuth";
+import { useCompanySettings } from "../../../src/hooks/useCompanySettingsSync";
 import { useEmployees } from "../../../src/hooks/useEmployees";
 import { useCreateReinforcement } from "../../../src/hooks/useInterventions";
 import { OptionsModal } from "../../../src/ui/components/OptionsModal";
@@ -211,14 +212,7 @@ export default function InterventionDetailScreen() {
     refetchInterval: 20 * 1000,
   });
 
-  const { data: companySettings } = useQuery({
-    queryKey: ["company-settings"],
-    queryFn: async () => { const res = await api.get("/api/settings/company"); return res.data; },
-    // Un simple drapeau d'affichage : 2 requetes/seconde etaient inutiles et
-    // generaient une rafale d'erreurs hors reseau. Un refetch au montage suffit.
-    staleTime: 30 * 1000,
-    refetchOnMount: true,
-  });
+  const { data: companySettings } = useCompanySettings();
   const hideCash = companySettings?.hide_cash ?? false;
 
   // Fil de notes : canal admin <-> employé(s)/sous-traitant(s) assigné(s) à cette intervention

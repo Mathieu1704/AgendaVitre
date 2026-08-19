@@ -8,7 +8,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Wallet,
@@ -21,6 +21,7 @@ import {
 } from "lucide-react-native";
 
 import { api } from "../../../src/lib/api";
+import { useCompanySettings } from "../../../src/hooks/useCompanySettingsSync";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { Button } from "../../../src/ui/components/Button";
 import { ConfirmModal } from "../../../src/ui/components/ConfirmModal";
@@ -62,10 +63,7 @@ export default function HeuresEncaissementScreen() {
     undefined,
     includeCurrentWeek,
   );
-  const { data: companySettings } = useQuery({
-    queryKey: ["company-settings"],
-    queryFn: async () => (await api.get("/api/settings/company")).data,
-  });
+  const { data: companySettings } = useCompanySettings();
   const hideCash = companySettings?.hide_cash ?? false;
 
   const confirmCash = useConfirmCashSettlement();

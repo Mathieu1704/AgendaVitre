@@ -31,7 +31,8 @@ import {
 } from "lucide-react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
 import Constants from "expo-constants";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCompanySettings } from "../../../src/hooks/useCompanySettingsSync";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
@@ -89,13 +90,7 @@ export default function ParametresScreen() {
   const [hideCashModal, setHideCashModal] = useState(false);
   const [showAvatarSheet, setShowAvatarSheet] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const { data: companySettings } = useQuery({
-    queryKey: ["company-settings"],
-    queryFn: async () => (await api.get("/api/settings/company")).data,
-    staleTime: 0,
-    refetchInterval: 500,
-    refetchOnMount: true,
-  });
+  const { data: companySettings } = useCompanySettings();
   const hideCash = companySettings?.hide_cash ?? false;
   const toggleAnim = useRef(
     new Animated.Value(companySettings?.hide_cash ? 1 : 0),

@@ -75,6 +75,9 @@ function isPersistableKey(key: readonly unknown[]): boolean {
     // dashboard. Sans persistance, la courbe repartait vide à chaque
     // démarrage alors que les revenus passés ne changent plus.
     root === "monthly-revenue" ||
+    // Un simple entier, contrairement à ["clients"] (~3000 lignes) qui reste
+    // exclu : le compteur du dashboard s'affiche donc dès le démarrage.
+    root === "clients-count" ||
     root === "tour-run"
   );
 }
