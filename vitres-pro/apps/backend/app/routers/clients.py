@@ -41,6 +41,24 @@ def read_clients(
 ):
     return db.query(Client).all()
 
+@router.get("/count")
+def count_clients(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Nombre de clients, sans la liste.
+
+    Le dashboard n'affiche qu'un compteur : il telechargeait pourtant les
+    ~3000 clients a chaque demarrage, une charge qui n'est jamais conservee
+    hors ligne. Cette reponse tient en un entier, donc persistable et
+    affichable immediatement.
+
+    Doit rester declaree AVANT /{client_id}, sinon "count" serait interprete
+    comme un identifiant de client.
+    """
+    return {"count": db.query(Client).count()}
+
 @router.get("/{client_id}", response_model=ClientOut)
 def read_client(
     client_id: str,
