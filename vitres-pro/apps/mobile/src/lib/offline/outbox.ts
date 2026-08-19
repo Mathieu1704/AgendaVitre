@@ -33,6 +33,7 @@ const MAX_ATTEMPTS = 8;
 
 export type OutboxKind =
   | "payment-mode"        // mode de paiement / encaissement
+  | "defer-cash"          // paiement cash reporté (client absent)
   | "items-done"          // prestations réalisées à la clôture
   | "create-reprise"      // création du RDV de reprise
   | "mark-done"           // marquage terminé + reprise prise

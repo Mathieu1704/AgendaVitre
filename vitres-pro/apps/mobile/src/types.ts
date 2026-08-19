@@ -34,6 +34,20 @@ export interface Intervention {
   // Split cash/facture, utilisé uniquement quand payment_mode === "invoice_cash".
   amount_cash?: number | null;
   amount_invoice?: number | null;
+  // Reprise RDV : lien vers l'intervention source, non modifiable par un
+  // employé au-delà des prestations quand ce champ est renseigné.
+  reprise_taken?: boolean | null;
+  reprise_note?: string | null;
+  reprise_chain_id?: string | null;
+  reprise_of_id?: string | null;
+  // Paiement cash reporté (client absent) : montant dû tant que
+  // deferred_settled_by_intervention_id est null.
+  deferred_cash_amount?: number | null;
+  deferred_settled_by_intervention_id?: string | null;
+  // Solde reporté non réglé trouvé sur la chaîne de reprise de cette
+  // intervention (calculé côté backend, voir GET /interventions/{id}).
+  pending_deferred_amount?: number | null;
+  settled_deferred_amount?: number | null;
   zone: "hainaut" | "ardennes";
   recurrence_rule?: {
     freq?: string;

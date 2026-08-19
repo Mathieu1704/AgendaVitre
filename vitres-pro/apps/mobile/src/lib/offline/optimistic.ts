@@ -102,6 +102,23 @@ export function applyPaymentMode(
 }
 
 /**
+ * Client absent au passage : le cash prévu est reporté au prochain RDV de la
+ * chaîne de reprise (voir POST /interventions/{id}/defer-cash).
+ */
+export function applyDeferredCash(
+  qc: QueryClient,
+  interventionId: string,
+  amount: number,
+): void {
+  patchIntervention(qc, interventionId, (current) => ({
+    ...current,
+    deferred_cash_amount: amount,
+    deferred_settled_by_intervention_id: null,
+    ...(current.payment_mode === "invoice_cash" ? { amount_cash: 0 } : {}),
+  }));
+}
+
+/**
  * Prestations réalisées à la clôture.
  *
  * Le serveur recalcule `price_estimated` comme la somme des prestations

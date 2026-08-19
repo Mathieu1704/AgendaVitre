@@ -51,6 +51,7 @@ import { enqueue } from "../../../src/lib/offline/outbox";
 import { isOnlineNow } from "../../../src/lib/offline/network";
 import {
   applyPaymentMode,
+  applyDeferredCash,
   applyItemsDone,
   applyDeleteIntervention,
   applyEditIntervention,
@@ -71,7 +72,7 @@ import { OptionsModal } from "../../../src/ui/components/OptionsModal";
 import { ConfirmModal } from "../../../src/ui/components/ConfirmModal";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
 import { PaymentSplitInputs } from "../../../src/ui/components/PaymentSplitInputs";
-import { isCashRelated, validatePaymentSplit } from "../../../src/lib/payment";
+import { isCashRelated, validatePaymentSplit, isDeferredCashPending } from "../../../src/lib/payment";
 import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
 import { Dialog } from "../../../src/ui/components/Dialog";
 import { Input } from "../../../src/ui/components/Input";
@@ -128,6 +129,8 @@ export default function InterventionDetailScreen() {
   const [reinforcementTimeMode, setReinforcementTimeMode] = useState<"asap" | "precise">("asap");
   const [reinforcementTimeStr, setReinforcementTimeStr] = useState("");
   const [editingPayment, setEditingPayment] = useState(false);
+  const [showDeferCash, setShowDeferCash] = useState(false);
+  const [deferAmount, setDeferAmount] = useState("");
   const [pendingPaymentMode, setPendingPaymentMode] = useState<"cash" | "invoice" | "invoice_cash">("cash");
   const [pendingAmountCash, setPendingAmountCash] = useState("");
   const [pendingAmountInvoice, setPendingAmountInvoice] = useState("");
@@ -196,7 +199,12 @@ export default function InterventionDetailScreen() {
     // place : affichage immédiat depuis le cache, mais refetch dès l'ouverture.
     initialDataUpdatedAt: 0,
     staleTime: 30 * 1000,
-    refetchOnMount: true,
+    // "always" plutôt que `true` : certains champs (solde reporté, montant
+    // dû...) ne sont calculés que côté serveur sur ce GET précis et jamais
+    // présents dans le cache liste utilisé comme initialData — un simple
+    // "stale donc refetch" pouvait dans certains cas ne se déclencher qu'au
+    // prochain refetchInterval (20s) plutôt qu'à l'ouverture de l'écran.
+    refetchOnMount: "always",
     // Pas de push temps réel : sans ça, un admin qui garde cet écran ouvert
     // ne voit jamais un employé/sous-traitant clôturer l'intervention en
     // direct depuis un autre appareil — il faut ressortir puis revenir.
@@ -503,6 +511,31 @@ export default function InterventionDetailScreen() {
       );
     },
     onError: () => toast.error("Erreur", "Impossible de modifier le paiement."),
+  });
+
+  // Client absent au passage : le cash prévu n'est pas encaissé maintenant,
+  // il est reporté au prochain RDV de la chaîne de reprise (voir defer-cash
+  // côté backend, qui exclut ce montant du total cash de la semaine).
+  const deferCashMutation = useMutation({
+    mutationFn: async (amount: number) => {
+      applyDeferredCash(queryClient, String(id), amount);
+      await enqueue({
+        kind: "defer-cash",
+        method: "POST",
+        url: `/api/interventions/${id}/defer-cash`,
+        body: { amount },
+        label: "Paiement reporté",
+      });
+    },
+    onSuccess: () => {
+      setShowDeferCash(false);
+      setDeferAmount("");
+      toast.success(
+        "Paiement reporté",
+        isOnlineNow() ? "Il sera à encaisser au prochain RDV." : "Sera synchronisé au retour du réseau.",
+      );
+    },
+    onError: () => toast.error("Erreur", "Impossible de reporter le paiement."),
   });
 
   // Clôture pour les sous-traitants : même checklist par prestation que pour
@@ -958,6 +991,110 @@ export default function InterventionDetailScreen() {
               );
             })()}
 
+            {/* Paiement reporté (client absent) : bandeau + toggle */}
+            {!isSubcontractor && intervType === "intervention" && (
+              <View style={{ marginBottom: 12, gap: 8 }}>
+                {isDeferredCashPending(intervention) && (
+                  <View
+                    style={{
+                      flexDirection: "row", alignItems: "center", gap: 10,
+                      padding: 12, borderRadius: 14,
+                      backgroundColor: isDark ? "rgba(249,115,22,0.1)" : "#FFF7ED",
+                      borderWidth: 1, borderColor: isDark ? "rgba(249,115,22,0.3)" : "#FED7AA",
+                    }}
+                  >
+                    <Banknote size={18} color="#F97316" />
+                    <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: isDark ? "#FDBA74" : "#C2410C" }}>
+                      Paiement reporté — {formatPrice(intervention.deferred_cash_amount)} dû, à encaisser au prochain RDV.
+                    </Text>
+                  </View>
+                )}
+
+                {!isDeferredCashPending(intervention) && !!intervention.pending_deferred_amount && (
+                  <View
+                    style={{
+                      flexDirection: "row", alignItems: "center", gap: 10,
+                      padding: 12, borderRadius: 14,
+                      backgroundColor: isDark ? "rgba(249,115,22,0.1)" : "#FFF7ED",
+                      borderWidth: 1, borderColor: isDark ? "rgba(249,115,22,0.3)" : "#FED7AA",
+                    }}
+                  >
+                    <Banknote size={18} color="#F97316" />
+                    <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: isDark ? "#FDBA74" : "#C2410C" }}>
+                      Solde précédent dû : {formatPrice(intervention.pending_deferred_amount)} (client absent au RDV précédent).
+                    </Text>
+                  </View>
+                )}
+
+                {isCashRelated(intervention.payment_mode) &&
+                  !["done", "cancelled"].includes(intervention.status) &&
+                  !isDeferredCashPending(intervention) && (
+                    <>
+                      {!showDeferCash ? (
+                        <Pressable
+                          onPress={() => {
+                            const defaultAmount = intervention.payment_mode === "invoice_cash"
+                              ? (intervention.amount_cash ?? intervention.price_estimated ?? 0)
+                              : (intervention.price_estimated ?? 0);
+                            setDeferAmount(defaultAmount ? String(defaultAmount) : "");
+                            setShowDeferCash(true);
+                          }}
+                          style={{
+                            flexDirection: "row", alignItems: "center", gap: 8,
+                            paddingVertical: 8, paddingHorizontal: 4,
+                          }}
+                        >
+                          <Banknote size={14} color={isDark ? "#94A3B8" : "#64748B"} />
+                          <Text style={{ fontSize: 12, fontWeight: "600", color: isDark ? "#94A3B8" : "#64748B", textDecorationLine: "underline" }}>
+                            Client absent — reporter le paiement
+                          </Text>
+                        </Pressable>
+                      ) : (
+                        <View style={{
+                          backgroundColor: isDark ? "#1E293B" : "#F8FAFC",
+                          borderWidth: 1, borderColor: isDark ? "#334155" : "#E2E8F0",
+                          borderRadius: 14, padding: 12, gap: 10,
+                        }}>
+                          <Text style={{ fontSize: 12, fontWeight: "600", color: isDark ? "#CBD5E1" : "#475569" }}>
+                            Montant dû, reporté au prochain RDV
+                          </Text>
+                          <Input
+                            value={deferAmount}
+                            onChangeText={setDeferAmount}
+                            keyboardType="decimal-pad"
+                            placeholder="0.00"
+                          />
+                          <View style={{ flexDirection: "row", gap: 8 }}>
+                            <Pressable
+                              onPress={() => setShowDeferCash(false)}
+                              style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: isDark ? "#334155" : "#E2E8F0" }}
+                            >
+                              <Text style={{ fontWeight: "700", color: isDark ? "#CBD5E1" : "#475569" }}>Annuler</Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => {
+                                const amount = parseFloat(deferAmount.replace(",", "."));
+                                if (!amount || amount <= 0) {
+                                  toast.error("Erreur", "Montant invalide");
+                                  return;
+                                }
+                                deferCashMutation.mutate(amount);
+                              }}
+                              disabled={deferCashMutation.isPending}
+                              style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 12, backgroundColor: "#F97316", opacity: deferCashMutation.isPending ? 0.6 : 1 }}
+                            >
+                              {deferCashMutation.isPending
+                                ? <ActivityIndicator color="white" size="small" />
+                                : <Text style={{ fontWeight: "700", color: "white" }}>Confirmer</Text>}
+                            </Pressable>
+                          </View>
+                        </View>
+                      )}
+                    </>
+                  )}
+              </View>
+            )}
+
             {/* Date + heure sur une seule ligne compacte */}
             <View
               style={{
@@ -1396,6 +1533,18 @@ export default function InterventionDetailScreen() {
                                 );
                               });
                           })()}
+                          {intervention.settled_deferred_amount != null && (
+                            <View className="pb-2 border-b border-border dark:border-slate-800">
+                              <View className="flex-row justify-between items-center">
+                                <Text style={{ fontWeight: "500", color: "#F97316" }}>
+                                  Solde reporté (RDV précédent)
+                                </Text>
+                                <Text style={{ fontWeight: "700", color: "#F97316" }}>
+                                  {formatPrice(intervention.settled_deferred_amount, "0 €")}
+                                </Text>
+                              </View>
+                            </View>
+                          )}
                           <View className="flex-row justify-between items-center pt-2 mt-1">
                             <Text className="text-lg font-bold text-foreground dark:text-white">
                               Total

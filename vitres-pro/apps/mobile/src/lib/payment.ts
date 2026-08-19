@@ -1,4 +1,4 @@
-import type { PaymentMode } from "../types";
+import type { Intervention, PaymentMode } from "../types";
 
 export interface PaymentModePillOption {
   id: PaymentMode;
@@ -41,4 +41,10 @@ export function validatePaymentSplit(
     return `La somme doit être égale à ${rounded.toFixed(2)} €`;
   }
   return null;
+}
+
+/** Paiement cash reporté (client absent au passage) pas encore réglé par une
+ * intervention suivante — voir POST /interventions/{id}/defer-cash. */
+export function isDeferredCashPending(intervention: Pick<Intervention, "deferred_cash_amount" | "deferred_settled_by_intervention_id">): boolean {
+  return intervention.deferred_cash_amount != null && !intervention.deferred_settled_by_intervention_id;
 }

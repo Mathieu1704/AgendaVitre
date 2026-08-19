@@ -3,7 +3,7 @@ import { View, ScrollView, Text, Pressable, ActivityIndicator, Platform } from "
 import { useRouter } from "expo-router";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BellOff, CheckCheck, AlertTriangle, Info, Trash2, LogIn, LogOut } from "lucide-react-native";
+import { BellOff, CheckCheck, AlertTriangle, Info, Trash2, LogIn, LogOut, XCircle, Banknote } from "lucide-react-native";
 import { Dialog } from "../../../src/ui/components/Dialog";
 import { toast } from "../../../src/ui/toast";
 import {
@@ -30,6 +30,8 @@ function timeAgo(dateStr: string): string {
 
 function NotifIcon({ type }: { type: string }) {
   if (type === "no_reprise") return <AlertTriangle size={20} color="#EF4444" />;
+  if (type === "service_unchecked") return <XCircle size={20} color="#F97316" />;
+  if (type === "deferred_cash") return <Banknote size={20} color="#F97316" />;
   if (type === "clock_in") return <LogIn size={20} color="#10B981" />;
   if (type === "clock_out") return <LogOut size={20} color="#F97316" />;
   return <Info size={20} color="#3B82F6" />;
@@ -37,6 +39,8 @@ function NotifIcon({ type }: { type: string }) {
 
 function notifBgColor(type: string): string {
   if (type === "no_reprise") return "#FEF2F2";
+  if (type === "service_unchecked") return "#FFF7ED";
+  if (type === "deferred_cash") return "#FFF7ED";
   if (type === "clock_in") return "#ECFDF5";
   if (type === "clock_out") return "#FFF7ED";
   return "#EFF6FF";

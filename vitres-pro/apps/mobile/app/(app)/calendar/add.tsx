@@ -1206,6 +1206,16 @@ export default function AddInterventionScreen() {
     [allItems],
   );
 
+  // Solde cash reporté (client absent au RDV précédent) que cette reprise
+  // absorbe : lu directement sur la source (pas besoin de chaîne, marche
+  // avec ou sans client lié), le backend l'ajoute automatiquement au prix
+  // total à la création (voir settle_deferred_intervention_id).
+  const pendingDeferredAmount =
+    isRepriseMode && !isDuplicateMode && repriseSource?.deferred_cash_amount != null && !repriseSource?.deferred_settled_by_intervention_id
+      ? Number(repriseSource.deferred_cash_amount) || 0
+      : 0;
+  const paymentTotal = totalPrice + pendingDeferredAmount;
+
   const selectedRate =
     (hourlyRates as any[])?.find((r: any) => r.id === selectedRateId) ?? null;
   const computedHoursRaw =
@@ -1317,7 +1327,7 @@ export default function AddInterventionScreen() {
 
   const handleSubmit = async (scope: "this" | "following" | "all" = "this") => {
     if (!title) return toast.error("Titre", "Titre requis.");
-    const splitError = validatePaymentSplit(paymentMode, totalPrice, amountCash, amountInvoice);
+    const splitError = validatePaymentSplit(paymentMode, paymentTotal, amountCash, amountInvoice);
     if (splitError) return toast.error("Paiement", splitError);
     const datePart = startDateStr.split("T")[0];
     let startParsed: Date, endParsed: Date, dur: number;
@@ -1360,6 +1370,7 @@ export default function AddInterventionScreen() {
           : isRepriseMode
           ? (repriseSource?.hourly_rate_id ?? null)
           : null,
+        ...(pendingDeferredAmount > 0 ? { settle_deferred_intervention_id: repriseSourceId } : {}),
       };
 
       if (isEditMode) {
@@ -1980,6 +1991,24 @@ export default function AddInterventionScreen() {
               </View>
             )}
 
+            {isRepriseMode && !noRepriseMode && pendingDeferredAmount > 0 && (
+              <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+                <View
+                  style={{
+                    flexDirection: "row", alignItems: "center", gap: 10,
+                    padding: 12, borderRadius: 14,
+                    backgroundColor: isDark ? "rgba(249,115,22,0.1)" : "#FFF7ED",
+                    borderWidth: 1, borderColor: isDark ? "rgba(249,115,22,0.3)" : "#FED7AA",
+                  }}
+                >
+                  <Banknote size={18} color="#F97316" />
+                  <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: isDark ? "#FDBA74" : "#C2410C" }}>
+                    Solde précédent dû : {pendingDeferredAmount.toFixed(2)} € (client absent au RDV précédent) — sera ajouté au total de ce RDV.
+                  </Text>
+                </View>
+              </View>
+            )}
+
             {!noRepriseMode && (
             <>
             <CardHeader className="p-6 pb-2">
@@ -2164,16 +2193,22 @@ export default function AddInterventionScreen() {
                             ? `Ce client a déjà ${upcomingClientInterventions.length} RDV prévus`
                             : "Ce client a déjà un RDV prévu"}
                         </Text>
-                        {upcomingClientInterventions.slice(0, 3).map((it: any) => (
-                          <Text key={it.id} style={{ fontSize: 12, color: "#C2410C" }}>
-                            {new Date(it.start_time).toLocaleDateString("fr-FR", {
-                              day: "numeric",
-                              month: "short",
-                            })}
-                            {" — "}
-                            {it.title}
-                          </Text>
-                        ))}
+                        <ScrollView
+                          style={{ maxHeight: 160 }}
+                          nestedScrollEnabled
+                          showsVerticalScrollIndicator={upcomingClientInterventions.length > 4}
+                        >
+                          {upcomingClientInterventions.map((it: any) => (
+                            <Text key={it.id} style={{ fontSize: 12, color: "#C2410C", paddingVertical: 1 }}>
+                              {new Date(it.start_time).toLocaleDateString("fr-FR", {
+                                day: "numeric",
+                                month: "short",
+                              })}
+                              {" — "}
+                              {it.title}
+                            </Text>
+                          ))}
+                        </ScrollView>
                       </View>
                     </View>
                   )}
@@ -2200,10 +2235,18 @@ export default function AddInterventionScreen() {
                   label="Titre"
                   value={title}
                   onChangeText={setTitle}
-                  multiline
-                  textAlignVertical="top"
-                  style={{ height: undefined, minHeight: 48, alignItems: "flex-start", paddingVertical: 10 }}
-                  inputStyle={{ height: undefined, minHeight: 28 }}
+                  multiline={!isRepriseMode}
+                  textAlignVertical={isRepriseMode ? "center" : "top"}
+                  style={
+                    isRepriseMode
+                      ? { minHeight: 48, backgroundColor: "transparent", borderWidth: 0 }
+                      : { height: undefined, minHeight: 48, alignItems: "flex-start", paddingVertical: 10 }
+                  }
+                  inputStyle={
+                    isRepriseMode
+                      ? undefined
+                      : { height: undefined, minHeight: 28 }
+                  }
                 />
 
                 {isAdmin && (
@@ -3080,7 +3123,7 @@ export default function AddInterventionScreen() {
                         L'employé encaisse sur place et une facture sera émise
                       </Text>
                       <PaymentSplitInputs
-                        total={totalPrice}
+                        total={paymentTotal}
                         amountCash={amountCash}
                         amountInvoice={amountInvoice}
                         onChangeCash={setAmountCash}
