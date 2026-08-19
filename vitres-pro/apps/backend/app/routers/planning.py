@@ -311,3 +311,60 @@ def get_range_stats_endpoint(
         current += timedelta(days=1)
 
     return results
+
+
+@router.get("/monthly-revenue")
+def get_monthly_revenue(
+    months: int = 6,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    CA réalisé par mois, sur les `months` derniers mois (mois courant inclus).
+
+    Le dashboard calculait ces totaux côté mobile, ce qui l'obligeait à
+    télécharger tout l'historique des interventions au démarrage. L'agrégation
+    est faite ici en SQL : la réponse tient en quelques lignes {month, revenue},
+    assez légère pour être conservée hors ligne et affichée immédiatement.
+
+    Les mois sans chiffre d'affaires sont renvoyés à 0 plutôt qu'omis, pour que
+    le graphique garde toujours le même nombre de points.
+    """
+    months = max(1, min(months, 24))
+
+    today = datetime.now(BRUSSELS_TZ).date()
+    year, month = today.year, today.month - (months - 1)
+    while month <= 0:
+        month += 12
+        year -= 1
+
+    start_utc = datetime(year, month, 1, tzinfo=BRUSSELS_TZ).astimezone(timezone.utc)
+
+    # Les mois sont découpés en heure de Bruxelles, pas en UTC : sinon une
+    # intervention du 1er du mois à 00h30 locale bascule dans le mois précédent.
+    month_expr = func.date_trunc(
+        "month", func.timezone("Europe/Brussels", Intervention.start_time)
+    )
+    rows = (
+        db.query(
+            month_expr.label("month"),
+            func.sum(Intervention.price_estimated).label("revenue"),
+        )
+        .filter(
+            Intervention.status == "done",
+            Intervention.start_time >= start_utc,
+        )
+        .group_by(month_expr)
+        .all()
+    )
+    totals = {r.month.strftime("%Y-%m"): float(r.revenue or 0) for r in rows}
+
+    result = []
+    for _ in range(months):
+        key = f"{year:04d}-{month:02d}"
+        result.append({"month": key, "revenue": round(totals.get(key, 0.0), 2)})
+        month += 1
+        if month > 12:
+            month = 1
+            year += 1
+    return result
