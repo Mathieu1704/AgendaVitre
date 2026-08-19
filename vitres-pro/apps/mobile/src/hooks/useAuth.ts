@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, getSessionFast } from "../lib/supabase";
 import { Session } from "@supabase/supabase-js";
 import { api } from "../lib/api";
 import { useQueryClient, onlineManager } from "@tanstack/react-query";
@@ -66,6 +66,11 @@ export const useAuth = () => {
 
     const checkRole = async () => {
       const cached = await hydrate();
+      // Un profil en cache suffit pour débloquer l'écran de chargement tout
+      // de suite : pas besoin d'attendre la confirmation réseau (jusqu'à 30s
+      // avec le retry d'axios) alors qu'on a déjà de quoi afficher l'app.
+      // La confirmation se fait ensuite en tâche de fond, sans regate l'UI.
+      if (cached && !cancelled) setLoading(false);
       try {
         const me = (await api.get("/api/employees/me")).data;
         const profile = {
@@ -112,7 +117,7 @@ export const useAuth = () => {
     };
 
     // 1. Session initiale — si le refresh token est invalide, on déconnecte proprement
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
+    getSessionFast().then(({ data: { session }, error }) => {
       if (error || !session) {
         if (error) supabase.auth.signOut(); // nettoie le token corrompu du SecureStore
         setLoading(false);

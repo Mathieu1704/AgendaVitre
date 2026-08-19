@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, useWindowDimensions, ActivityIndicator, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Tabs, Redirect, usePathname, useGlobalSearchParams } from "expo-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "../../src/lib/supabase";
+import { useQueryClient, useIsRestoring } from "@tanstack/react-query";
+import { supabase, getSessionFast } from "../../src/lib/supabase";
 import { api } from "../../src/lib/api";
 import { rememberAppPath } from "../../src/lib/returnTo";
 import { Sidebar } from "../../src/ui/layout/Sidebar";
@@ -37,6 +37,11 @@ export default function AppLayout() {
   const { isAdmin, isSubcontractor, loading: authLoading } = useAuth();
   const { isDark } = useTheme();
   const queryClient = useQueryClient();
+  // Le cache React Query persisté (planning, heures, etc.) se restaure de
+  // façon asynchrone au démarrage. Sans l'attendre ici, les écrans montent
+  // avant la fin de la restauration : hors réseau, ils ne voient ni cache
+  // ni réponse serveur et restent vides jusqu'au prochain remount.
+  const isRestoring = useIsRestoring();
   const prefetchedRef = useRef(false);
   const prefetchedAdminRef = useRef(false);
   const prefetchedToursRef = useRef(false);
@@ -123,7 +128,7 @@ export default function AppLayout() {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    getSessionFast().then(({ data: { session } }) => {
       if (!mounted) return;
       setSession(session);
       setIsLoading(false);
@@ -145,7 +150,7 @@ export default function AppLayout() {
     };
   }, []);
 
-  if (isLoading || authLoading) {
+  if (isLoading || authLoading || isRestoring) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
         <ActivityIndicator size="large" color="#3B82F6" />

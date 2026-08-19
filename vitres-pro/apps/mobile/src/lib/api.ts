@@ -2,7 +2,7 @@ import axios from "axios";
 import { router } from "expo-router";
 import { Platform } from "react-native";
 import { onlineManager } from "@tanstack/react-query";
-import { supabase } from "./supabase";
+import { supabase, getSessionFast } from "./supabase";
 
 const configuredApiUrl =
   process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000";
@@ -39,7 +39,7 @@ supabase.auth.getSession().then(({ data }) => {
 // Si le token n'est pas encore en cache (premier chargement), on attend getSession()
 api.interceptors.request.use(async (config) => {
   if (!_cachedToken) {
-    const { data } = await supabase.auth.getSession();
+    const { data } = await getSessionFast();
     _cachedToken = data.session?.access_token ?? null;
   }
   if (_cachedToken) {
