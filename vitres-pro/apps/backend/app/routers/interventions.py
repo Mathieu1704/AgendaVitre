@@ -102,20 +102,6 @@ def _pending_deferred_amount(db: Session, intervention: Intervention):
     return None
 
 
-def _settled_deferred_amount(db: Session, intervention: Intervention):
-    """Ce RDV a-t-il absorbe un solde cash reporte du RDV precedent (deja
-    reglee) ? Utilise pour afficher une ligne "Solde reporte" dans le detail
-    de la prestation, en plus des services rendus."""
-    if not intervention.reprise_of_id:
-        return None
-    source = db.query(Intervention).filter(
-        Intervention.id == intervention.reprise_of_id,
-        Intervention.deferred_cash_amount.isnot(None),
-        Intervention.deferred_settled_by_intervention_id == intervention.id,
-    ).first()
-    return float(source.deferred_cash_amount) if source else None
-
-
 def _migrate_orphan_items_to_chain(db: Session, intervention: Intervention, chain_id) -> dict:
     """Convertit les items ad-hoc existants d'une intervention (label+prix
     seuls, sans catalogue) en entrées intervention_services au moment où sa
@@ -377,7 +363,11 @@ def read_intervention(
     if current_user.role == 'subcontractor':
         _strip_prices([intervention])
     intervention.pending_deferred_amount = _pending_deferred_amount(db, intervention)
-    intervention.settled_deferred_amount = _settled_deferred_amount(db, intervention)
+    intervention.settled_deferred_amount = (
+        float(intervention.carried_over_deferred_amount)
+        if intervention.carried_over_deferred_amount is not None
+        else None
+    )
     return intervention
 
 
@@ -487,6 +477,9 @@ def create_intervention(
         ).first()
         if deferred_source:
             new_intervention.price_estimated = float(new_intervention.price_estimated or 0) + float(deferred_source.deferred_cash_amount)
+            # Persiste pour pouvoir l'exclure du calcul des heures planifiees
+            # (taux horaire) sans requete supplementaire — voir intervention_hours.
+            new_intervention.carried_over_deferred_amount = deferred_source.deferred_cash_amount
 
     _validate_payment_split(
         new_intervention.payment_mode, new_intervention.price_estimated,

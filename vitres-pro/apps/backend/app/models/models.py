@@ -248,6 +248,10 @@ class Intervention(Base):
     # n'est alors compté dans aucun total cash hebdomadaire.
     deferred_cash_amount = Column(Numeric(10, 2), nullable=True)
     deferred_settled_by_intervention_id = Column(UUID(as_uuid=True), ForeignKey("interventions.id", ondelete="SET NULL"), nullable=True)
+    # Montant absorbe depuis un solde reporte du RDV precedent (persiste sur
+    # CETTE intervention, celle qui encaisse) : exclu du calcul des heures
+    # planifiees (taux horaire), inclus dans price_estimated.
+    carried_over_deferred_amount = Column(Numeric(10, 2), nullable=True)
 
     # Renfort : intervention légère créée pour qu'un employé vienne épauler une
     # intervention préexistante assignée à un(des) autre(s) employé(s), sans

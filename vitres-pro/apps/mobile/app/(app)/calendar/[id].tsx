@@ -645,7 +645,10 @@ export default function InterventionDetailScreen() {
       (s: number, it: any) => s + (Number(it.price) < 0 ? Number(it.price) : 0),
       0,
     );
-    const rateEligiblePrice = intervention.price_estimated - negativeTotal;
+    // Solde cash reporté absorbé depuis le RDV précédent : n'a pas pris de
+    // temps supplémentaire, ne doit pas gonfler la durée calculée.
+    const carriedOver = Number(intervention.settled_deferred_amount) || 0;
+    const rateEligiblePrice = intervention.price_estimated - negativeTotal - carriedOver;
     if (rateEligiblePrice <= 0) return null;
     return (rateEligiblePrice / rate.rate) * 3600000;
   })();

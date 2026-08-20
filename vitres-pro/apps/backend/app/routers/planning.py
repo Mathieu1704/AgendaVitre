@@ -81,7 +81,11 @@ def intervention_hours(interv) -> float:
     negative_total = sum(
         float(it.price) for it in interv.items if float(it.price) < 0
     )
-    rate_eligible = price_estimated - negative_total
+    # Solde cash reporté absorbé depuis le RDV précédent (client absent) :
+    # encaisser une vieille dette ne prend pas de temps sur place, seules les
+    # prestations réellement prévues cette fois-ci doivent compter.
+    carried_over = float(getattr(interv, "carried_over_deferred_amount", None) or 0)
+    rate_eligible = price_estimated - negative_total - carried_over
 
     if rate_eligible > 0 and rate.rate > 0:
         # Arrondi au quart d'heure, comme côté mobile (rate-session.tsx,

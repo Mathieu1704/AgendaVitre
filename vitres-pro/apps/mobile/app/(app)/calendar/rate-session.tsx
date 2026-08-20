@@ -232,7 +232,11 @@ export default function RateSessionScreen() {
     (s: number, it: any) => s + (Number(it.price) < 0 ? Number(it.price) : 0),
     0,
   );
-  const rateEligiblePrice = price - negativeTotal;
+  // Solde cash reporté absorbé depuis le RDV précédent (client absent) :
+  // n'a pas pris de temps supplémentaire sur place, ne doit pas compter
+  // dans les heures — en miroir du backend (planning.py::intervention_hours).
+  const carriedOver = Number(current?.settled_deferred_amount) || 0;
+  const rateEligiblePrice = price - negativeTotal - carriedOver;
   const durationFromIntervention =
     current?.start_time && current?.end_time
       ? (new Date(current.end_time).getTime() -
@@ -273,7 +277,8 @@ export default function RateSessionScreen() {
         (s: number, it: any) => s + (Number(it.price) < 0 ? Number(it.price) : 0),
         0,
       );
-      const p = (parseFloat(i.price_estimated) || 0) - negTotal;
+      const carriedOver = Number(i.settled_deferred_amount) || 0;
+      const p = (parseFloat(i.price_estimated) || 0) - negTotal - carriedOver;
       if (p <= 0 || rate.rate <= 0) return sum;
       return sum + Math.round((p / rate.rate) * 4) / 4;
     }, 0);
