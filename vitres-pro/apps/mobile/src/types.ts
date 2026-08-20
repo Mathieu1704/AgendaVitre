@@ -47,7 +47,7 @@ export interface Intervention {
   // Solde reporté non réglé trouvé sur la chaîne de reprise de cette
   // intervention (calculé côté backend, voir GET /interventions/{id}).
   pending_deferred_amount?: number | null;
-  settled_deferred_amount?: number | null;
+  carried_over_deferred_amount?: number | null;
   zone: "hainaut" | "ardennes";
   recurrence_rule?: {
     freq?: string;

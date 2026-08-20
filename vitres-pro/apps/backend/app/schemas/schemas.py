@@ -278,7 +278,7 @@ class InterventionOut(BaseModel):
     deferred_cash_amount: Optional[float] = None
     deferred_settled_by_intervention_id: Optional[UUID] = None
     pending_deferred_amount: Optional[float] = None
-    settled_deferred_amount: Optional[float] = None
+    carried_over_deferred_amount: Optional[float] = None
     reinforcement_for_id: Optional[UUID] = None
     address: Optional[str] = None
     phone: Optional[str] = None

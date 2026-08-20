@@ -87,7 +87,10 @@ export const InterventionCard = React.memo(function InterventionCard({
       (s: number, it: any) => s + (Number(it.price) < 0 ? Number(it.price) : 0),
       0,
     );
-    const rateEligiblePrice = item.price_estimated - negativeTotal;
+    // Solde cash reporté absorbé depuis le RDV précédent : n'a pas pris de
+    // temps supplémentaire, ne doit pas gonfler la durée affichée.
+    const carriedOver = Number((item as any).carried_over_deferred_amount) || 0;
+    const rateEligiblePrice = item.price_estimated - negativeTotal - carriedOver;
     if (rateEligiblePrice <= 0) return null;
     return Math.round((rateEligiblePrice / rate.rate) * 4) / 4;
   })();

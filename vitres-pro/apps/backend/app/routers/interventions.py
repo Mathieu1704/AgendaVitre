@@ -363,11 +363,6 @@ def read_intervention(
     if current_user.role == 'subcontractor':
         _strip_prices([intervention])
     intervention.pending_deferred_amount = _pending_deferred_amount(db, intervention)
-    intervention.settled_deferred_amount = (
-        float(intervention.carried_over_deferred_amount)
-        if intervention.carried_over_deferred_amount is not None
-        else None
-    )
     return intervention
 
 

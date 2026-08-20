@@ -647,7 +647,7 @@ export default function InterventionDetailScreen() {
     );
     // Solde cash reporté absorbé depuis le RDV précédent : n'a pas pris de
     // temps supplémentaire, ne doit pas gonfler la durée calculée.
-    const carriedOver = Number(intervention.settled_deferred_amount) || 0;
+    const carriedOver = Number(intervention.carried_over_deferred_amount) || 0;
     const rateEligiblePrice = intervention.price_estimated - negativeTotal - carriedOver;
     if (rateEligiblePrice <= 0) return null;
     return (rateEligiblePrice / rate.rate) * 3600000;
@@ -1532,14 +1532,14 @@ export default function InterventionDetailScreen() {
                                 );
                               });
                           })()}
-                          {intervention.settled_deferred_amount != null && (
+                          {intervention.carried_over_deferred_amount != null && (
                             <View className="pb-2 border-b border-border dark:border-slate-800">
                               <View className="flex-row justify-between items-center">
                                 <Text style={{ fontWeight: "500", color: "#F97316" }}>
                                   Solde reporté (RDV précédent)
                                 </Text>
                                 <Text style={{ fontWeight: "700", color: "#F97316" }}>
-                                  {formatPrice(intervention.settled_deferred_amount, "0 €")}
+                                  {formatPrice(intervention.carried_over_deferred_amount, "0 €")}
                                 </Text>
                               </View>
                             </View>
