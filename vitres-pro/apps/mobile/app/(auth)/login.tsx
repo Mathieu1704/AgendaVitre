@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "../../src/lib/supabase";
+import { hideSplash } from "../../src/lib/splash";
 import { consumeReturnTo } from "../../src/lib/returnTo";
 import { toast } from "../../src/ui/toast";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
@@ -28,6 +29,13 @@ export default function LoginScreen() {
   const isDesktop = width >= 1024;
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
+
+  // Un utilisateur non connecte traverse quand meme (app)/_layout, qui garde le
+  // splash affiche : sans ceci, le logo resterait par-dessus l'ecran de
+  // connexion jusqu'au delai de securite.
+  useEffect(() => {
+    void hideSplash();
+  }, []);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

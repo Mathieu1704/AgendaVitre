@@ -3,7 +3,6 @@ import { supabase, getSessionFast } from "../lib/supabase";
 import { Session } from "@supabase/supabase-js";
 import { api } from "../lib/api";
 import { useQueryClient, onlineManager } from "@tanstack/react-query";
-import { router } from "expo-router";
 import {
   loadProfile,
   saveProfile,
@@ -119,7 +118,10 @@ const useAuthState = () => {
       // ligne, les données du compte précédent seraient restaurées au
       // prochain démarrage.
       await queryPersister.removeClient();
-      router.replace("/(auth)/login");
+      // Pas de navigation ici : `(app)/_layout` écoute le même événement
+      // d'authentification et redirige déjà vers le login de façon déclarative.
+      // Naviguer en plus faisait arriver deux fois sur l'écran de connexion,
+      // la seconde avec son animation d'entrée.
     };
 
     // 1. Session initiale — si le refresh token est invalide, on déconnecte proprement

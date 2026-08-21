@@ -18,6 +18,9 @@ import {
 import { flush as flushOutbox } from "../src/lib/offline/outbox";
 import { flushPersistedQueryCache } from "../src/lib/offline/chunkedPersister";
 import { supabase } from "../src/lib/supabase";
+// Importé ici, au point d'entrée : ce module empêche le splash natif de se
+// masquer tout seul, et doit donc s'exécuter avant le premier rendu.
+import "../src/lib/splash";
 import "../app.css";
 
 // Sentry désactivé temporairement : le build natif 1.0.2 a été publié sans le

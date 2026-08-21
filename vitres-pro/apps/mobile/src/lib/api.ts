@@ -1,5 +1,4 @@
 import axios from "axios";
-import { router } from "expo-router";
 import { Platform } from "react-native";
 import { onlineManager } from "@tanstack/react-query";
 import { supabase, getSessionFast } from "./supabase";
@@ -113,8 +112,11 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401) {
       _cachedToken = null;
+      // `signOut()` déclenche l'événement d'authentification que `(app)/_layout`
+      // écoute pour rediriger vers le login. Naviguer aussi depuis ici faisait
+      // rejouer l'écran de connexion autant de fois qu'il y avait de requêtes
+      // en 401 — typiquement toute la rafale de préchargement au démarrage.
       void supabase.auth.signOut();
-      router.replace("/(auth)/login");
     } else if (isNetworkIssue) {
       // Pas de toast par requête : hors réseau, le planning et les sondages
       // périodiques en déclenchaient une rafale. L'état est signalé une seule

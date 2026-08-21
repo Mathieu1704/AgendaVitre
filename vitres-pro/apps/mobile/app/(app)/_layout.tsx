@@ -12,6 +12,7 @@ import { CustomTabBar } from "../../src/ui/layout/CustomTabBar";
 import { useNotifications } from "../../src/hooks/useNotifications";
 import { useAuth, AuthProvider } from "../../src/hooks/useAuth";
 import { useCompanySettingsSync } from "../../src/hooks/useCompanySettingsSync";
+import { hideSplash } from "../../src/lib/splash";
 import { useTheme } from "../../src/ui/components/ThemeToggle";
 import { monthRangeStart, monthRangeEnd } from "../../src/lib/calendarRange";
 // OfflineBanner monte useOutboxSync : c'est lui qui déclenche la reprise de la
@@ -165,7 +166,17 @@ function AppLayoutContent() {
     };
   }, []);
 
-  if (isLoading || authLoading || isRestoring) {
+  const ready = !isLoading && !authLoading && !isRestoring;
+
+  // Le splash natif reste affiché tant que l'app n'a rien d'utile à montrer :
+  // l'utilisateur voit le logo en continu au lieu du logo puis d'un rond de
+  // chargement. Le rendu ci-dessous existe toujours, simplement masqué par le
+  // splash — et sert de secours si celui-ci a déjà été rendu (filet de sécurité).
+  useEffect(() => {
+    if (ready) void hideSplash();
+  }, [ready]);
+
+  if (!ready) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: isDark ? "#020817" : "#FFFFFF" }}>
         <ActivityIndicator size="large" color="#3B82F6" />
