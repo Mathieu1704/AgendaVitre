@@ -349,15 +349,22 @@ export default function HeuresEncaissementScreen() {
                     </Text>
                   </View>
                 </View>
-                <Pressable
-                  onPress={() => setOvertimeConfirm(emp)}
-                  style={({ pressed }) => ({
-                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14,
-                    backgroundColor: pressed ? "#2563EB" : "#3B82F6",
-                  })}
-                >
-                  <Text style={{ color: "white", fontWeight: "700", fontSize: 12 }}>Soldé</Text>
-                </Pressable>
+                {Math.abs(emp.overtime_balance_hours) < 0.01 ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <CheckCircle2 size={16} color="#3B82F6" />
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#3B82F6" }}>Soldé</Text>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={() => setOvertimeConfirm(emp)}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14,
+                      backgroundColor: pressed ? "#2563EB" : "#3B82F6",
+                    })}
+                  >
+                    <Text style={{ color: "white", fontWeight: "700", fontSize: 12 }}>Solder</Text>
+                  </Pressable>
+                )}
               </View>
 
               {/* Grille des jours ouvrés (lun-ven) */}
