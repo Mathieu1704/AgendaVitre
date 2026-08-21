@@ -2716,7 +2716,7 @@ export default function AddInterventionScreen() {
                   )}
                   {recurrence.freq !== "none" && recurrence.endType === "never" && (
                     <Text style={{ fontSize: 13, color: "#64748B", marginTop: 8, paddingHorizontal: 4 }}>
-                      Se termine : jamais (jusqu'à 10 ans à l'avance)
+                      Se termine : jamais
                     </Text>
                   )}
                   {recurrence.freq !== "none" &&
