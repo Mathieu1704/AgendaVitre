@@ -1108,9 +1108,9 @@ export default function AddInterventionScreen() {
       setStartDateStr(toBrusselsDateTimeString(nextDate));
       setEndDateStr(toBrusselsDateTimeString(nextEnd));
       setTimeTbd(isAdmin ? (repriseSource.time_tbd ?? true) : true);
-      if (!isDuplicateMode) {
-        setRepriseDates([toBrusselsDateTimeString(nextDate).split("T")[0]]);
-      }
+      // Pas de date pré-cochée dans le calendrier multi-dates : un employé
+      // qui oublie de la décocher se retrouvait avec un RDV en trop (le J+7
+      // suggéré, en plus des dates qu'il sélectionnait vraiment).
 
       const repriseClientId = repriseSource.client_id ?? repriseSource.client?.id;
       const foundClient = clients?.find((c) => c.id === repriseClientId);
