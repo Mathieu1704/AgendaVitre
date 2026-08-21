@@ -238,6 +238,39 @@ class InterventionCreate(InterventionBase):
     # detecter un rejeu et d'eviter de creer l'intervention en double.
     client_operation_id: Optional[UUID] = None
 
+class RecurringOccurrence(BaseModel):
+    start_time: datetime
+    end_time: datetime
+
+class InterventionRecurringCreate(BaseModel):
+    """Création en masse d'une série récurrente "à l'infini" (horizon glissant
+    de plusieurs années) : une seule requête, un seul commit côté serveur,
+    au lieu d'un POST par occurrence qui bloquerait l'appli pendant la
+    création (jusqu'à plusieurs milliers d'occurrences pour une récurrence
+    quotidienne)."""
+    type: str = "intervention"
+    title: str
+    description: Optional[str] = None
+    status: str = "planned"
+    price_estimated: Optional[float] = None
+    is_invoice: bool = False
+    payment_mode: str = "cash"
+    amount_cash: Optional[float] = None
+    amount_invoice: Optional[float] = None
+    zone: str = "hainaut"
+    sub_zone: Optional[str] = None
+    client_id: Optional[UUID] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    employee_ids: List[UUID] = []
+    items: List[InterventionItemCreate] = []
+    time_tbd: bool = False
+    hourly_rate_id: Optional[UUID] = None
+    recurrence_rule: Optional[Dict[str, Any]] = None
+    occurrences: List[RecurringOccurrence]
+    client_operation_id: Optional[UUID] = None
+
 class InterventionOutLite(BaseModel):
     id: UUID
     type: str = "intervention"

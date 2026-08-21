@@ -15,7 +15,7 @@ from app.models.models import (
     InterventionService, InterventionNote, TourRun
 )
 from app.schemas.schemas import (
-    InterventionCreate, InterventionOut,
+    InterventionCreate, InterventionOut, InterventionRecurringCreate,
     InterventionServiceCreate, InterventionServiceOut, InterventionServiceUpdate,
     InterventionNoteCreate, InterventionNoteOut,
 )
@@ -370,6 +370,102 @@ def read_intervention(
         _strip_prices([intervention])
     intervention.pending_deferred_amount = _pending_deferred_amount(db, intervention)
     return intervention
+
+
+# Plafond de sécurité : au-delà, la requête est refusée plutôt que de risquer
+# un commit disproportionné (ex. horizon mal calculé côté client).
+MAX_RECURRING_BULK_OCCURRENCES = 4000
+
+
+@router.post("/recurring-bulk")
+def create_recurring_bulk(
+    payload: InterventionRecurringCreate,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Crée toutes les occurrences d'une série récurrente "à l'infini" en une
+    seule transaction — les dates sont déjà calculées côté client (horizon
+    glissant de plusieurs années), ici on ne fait que les persister en masse,
+    pour ne jamais bloquer l'appli sur des centaines/milliers de requêtes
+    individuelles."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Réservé aux admins.")
+    if not payload.occurrences:
+        raise HTTPException(status_code=400, detail="Aucune occurrence à créer.")
+    if len(payload.occurrences) > MAX_RECURRING_BULK_OCCURRENCES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Trop d'occurrences ({len(payload.occurrences)} > {MAX_RECURRING_BULK_OCCURRENCES}).",
+        )
+
+    seen = already_processed(db, payload.client_operation_id)
+    if seen is not None:
+        return {"created": 0, "recurrence_group_id": str(seen.result_id) if seen.result_id else None}
+
+    if payload.client_id:
+        client = db.query(Client).filter(Client.id == payload.client_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client introuvable")
+
+    employees = (
+        db.query(Employee).filter(Employee.id.in_(payload.employee_ids)).all()
+        if payload.employee_ids else []
+    )
+
+    total_price = sum(_item_effective_price(i) for i in payload.items) if payload.items else 0
+    price_estimated = payload.price_estimated or total_price
+    recurrence_group_id = uuid.uuid4()
+
+    created_ids = []
+    for occ in payload.occurrences:
+        new_intervention = Intervention(
+            id=uuid.uuid4(),
+            type=payload.type,
+            title=payload.title,
+            description=payload.description,
+            start_time=occ.start_time,
+            end_time=occ.end_time,
+            status=payload.status,
+            price_estimated=price_estimated,
+            is_invoice=payload.is_invoice,
+            payment_mode=payload.payment_mode,
+            amount_cash=payload.amount_cash,
+            amount_invoice=payload.amount_invoice,
+            zone=payload.zone,
+            sub_zone=payload.sub_zone,
+            client_id=payload.client_id,
+            address=payload.address,
+            phone=payload.phone,
+            email=payload.email,
+            time_tbd=payload.time_tbd,
+            hourly_rate_id=payload.hourly_rate_id,
+            recurrence_rule=payload.recurrence_rule,
+            recurrence_group_id=recurrence_group_id,
+        )
+        new_intervention.employees = employees
+        for item_data in payload.items:
+            new_intervention.items.append(InterventionItem(
+                label=item_data.label,
+                price=item_data.price,
+                client_service_id=item_data.client_service_id,
+                intervention_service_id=item_data.intervention_service_id,
+                on_demand=item_data.on_demand,
+            ))
+        db.add(new_intervention)
+        created_ids.append(new_intervention.id)
+
+    _add_audit(
+        db, "created", current_user.id, created_ids[0],
+        f"Série récurrente créée : {payload.title} ({len(created_ids)} occurrences)",
+        {"recurrence_group_id": str(recurrence_group_id), "count": len(created_ids)},
+    )
+    record_operation(
+        db, payload.client_operation_id, current_user.id,
+        "POST /api/interventions/recurring-bulk", recurrence_group_id,
+    )
+
+    db.commit()
+    return {"created": len(created_ids), "recurrence_group_id": str(recurrence_group_id)}
 
 
 @router.post("", response_model=InterventionOut)

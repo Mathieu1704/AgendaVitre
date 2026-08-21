@@ -332,13 +332,21 @@ function generateDates(
   if (rec.freq === "none")
     return skipFirst ? [] : [{ start: base, end: new Date(base.getTime() + dur) }];
   const MAX = 365;
+  // "À l'infini" : horizon glissant de 10 ans plutôt qu'un nombre fixe
+  // d'occurrences — sinon une récurrence quotidienne s'arrêterait après 1 an
+  // mais une annuelle irait jusqu'en l'an 2391. NEVER_MAX reste un filet de
+  // sécurité (~1 occurrence/jour sur 10 ans) pour ne jamais surcharger la
+  // création en masse côté serveur (voir MAX_RECURRING_BULK_OCCURRENCES).
+  const NEVER_MAX = 4000;
   const targetCount =
-    (rec.endType === "count" ? Math.max(1, Math.min(rec.count, MAX)) : MAX) +
+    (rec.endType === "count" ? Math.max(1, Math.min(rec.count, MAX)) : NEVER_MAX) +
     (skipFirst ? 1 : 0);
   const endDate =
     rec.endType === "date" && rec.endDate
       ? new Date(rec.endDate + "T23:59:59")
-      : null;
+      : rec.endType === "never"
+        ? new Date(base.getFullYear() + 10, base.getMonth(), base.getDate(), 23, 59, 59)
+        : null;
   const dates: { start: Date; end: Date }[] = [];
   if (rec.freq === "weekdays") {
     let cur = new Date(base);
@@ -1497,6 +1505,51 @@ export default function AddInterventionScreen() {
       }
       if (occurrences.length === 0)
         return toast.error("Date", isRepriseMode ? "Sélectionne au moins une date." : "Vérifie la date.");
+
+      if (
+        !isRepriseMode &&
+        !isDuplicateMode &&
+        recurrence.endType === "never" &&
+        occurrences.length > 1
+      ) {
+        // Série "à l'infini" : horizon de plusieurs années, donc
+        // potentiellement des milliers d'occurrences. Un POST par occurrence
+        // bloquerait l'appli le temps de tout envoyer (surtout sur web où
+        // chaque envoi est attendu un par un) : on passe par un endpoint
+        // dédié qui crée tout en une seule requête, un seul commit côté
+        // serveur — pas de file d'attente hors-ligne ici, cette action admin
+        // nécessite déjà une connexion (même principe que le bulk-assign).
+        try {
+          const { data } = await api.post("/api/interventions/recurring-bulk", {
+            ...basePayload,
+            status: "planned",
+            time_tbd: isAdmin ? timeTbd : true,
+            recurrence_rule: {
+              freq: recurrence.freq === "custom" ? recurrence.unit : recurrence.freq,
+              interval: recurrence.freq === "custom" ? recurrence.interval : 1,
+              endType: "never",
+            },
+            occurrences: occurrences.map((o) => ({
+              start_time: o.start.toISOString(),
+              end_time: o.end.toISOString(),
+            })),
+            client_operation_id: newUuidV4(),
+          });
+          toast.success("Succès", `${data.created} interventions créées !`);
+          queryClient.invalidateQueries({ queryKey: ["interventions"] });
+          router.dismissTo({
+            pathname: "/(app)/calendar",
+            params: {
+              date: from_date ?? startDateStr.split("T")[0],
+              ...(from_view ? { view: from_view } : {}),
+              ...(from_zone ? { zone: from_zone } : {}),
+            },
+          });
+        } catch (e) {
+          toast.error("Erreur", "Impossible de créer la série récurrente.");
+        }
+        return;
+      }
 
       // En duplication, l'intervention source existe déjà et représente la
       // première occurrence de la série : elle doit donc en faire partie
