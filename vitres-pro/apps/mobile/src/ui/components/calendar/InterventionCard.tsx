@@ -107,20 +107,16 @@ export const InterventionCard = React.memo(function InterventionCard({
   const employees: any[] = [...(item.employees ?? [])].sort((a: any, b: any) =>
     (a.id as string).localeCompare(b.id as string),
   );
-  // Renfort : on unifie l'affichage (bandes + noms) avec les cartes
-  // multi-employés en y ajoutant l'employé de l'intervention liée
-  // (source <-> renfort), sans toucher `employees` qui sert aussi de base
-  // à l'assignation (long press) — le renfort reste une intervention à part.
-  const linkedEmployees: any[] = [
-    ...(item.reinforcement_for_employees ?? []),
-    ...(item.reinforcement_employees ?? []),
-  ];
-  const displayEmployees: any[] = [...employees, ...linkedEmployees]
-    .filter(
-      (e: any, idx: number, arr: any[]) =>
-        arr.findIndex((o: any) => o.id === e.id) === idx,
-    )
-    .sort((a: any, b: any) => (a.id as string).localeCompare(b.id as string));
+  // La carte "renfort" elle-même (item.reinforcement_for_id) reste bicolore
+  // (son employé + celui de la source) pour que l'ouvrier en renfort voie
+  // tout de suite qui il vient épauler. La carte source, elle, garde un seul
+  // nom d'entête — le renfort y est signalé par un tag dédié plus bas.
+  const displayEmployees: any[] = item.reinforcement_for_id
+    ? [...employees, ...(item.reinforcement_for_employees ?? [])].filter(
+        (e: any, idx: number, arr: any[]) =>
+          arr.findIndex((o: any) => o.id === e.id) === idx,
+      )
+    : employees;
   // Une intervention annulée reste rouge même si un employé est déjà
   // assigné : le statut prime sur la couleur d'affectation.
   const isCancelled = item.status === "cancelled";
@@ -300,8 +296,15 @@ export const InterventionCard = React.memo(function InterventionCard({
                 marginBottom: 3,
               }}
             >
-              <Text style={{ fontSize: 10, fontWeight: "700", color: "#0EA5E9" }}>
-                Renfort
+              <Text
+                style={{ fontSize: 10, fontWeight: "700", color: "#0EA5E9" }}
+                numberOfLines={1}
+              >
+                {item.reinforcement_for_id
+                  ? "Renfort"
+                  : `Renfort ${(item.reinforcement_employees ?? [])
+                      .map((e: any) => (e.full_name ?? e.email ?? "?").split(" ")[0])
+                      .join(", ")}`}
               </Text>
             </View>
           )}
