@@ -86,6 +86,20 @@ type Client = {
   address: string | null;
   phone?: string | null;
 };
+// Le clavier "decimal-pad" n'a pas de touche "-", sur iOS comme sur Android :
+// c'est un clavier purement numérique non signé sur les deux plateformes. Pour
+// les champs de prix qui acceptent un montant négatif tapé directement, on
+// utilise donc un clavier qui a la touche "-" (au prix d'avoir aussi des
+// lettres disponibles) et on filtre le texte saisi pour ne garder que
+// chiffres, séparateur décimal et signe — les lettres tapées n'apparaissent
+// jamais dans le champ.
+const SIGNED_PRICE_KEYBOARD = Platform.OS === "ios" ? "numbers-and-punctuation" : "default";
+function sanitizeSignedPrice(text: string): string {
+  const negative = text.trim().startsWith("-");
+  const digits = text.replace(/[^0-9.,]/g, "");
+  return negative ? `-${digits}` : digits;
+}
+
 type Item = {
   label: string;
   price: string;
@@ -2710,9 +2724,9 @@ export default function AddInterventionScreen() {
                       <TextInput
                         placeholder="Prix"
                         placeholderTextColor="#94A3B8"
-                        keyboardType="decimal-pad"
+                        keyboardType={SIGNED_PRICE_KEYBOARD}
                         value={newServicePrice}
-                        onChangeText={setNewServicePrice}
+                        onChangeText={(t) => setNewServicePrice(sanitizeSignedPrice(t))}
                         style={[
                           {
                             flex: 1,
@@ -2933,14 +2947,15 @@ export default function AddInterventionScreen() {
                           <TextInput
                             value={priceVal}
                             placeholder="Prix"
-                            keyboardType="decimal-pad"
+                            keyboardType={SIGNED_PRICE_KEYBOARD}
                             editable={isAdmin}
                             onChangeText={(t) => {
+                              const cleaned = sanitizeSignedPrice(t);
                               setServicePriceOverrides((prev) => ({
                                 ...prev,
-                                [svc.id]: t,
+                                [svc.id]: cleaned,
                               }));
-                              scheduleServicePriceSave(svc.id, t);
+                              scheduleServicePriceSave(svc.id, cleaned);
                             }}
                             style={[
                               {
