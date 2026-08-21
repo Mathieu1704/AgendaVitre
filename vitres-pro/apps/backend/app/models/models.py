@@ -278,10 +278,16 @@ class Intervention(Base):
     @property
     def reinforcement_employees(self):
         """Employés des renforts liés, quand cette intervention EST la source —
-        pour que la carte source affiche qui vient l'épauler."""
+        pour que la carte source affiche qui vient l'épauler. Un même employé
+        peut venir en renfort sur plusieurs créneaux de la même source (donc
+        plusieurs lignes renfort) : dédupliqué pour ne pas le lister 2x."""
+        seen = set()
         result = []
         for r in self.reinforcements:
-            result.extend(r.employees)
+            for emp in r.employees:
+                if emp.id not in seen:
+                    seen.add(emp.id)
+                    result.append(emp)
         return result
 
     # Coordonnées de contact directement sur l'intervention : uniquement pour les
