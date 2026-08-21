@@ -15,7 +15,7 @@ import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { CloudOff, RefreshCw, AlertTriangle } from "lucide-react-native";
 import { useIsOnline } from "../../lib/offline/network";
 import { useOutboxSync } from "../../lib/offline/useOutboxSync";
-import { retryFailed } from "../../lib/offline/outbox";
+import { retryFailed, clearFailed } from "../../lib/offline/outbox";
 import { isOfflineSupported } from "../../lib/offline/storage";
 
 type Props = { topInset?: number };
@@ -92,6 +92,17 @@ export function OfflineBanner({ topInset = 0 }: Props) {
             await refresh();
           },
         }}
+        secondaryAction={{
+          label: "Ignorer",
+          onPress: async () => {
+            // Certaines entrées (référence jamais résolue) ne peuvent pas
+            // aboutir même en réessayant indéfiniment — sans ce bouton, le
+            // bandeau resterait bloqué alors que l'action a par ailleurs été
+            // refaite manuellement avec succès (voir écran concerné).
+            await clearFailed();
+            await refresh();
+          },
+        }}
       />
     );
   }
@@ -131,12 +142,14 @@ function Bar({
   icon,
   text,
   action,
+  secondaryAction,
 }: {
   topInset: number;
   background: string;
   icon: React.ReactNode;
   text: string;
   action?: { label: string; onPress: () => void };
+  secondaryAction?: { label: string; onPress: () => void };
 }) {
   return (
     <View
@@ -154,6 +167,13 @@ function Bar({
       <Text style={{ flex: 1, color: "#F8FAFC", fontSize: 12, fontWeight: "600" }}>
         {text}
       </Text>
+      {secondaryAction ? (
+        <Pressable onPress={secondaryAction.onPress} hitSlop={8}>
+          <Text style={{ color: "#CBD5E1", fontSize: 11, fontWeight: "600", textDecorationLine: "underline" }}>
+            {secondaryAction.label}
+          </Text>
+        </Pressable>
+      ) : null}
       {action ? (
         <Pressable
           onPress={action.onPress}
