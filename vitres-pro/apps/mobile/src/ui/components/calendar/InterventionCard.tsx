@@ -107,16 +107,12 @@ export const InterventionCard = React.memo(function InterventionCard({
   const employees: any[] = [...(item.employees ?? [])].sort((a: any, b: any) =>
     (a.id as string).localeCompare(b.id as string),
   );
-  // La carte "renfort" elle-même (item.reinforcement_for_id) reste bicolore
-  // (son employé + celui de la source) pour que l'ouvrier en renfort voie
-  // tout de suite qui il vient épauler. La carte source, elle, garde un seul
-  // nom d'entête — le renfort y est signalé par un tag dédié plus bas.
-  const displayEmployees: any[] = item.reinforcement_for_id
-    ? [...employees, ...(item.reinforcement_for_employees ?? [])].filter(
-        (e: any, idx: number, arr: any[]) =>
-          arr.findIndex((o: any) => o.id === e.id) === idx,
-      )
-    : employees;
+  // Le renfort n'affecte jamais les bandes/noms d'entête : chaque
+  // intervention (source ou renfort) garde son propre employé assigné,
+  // le lien vers l'autre est signalé uniquement par le tag "Renfort" plus
+  // bas. Le bicolore reste réservé aux vrais cas multi-employés sur une
+  // même intervention (employees.length > 1 côté DB).
+  const displayEmployees: any[] = employees;
   // Une intervention annulée reste rouge même si un employé est déjà
   // assigné : le statut prime sur la couleur d'affectation.
   const isCancelled = item.status === "cancelled";
@@ -300,11 +296,18 @@ export const InterventionCard = React.memo(function InterventionCard({
                 style={{ fontSize: 10, fontWeight: "700", color: "#0EA5E9" }}
                 numberOfLines={1}
               >
-                {item.reinforcement_for_id
-                  ? "Renfort"
-                  : `Renfort ${(item.reinforcement_employees ?? [])
-                      .map((e: any) => (e.full_name ?? e.email ?? "?").split(" ")[0])
-                      .join(", ")}`}
+                {(() => {
+                  // Carte renfort : nomme la personne qu'on vient épauler
+                  // (l'employé de l'intervention source). Carte source :
+                  // nomme la personne venue en renfort.
+                  const otherEmployees = item.reinforcement_for_id
+                    ? item.reinforcement_for_employees ?? []
+                    : item.reinforcement_employees ?? [];
+                  const names = otherEmployees
+                    .map((e: any) => (e.full_name ?? e.email ?? "?").split(" ")[0])
+                    .join(", ");
+                  return names ? `Renfort ${names}` : "Renfort";
+                })()}
               </Text>
             </View>
           )}
