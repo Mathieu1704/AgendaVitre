@@ -201,7 +201,16 @@ def _weekly_cash_amount(db: Session, emp: Employee, week_start: date, week_end: 
     )
     total = 0.0
     for iv in interventions:
-        if not any(e.id == emp.id for e in iv.employees):
+        if iv.closed_by_employee_id is not None:
+            # Un seul employe encaisse reellement, meme si plusieurs sont
+            # assignes au RDV : sans ca, un RDV a 2 employes doublait le
+            # montant compte (une fois par employe assigne).
+            if iv.closed_by_employee_id != emp.id:
+                continue
+        elif not any(e.id == emp.id for e in iv.employees):
+            # Ancienne intervention cloturee avant l'ajout de ce champ : on
+            # retombe sur l'ancien comportement (compte pour chaque assigne)
+            # plutot que de perdre silencieusement ce cash historique.
             continue
         if iv.deferred_cash_amount is not None:
             # Paiement reporte (client absent) : cette intervention ne compte

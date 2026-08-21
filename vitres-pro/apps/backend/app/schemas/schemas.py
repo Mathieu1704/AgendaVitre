@@ -326,6 +326,7 @@ class InterventionOut(BaseModel):
     deferred_settled_by_intervention_id: Optional[UUID] = None
     pending_deferred_amount: Optional[float] = None
     carried_over_deferred_amount: Optional[float] = None
+    closed_by_employee_id: Optional[UUID] = None
     reinforcement_for_id: Optional[UUID] = None
     reinforcement_for_employees: List[EmployeeOut] = []
     reinforcement_employees: List[ReinforcementEmployeeOut] = []

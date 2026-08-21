@@ -269,6 +269,15 @@ class Intervention(Base):
         backref="reinforcements",
     )
 
+    # Employé qui a effectivement clôturé (et donc encaissé) l'intervention —
+    # distinct de `employees` qui liste tous les assignés. Sert à attribuer le
+    # cash hebdomadaire à celui qui a réellement pris l'argent plutôt qu'à
+    # chaque employé assigné (voir _weekly_cash_amount côté timetracking).
+    closed_by_employee_id = Column(
+        UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True,
+    )
+    closed_by_employee = relationship("Employee", foreign_keys=[closed_by_employee_id])
+
     @property
     def reinforcement_for_employees(self):
         """Employés de l'intervention source, quand celle-ci EST un renfort —

@@ -795,6 +795,11 @@ def update_intervention(
         elif hasattr(db_intervention, key):
             setattr(db_intervention, key, value)
 
+    # Cloture : on retient qui a reellement termine (et donc encaisse), pas
+    # seulement les employes assignes — voir _weekly_cash_amount.
+    if db_intervention.status == "done" and old_status != "done":
+        db_intervention.closed_by_employee_id = current_user.id
+
     _validate_payment_split(
         db_intervention.payment_mode, db_intervention.price_estimated,
         db_intervention.amount_cash, db_intervention.amount_invoice,
@@ -1100,6 +1105,7 @@ def no_reprise(
     intervention.status = "done"
     intervention.reprise_taken = False
     intervention.reprise_note = note if note else None
+    intervention.closed_by_employee_id = current_user.id
 
     emp_name = current_user.full_name or current_user.email or "Un employé"
     is_subcontractor = current_user.role == "subcontractor"
