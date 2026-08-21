@@ -105,8 +105,14 @@ export const useConfirmCashSettlement = () => {
 export const useConfirmOvertimeSettlement = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (vars: { employee_id: string; include_current_week?: boolean }) =>
-      (await api.post("/api/timetracking/overtime-settlements", vars)).data,
+    mutationFn: async (vars: {
+      employee_id: string;
+      include_current_week?: boolean;
+      // Absent = solde total ("Solder à 0"). Fourni = solde partiel (ex. 1
+      // jour de congé pris sur un solde plus large) : le reliquat continue
+      // de s'accumuler au lieu d'être remis à zéro.
+      hours?: number;
+    }) => (await api.post("/api/timetracking/overtime-settlements", vars)).data,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["timetracking", "weekly-summary"] }),
   });

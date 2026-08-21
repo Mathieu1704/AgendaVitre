@@ -153,6 +153,10 @@ def _overtime_balance(
         .order_by(OvertimeSettlement.period_end.desc())
         .first()
     )
+    # Un règlement partiel (ex. 1 jour de congé pris sur un solde plus large)
+    # laisse un reliquat non consommé : on repart de là plutôt que de zéro,
+    # sinon le reste du solde disparaîtrait silencieusement.
+    carried_forward = last_settlement.carried_forward_hours if last_settlement else 0.0
     if last_settlement:
         period_start = last_settlement.period_end + timedelta(days=1)
     else:
@@ -170,9 +174,9 @@ def _overtime_balance(
     )
 
     if period_start > last_counted_week_end:
-        return 0.0, period_start, last_counted_week_end
+        return round(carried_forward, 2), period_start, last_counted_week_end
 
-    total_delta = 0.0
+    total_delta = carried_forward
     week_cursor = period_start
     while week_cursor <= last_counted_week_end:
         w_start, w_end = _week_bounds(week_cursor)
@@ -552,9 +556,25 @@ def confirm_overtime_settlement(
         db, emp, include_current_week=payload.include_current_week
     )
 
+    if payload.hours is not None:
+        if payload.hours <= 0:
+            raise HTTPException(status_code=400, detail="Le nombre d'heures doit être positif.")
+        if balance >= 0 and payload.hours > balance:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Le solde actuel ({balance}h) est inférieur au nombre d'heures à solder.",
+            )
+        delta_hours = payload.hours
+        carried_forward_hours = round(balance - payload.hours, 2)
+    else:
+        # Solde total (comportement historique) : rien ne reste en reliquat.
+        delta_hours = balance
+        carried_forward_hours = 0.0
+
     settlement = OvertimeSettlement(
         employee_id=payload.employee_id,
-        delta_hours=balance,
+        delta_hours=delta_hours,
+        carried_forward_hours=carried_forward_hours,
         period_start=period_start,
         period_end=period_end,
         confirmed_by=current_user.id,

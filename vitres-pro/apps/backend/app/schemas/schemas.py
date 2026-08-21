@@ -453,12 +453,18 @@ class CashSettlementOut(BaseModel):
 class OvertimeSettlementIn(BaseModel):
     employee_id: UUID
     include_current_week: bool = False
+    # Absent/None = solde total (comportement historique, "Solder à 0").
+    # Fourni = solde partiel (ex. 1 jour de congé pris sur un solde plus
+    # large) : seul ce nombre d'heures est retiré, le reliquat continue de
+    # s'accumuler normalement.
+    hours: Optional[float] = None
 
 
 class OvertimeSettlementOut(BaseModel):
     id: UUID
     employee_id: UUID
     delta_hours: float
+    carried_forward_hours: float = 0.0
     period_start: date
     period_end: date
     confirmed_at: datetime

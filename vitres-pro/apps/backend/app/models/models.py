@@ -410,12 +410,19 @@ class EmployeeTimeEntry(Base):
 
 
 class OvertimeSettlement(Base):
-    """Historique des règlements ('Soldé') : remise à zéro du solde heures sup/en moins."""
+    """Historique des règlements ('Soldé') du solde heures sup/en moins.
+
+    Un règlement peut être total (bouton "Solder à 0", carried_forward_hours
+    reste à 0) ou partiel (bouton "Solder X heures", ex. un jour de congé
+    pris sur un solde plus large) : carried_forward_hours porte alors le
+    reliquat non consommé, que le prochain calcul reprend au lieu de
+    repartir de zéro — voir _overtime_balance."""
     __tablename__ = "overtime_settlements"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
     delta_hours = Column(Float, nullable=False)
+    carried_forward_hours = Column(Float, nullable=False, default=0.0)
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=False)
     confirmed_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -6,6 +6,8 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  TextInput,
+  Platform,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -72,6 +74,7 @@ export default function HeuresEncaissementScreen() {
 
   const [cashConfirm, setCashConfirm] = useState<WeeklySummaryEmployee | null>(null);
   const [overtimeConfirm, setOvertimeConfirm] = useState<WeeklySummaryEmployee | null>(null);
+  const [partialHoursStr, setPartialHoursStr] = useState("");
   const [editingDay, setEditingDay] = useState<{
     employee: WeeklySummaryEmployee;
     day: DailyEntry;
@@ -125,18 +128,22 @@ export default function HeuresEncaissementScreen() {
     }
   };
 
-  const handleConfirmOvertime = async () => {
+  const handleConfirmOvertime = async (hours?: number) => {
     if (!overtimeConfirm) return;
     try {
       await confirmOvertime.mutateAsync({
         employee_id: overtimeConfirm.employee_id,
         include_current_week: includeCurrentWeek,
+        ...(hours != null ? { hours } : {}),
       });
-      toast.success("Solde d'heures remis à zéro");
+      toast.success(
+        hours != null ? `${formatHours(hours)} soldées` : "Solde d'heures remis à zéro",
+      );
     } catch (e: any) {
       toast.error("Erreur", e?.response?.data?.detail || "Impossible de confirmer.");
     } finally {
       setOvertimeConfirm(null);
+      setPartialHoursStr("");
     }
   };
 
@@ -406,18 +413,84 @@ export default function HeuresEncaissementScreen() {
         onCancel={() => setCashConfirm(null)}
       />
 
-      <ConfirmModal
-        visible={!!overtimeConfirm}
-        title="Solder les heures"
-        message={
-          overtimeConfirm
-            ? `Le solde de ${formatHours(overtimeConfirm.overtime_balance_hours)} sera remis à zéro pour ${overtimeConfirm.full_name || "cet employé"}.`
-            : ""
-        }
-        confirmText="Solder"
-        onConfirm={handleConfirmOvertime}
-        onCancel={() => setOvertimeConfirm(null)}
-      />
+      {overtimeConfirm && (
+        <Dialog
+          open
+          onClose={() => {
+            setOvertimeConfirm(null);
+            setPartialHoursStr("");
+          }}
+          maxWidth={340}
+        >
+          <View style={{ padding: 20, gap: 16 }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: isDark ? "#F1F5F9" : "#0F172A", textAlign: "center" }}>
+              Solder les heures
+            </Text>
+            <Text style={{ color: "#64748B", textAlign: "center", lineHeight: 20 }}>
+              Solde actuel de {overtimeConfirm.full_name || "cet employé"} :{" "}
+              {formatHours(overtimeConfirm.overtime_balance_hours)}
+            </Text>
+
+            <Pressable
+              onPress={() => handleConfirmOvertime()}
+              disabled={confirmOvertime.isPending}
+              style={{
+                height: 48, borderRadius: 24,
+                backgroundColor: "#3B82F6",
+                alignItems: "center", justifyContent: "center",
+                opacity: confirmOvertime.isPending ? 0.7 : 1,
+              }}
+            >
+              <Text style={{ fontWeight: "700", color: "white" }}>Solder à 0</Text>
+            </Pressable>
+
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0" }} />
+              <Text style={{ color: "#94A3B8", fontSize: 12 }}>ou un nombre précis</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0" }} />
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+              <TextInput
+                value={partialHoursStr}
+                onChangeText={setPartialHoursStr}
+                placeholder="ex. 7,6"
+                placeholderTextColor="#94A3B8"
+                keyboardType="decimal-pad"
+                style={[
+                  {
+                    flex: 1, height: 44, borderRadius: 16,
+                    borderWidth: 1.5, borderColor: isDark ? "#334155" : "#DBEAFE",
+                    paddingHorizontal: 14, fontSize: 15, fontWeight: "600",
+                    color: isDark ? "#F1F5F9" : "#0F172A",
+                  },
+                  Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {},
+                ]}
+              />
+              <Pressable
+                onPress={() => {
+                  const hours = parseFloat(partialHoursStr.replace(",", "."));
+                  if (!hours || hours <= 0) {
+                    return toast.error("Heures", "Indique un nombre d'heures valide.");
+                  }
+                  handleConfirmOvertime(hours);
+                }}
+                disabled={confirmOvertime.isPending || !partialHoursStr}
+                style={{
+                  height: 44, paddingHorizontal: 16, borderRadius: 16,
+                  backgroundColor: isDark ? "#334155" : "#E2E8F0",
+                  alignItems: "center", justifyContent: "center",
+                  opacity: confirmOvertime.isPending || !partialHoursStr ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ fontWeight: "700", color: isDark ? "#F1F5F9" : "#0F172A" }}>
+                  Solder
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </Dialog>
+      )}
 
       {editingDay && (
         <Dialog open onClose={() => setEditingDay(null)} maxWidth={340}>
