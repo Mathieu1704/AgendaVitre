@@ -107,6 +107,20 @@ export const InterventionCard = React.memo(function InterventionCard({
   const employees: any[] = [...(item.employees ?? [])].sort((a: any, b: any) =>
     (a.id as string).localeCompare(b.id as string),
   );
+  // Renfort : on unifie l'affichage (bandes + noms) avec les cartes
+  // multi-employés en y ajoutant l'employé de l'intervention liée
+  // (source <-> renfort), sans toucher `employees` qui sert aussi de base
+  // à l'assignation (long press) — le renfort reste une intervention à part.
+  const linkedEmployees: any[] = [
+    ...(item.reinforcement_for_employees ?? []),
+    ...(item.reinforcement_employees ?? []),
+  ];
+  const displayEmployees: any[] = [...employees, ...linkedEmployees]
+    .filter(
+      (e: any, idx: number, arr: any[]) =>
+        arr.findIndex((o: any) => o.id === e.id) === idx,
+    )
+    .sort((a: any, b: any) => (a.id as string).localeCompare(b.id as string));
   // Une intervention annulée reste rouge même si un employé est déjà
   // assigné : le statut prime sur la couleur d'affectation.
   const isCancelled = item.status === "cancelled";
@@ -147,7 +161,7 @@ export const InterventionCard = React.memo(function InterventionCard({
       className={`border border-border dark:border-slate-800 shadow-sm active:scale-[0.98] overflow-hidden${leftBarColor ? "" : " mb-3"}`}
       style={{ borderRadius: cardRadius, flex: leftBarColor ? 1 : undefined }}
     >
-      {(employees.length > 0 || isCancelled) && (
+      {(displayEmployees.length > 0 || isCancelled) && (
         <View
           style={{
             position: "absolute",
@@ -161,7 +175,7 @@ export const InterventionCard = React.memo(function InterventionCard({
           {isCancelled ? (
             <View style={{ flex: 1, backgroundColor: "#EF44442C" }} />
           ) : (
-            employees.map((e: any) => (
+            displayEmployees.map((e: any) => (
               <View
                 key={e.id}
                 style={{
@@ -173,7 +187,7 @@ export const InterventionCard = React.memo(function InterventionCard({
           )}
         </View>
       )}
-      {(employees.length > 0 || isCancelled) && (
+      {(displayEmployees.length > 0 || isCancelled) && (
         <View style={{ flexDirection: "row", height: 18, width: "100%" }}>
           {isCancelled ? (
             <View
@@ -198,7 +212,7 @@ export const InterventionCard = React.memo(function InterventionCard({
               </Text>
             </View>
           ) : (
-            employees.map((emp: any) => (
+            displayEmployees.map((emp: any) => (
               <View
                 key={emp.id}
                 style={{
@@ -275,7 +289,7 @@ export const InterventionCard = React.memo(function InterventionCard({
         )}
 
         <View className="flex-1 justify-center">
-          {item.reinforcement_for_id && (
+          {(item.reinforcement_for_id || (item.reinforcement_employees ?? []).length > 0) && (
             <View
               style={{
                 alignSelf: "flex-start",

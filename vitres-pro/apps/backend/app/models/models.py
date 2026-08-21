@@ -265,8 +265,24 @@ class Intervention(Base):
         index=True,
     )
     reinforcement_for = relationship(
-        "Intervention", remote_side=[id], foreign_keys=[reinforcement_for_id]
+        "Intervention", remote_side=[id], foreign_keys=[reinforcement_for_id],
+        backref="reinforcements",
     )
+
+    @property
+    def reinforcement_for_employees(self):
+        """Employés de l'intervention source, quand celle-ci EST un renfort —
+        pour que la carte du renfort affiche qui il vient épauler."""
+        return self.reinforcement_for.employees if self.reinforcement_for else []
+
+    @property
+    def reinforcement_employees(self):
+        """Employés des renforts liés, quand cette intervention EST la source —
+        pour que la carte source affiche qui vient l'épauler."""
+        result = []
+        for r in self.reinforcements:
+            result.extend(r.employees)
+        return result
 
     # Coordonnées de contact directement sur l'intervention : uniquement pour les
     # interventions sans client lié (même logique que reprise_chain_id ci-dessus,

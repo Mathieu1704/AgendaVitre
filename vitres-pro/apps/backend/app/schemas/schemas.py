@@ -280,6 +280,8 @@ class InterventionOut(BaseModel):
     pending_deferred_amount: Optional[float] = None
     carried_over_deferred_amount: Optional[float] = None
     reinforcement_for_id: Optional[UUID] = None
+    reinforcement_for_employees: List[EmployeeOut] = []
+    reinforcement_employees: List[EmployeeOut] = []
     address: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None

@@ -83,6 +83,8 @@ def _load_intervention(intervention_id: UUID, db: Session) -> Intervention:
         selectinload(Intervention.items),
         selectinload(Intervention.hourly_rate),
         selectinload(Intervention.tour_run).selectinload(TourRun.stops),
+        selectinload(Intervention.reinforcement_for).selectinload(Intervention.employees),
+        selectinload(Intervention.reinforcements).selectinload(Intervention.employees),
     ).filter(Intervention.id == intervention_id).first()
 
 
@@ -178,6 +180,8 @@ def read_interventions(
         selectinload(Intervention.items),
         selectinload(Intervention.hourly_rate),
         selectinload(Intervention.tour_run).selectinload(TourRun.stops),
+        selectinload(Intervention.reinforcement_for).selectinload(Intervention.employees),
+        selectinload(Intervention.reinforcements).selectinload(Intervention.employees),
     )
     query = query.filter(
         ~Intervention.tour_run.has()
@@ -241,6 +245,8 @@ def search_interventions(
             selectinload(Intervention.items),
             selectinload(Intervention.hourly_rate),
             selectinload(Intervention.tour_run).selectinload(TourRun.stops),
+            selectinload(Intervention.reinforcement_for).selectinload(Intervention.employees),
+            selectinload(Intervention.reinforcements).selectinload(Intervention.employees),
         )
         .filter(or_(*conditions))
         .filter(
