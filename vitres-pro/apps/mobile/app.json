@@ -8,11 +8,6 @@
     "scheme": "lvm-agenda",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/images/LVM_LOGO_Colors-01.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "bundleIdentifier": "com.lvmagenda.app",
       "buildNumber": "2",
@@ -47,6 +42,15 @@
       "expo-router",
       "expo-updates",
       "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/LVM_LOGO_Colors-01.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
       [
         "expo-build-properties",
         {
