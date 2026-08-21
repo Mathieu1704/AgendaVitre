@@ -314,7 +314,10 @@ export const InterventionCard = React.memo(function InterventionCard({
                       return `${firstName} ${t}`;
                     })
                     .join(", ");
-                  return names ? `Renfort ${names}` : "Renfort";
+                  if (!names) return "Renfort";
+                  return item.reinforcement_for_id
+                    ? `Renfort pour ${names}`
+                    : `Renfort ${names}`;
                 })()}
               </Text>
             </View>

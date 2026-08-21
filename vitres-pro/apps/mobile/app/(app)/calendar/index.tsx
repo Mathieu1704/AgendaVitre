@@ -483,18 +483,10 @@ export default function CalendarScreen() {
       if (activeEmployeeId !== null) {
         const emps: any[] = item.employees ?? [];
         if (!emps.some((e: any) => e.id === activeEmployeeId)) return false;
-      } else if (isAdmin && item.reinforcement_for_id) {
-        // Vue admin générale (tous employés) : le renfort a sa propre ligne
-        // liée à la source, déjà signalée par le tag "Renfort X" sur la carte
-        // de celle-ci — on ne l'affiche pas en double ici. Elle ne réapparaît
-        // que dans la vue filtrée sur l'employé de renfort (ci-dessus), ou
-        // dans le planning personnel de l'employé de renfort lui-même (le
-        // backend ne lui renvoie de toute façon que sa propre ligne).
-        return false;
       }
       return true;
     },
-    [activeTypes, activeStatuses, activeEmployeeId, isAdmin],
+    [activeTypes, activeStatuses, activeEmployeeId],
   );
 
   const toggleType = useCallback((id: string) => {
