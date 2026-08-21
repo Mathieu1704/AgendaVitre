@@ -1639,13 +1639,21 @@ export default function AddInterventionScreen() {
         };
 
         // Affiché immédiatement dans le planning, marqué en attente de synchro.
-        applyCreateReprise(queryClient, newTempId(), payload);
+        const tempId = newTempId();
+        applyCreateReprise(queryClient, tempId, payload);
 
+        // `tempId` permet à l'outbox de résoudre cet id temporaire vers le
+        // vrai id serveur une fois la création envoyée : sans ça, une action
+        // ultérieure sur cette même occurrence encore affichée avec son id
+        // temporaire (ex. supprimer "celle-ci et les suivantes" juste après
+        // création) échoue avec "Référence non résolue", faute de savoir que
+        // la création a bien abouti.
         await enqueue({
           kind: "create-reprise",
           method: "POST",
           url: "/api/interventions",
           body: payload,
+          tempId,
           label: isRepriseMode
             ? "RDV de reprise"
             : isDuplicateMode
@@ -1798,12 +1806,14 @@ export default function AddInterventionScreen() {
               : null,
           recurrence_group_id: occurrences.length > 1 ? groupId : null,
         };
-        applyCreateReprise(queryClient, newTempId(), payload);
+        const tempId = newTempId();
+        applyCreateReprise(queryClient, tempId, payload);
         await enqueue({
           kind: "create-reprise",
           method: "POST",
           url: "/api/interventions",
           body: payload,
+          tempId,
           label: "Occurrence recréée (nouvelle récurrence)",
         });
       }
