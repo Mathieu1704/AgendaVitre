@@ -2664,8 +2664,12 @@ export default function AddInterventionScreen() {
                     </View>
                   )}
 
-                  {/* Nombre d'occurrences si récurrence active */}
-                  {recurrence.freq !== "none" && (
+                  {/* Nombre d'occurrences si récurrence active — seulement
+                      pertinent quand endType === "count" : sinon (fixée par
+                      "Personnaliser..." sur "Jamais"/"Le ...") ce champ
+                      afficherait un chiffre obsolète et trompeur alors qu'il
+                      n'est pas utilisé pour générer la série. */}
+                  {recurrence.freq !== "none" && recurrence.endType === "count" && (
                     <View
                       style={{
                         flexDirection: "row",
@@ -2710,6 +2714,18 @@ export default function AddInterventionScreen() {
                       />
                     </View>
                   )}
+                  {recurrence.freq !== "none" && recurrence.endType === "never" && (
+                    <Text style={{ fontSize: 13, color: "#64748B", marginTop: 8, paddingHorizontal: 4 }}>
+                      Se termine : jamais (jusqu'à 10 ans à l'avance)
+                    </Text>
+                  )}
+                  {recurrence.freq !== "none" &&
+                    recurrence.endType === "date" &&
+                    !!recurrence.endDate && (
+                      <Text style={{ fontSize: 13, color: "#64748B", marginTop: 8, paddingHorizontal: 4 }}>
+                        Se termine le {recurrence.endDate}
+                      </Text>
+                    )}
                 </View>
               )}
 
