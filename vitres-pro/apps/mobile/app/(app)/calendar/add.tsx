@@ -1508,27 +1508,45 @@ export default function AddInterventionScreen() {
 
       if (
         !isRepriseMode &&
-        !isDuplicateMode &&
         recurrence.endType === "never" &&
         occurrences.length > 1
       ) {
         // Série "à l'infini" : horizon de plusieurs années, donc
-        // potentiellement des milliers d'occurrences. Un POST par occurrence
-        // bloquerait l'appli le temps de tout envoyer (surtout sur web où
-        // chaque envoi est attendu un par un) : on passe par un endpoint
-        // dédié qui crée tout en une seule requête, un seul commit côté
-        // serveur — pas de file d'attente hors-ligne ici, cette action admin
-        // nécessite déjà une connexion (même principe que le bulk-assign).
+        // potentiellement des milliers d'occurrences (aussi bien en création
+        // qu'en duplication d'un RDV existant transformé en série). Un POST
+        // par occurrence bloquerait l'appli le temps de tout envoyer (surtout
+        // sur web où chaque envoi est attendu un par un) : on passe par un
+        // endpoint dédié qui crée tout en une seule requête, un seul commit
+        // côté serveur — pas de file d'attente hors-ligne ici, cette action
+        // admin nécessite déjà une connexion (même principe que bulk-assign).
+        const recurrenceRule = {
+          freq: recurrence.freq === "custom" ? recurrence.unit : recurrence.freq,
+          interval: recurrence.freq === "custom" ? recurrence.interval : 1,
+          endType: "never",
+        };
+        const sourceGroupId = isDuplicateMode
+          ? (repriseSource?.recurrence_group_id ?? undefined)
+          : undefined;
+        const groupId = sourceGroupId ?? newUuidV4();
         try {
+          if (isDuplicateMode && repriseSourceId && !sourceGroupId) {
+            // La source existe déjà et représente la 1ère occurrence : on la
+            // rattache rétroactivement à la série tout juste créée.
+            applyEditIntervention(queryClient, String(repriseSourceId), {
+              recurrence_group_id: groupId,
+              recurrence_rule: recurrenceRule,
+            });
+            await api.patch(`/api/interventions/${repriseSourceId}`, {
+              recurrence_group_id: groupId,
+              recurrence_rule: recurrenceRule,
+            });
+          }
           const { data } = await api.post("/api/interventions/recurring-bulk", {
             ...basePayload,
             status: "planned",
             time_tbd: isAdmin ? timeTbd : true,
-            recurrence_rule: {
-              freq: recurrence.freq === "custom" ? recurrence.unit : recurrence.freq,
-              interval: recurrence.freq === "custom" ? recurrence.interval : 1,
-              endType: "never",
-            },
+            recurrence_rule: recurrenceRule,
+            recurrence_group_id: groupId,
             occurrences: occurrences.map((o) => ({
               start_time: o.start.toISOString(),
               end_time: o.end.toISOString(),
@@ -1537,14 +1555,21 @@ export default function AddInterventionScreen() {
           });
           toast.success("Succès", `${data.created} interventions créées !`);
           queryClient.invalidateQueries({ queryKey: ["interventions"] });
-          router.dismissTo({
-            pathname: "/(app)/calendar",
-            params: {
-              date: from_date ?? startDateStr.split("T")[0],
-              ...(from_view ? { view: from_view } : {}),
-              ...(from_zone ? { zone: from_zone } : {}),
-            },
-          });
+          if (isDuplicateMode && duplicate_of) {
+            router.dismissTo({
+              pathname: "/(app)/calendar/[id]",
+              params: { id: String(duplicate_of) },
+            });
+          } else {
+            router.dismissTo({
+              pathname: "/(app)/calendar",
+              params: {
+                date: from_date ?? startDateStr.split("T")[0],
+                ...(from_view ? { view: from_view } : {}),
+                ...(from_zone ? { zone: from_zone } : {}),
+              },
+            });
+          }
         } catch (e) {
           toast.error("Erreur", "Impossible de créer la série récurrente.");
         }

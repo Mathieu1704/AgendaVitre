@@ -414,7 +414,7 @@ def create_recurring_bulk(
 
     total_price = sum(_item_effective_price(i) for i in payload.items) if payload.items else 0
     price_estimated = payload.price_estimated or total_price
-    recurrence_group_id = uuid.uuid4()
+    recurrence_group_id = payload.recurrence_group_id or uuid.uuid4()
 
     created_ids = []
     for occ in payload.occurrences:

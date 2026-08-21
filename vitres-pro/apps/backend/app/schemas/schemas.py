@@ -268,6 +268,9 @@ class InterventionRecurringCreate(BaseModel):
     time_tbd: bool = False
     hourly_rate_id: Optional[UUID] = None
     recurrence_rule: Optional[Dict[str, Any]] = None
+    # Fourni quand une intervention existante (duplication) rejoint la série
+    # comme première occurrence — sinon un nouveau groupe est généré.
+    recurrence_group_id: Optional[UUID] = None
     occurrences: List[RecurringOccurrence]
     client_operation_id: Optional[UUID] = None
 
