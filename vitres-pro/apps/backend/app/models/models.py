@@ -278,17 +278,33 @@ class Intervention(Base):
     @property
     def reinforcement_employees(self):
         """Employés des renforts liés, quand cette intervention EST la source —
-        pour que la carte source affiche qui vient l'épauler. Un même employé
-        peut venir en renfort sur plusieurs créneaux de la même source (donc
-        plusieurs lignes renfort) : dédupliqué pour ne pas le lister 2x."""
-        seen = set()
-        result = []
+        pour que la carte source affiche qui vient l'épauler, et à quelle
+        heure si un créneau précis a été fixé (time_tbd=False sur la ligne
+        renfort). Un même employé peut venir en renfort sur plusieurs
+        créneaux de la même source (plusieurs lignes renfort) : dédupliqué
+        par employé, en gardant l'heure la plus proche si plusieurs sont
+        précisées."""
+        entries: dict = {}
         for r in self.reinforcements:
+            candidate_time = None if r.time_tbd else r.start_time
             for emp in r.employees:
-                if emp.id not in seen:
-                    seen.add(emp.id)
-                    result.append(emp)
-        return result
+                existing = entries.get(emp.id)
+                if existing is None:
+                    entries[emp.id] = {"employee": emp, "start_time": candidate_time}
+                elif candidate_time is not None and (
+                    existing["start_time"] is None or candidate_time < existing["start_time"]
+                ):
+                    existing["start_time"] = candidate_time
+        return [
+            {
+                "id": e["employee"].id,
+                "full_name": e["employee"].full_name,
+                "email": e["employee"].email,
+                "color": e["employee"].color,
+                "reinforcement_start_time": e["start_time"],
+            }
+            for e in entries.values()
+        ]
 
     # Coordonnées de contact directement sur l'intervention : uniquement pour les
     # interventions sans client lié (même logique que reprise_chain_id ci-dessus,

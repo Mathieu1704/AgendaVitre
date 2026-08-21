@@ -304,7 +304,15 @@ export const InterventionCard = React.memo(function InterventionCard({
                     ? item.reinforcement_for_employees ?? []
                     : item.reinforcement_employees ?? [];
                   const names = otherEmployees
-                    .map((e: any) => (e.full_name ?? e.email ?? "?").split(" ")[0])
+                    .map((e: any) => {
+                      const firstName = (e.full_name ?? e.email ?? "?").split(" ")[0];
+                      if (!e.reinforcement_start_time) return firstName;
+                      const t = new Date(e.reinforcement_start_time).toLocaleTimeString(
+                        "fr-FR",
+                        { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" },
+                      );
+                      return `${firstName} ${t}`;
+                    })
                     .join(", ");
                   return names ? `Renfort ${names}` : "Renfort";
                 })()}

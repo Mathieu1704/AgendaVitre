@@ -256,6 +256,17 @@ class TourRunSummaryOut(BaseModel):
     class Config:
         from_attributes = True
 
+class ReinforcementEmployeeOut(BaseModel):
+    id: UUID
+    full_name: Optional[str] = None
+    email: str
+    color: str = "#3B82F6"
+    # Heure d'arrivée du renfort, seulement si un créneau précis a été fixé
+    # (sinon "dès qu'il a fini ses propres RDV" — pas d'heure à afficher).
+    reinforcement_start_time: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
 class InterventionOut(BaseModel):
     id: UUID
     type: str = "intervention"
@@ -281,7 +292,7 @@ class InterventionOut(BaseModel):
     carried_over_deferred_amount: Optional[float] = None
     reinforcement_for_id: Optional[UUID] = None
     reinforcement_for_employees: List[EmployeeOut] = []
-    reinforcement_employees: List[EmployeeOut] = []
+    reinforcement_employees: List[ReinforcementEmployeeOut] = []
     address: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
