@@ -143,10 +143,12 @@ function GroupCard({
         ) : (
           <ChevronDown size={16} color={isDark ? "#94A3B8" : "#64748B"} />
         )}
-        <Pressable onPress={onRename} hitSlop={6} style={{ flex: 1, marginLeft: 8 }}>
-          <Text className="text-base font-bold text-foreground dark:text-white">{group.name}</Text>
+        <View style={{ flex: 1, marginLeft: 8 }}>
+          <Pressable onPress={onRename} hitSlop={4} style={{ alignSelf: "flex-start", maxWidth: "100%" }}>
+            <Text className="text-base font-bold text-foreground dark:text-white">{group.name}</Text>
+          </Pressable>
           <Text className="text-xs text-muted-foreground">{groupCities.length} ville{groupCities.length === 1 ? "" : "s"}</Text>
-        </Pressable>
+        </View>
         <Pressable onPress={onCreateCity} hitSlop={8} style={{ padding: 6 }}>
           <Plus size={17} color={color} />
         </Pressable>
