@@ -23,6 +23,7 @@ export function Dialog({
   position = "center",
   maxWidth,
   containerStyle,
+  cardStyle,
   keyboardVerticalOffset = 0,
   onShow,
 }: {
@@ -32,6 +33,10 @@ export function Dialog({
   position?: "center" | "bottom";
   maxWidth?: number;
   containerStyle?: ViewStyle;
+  // Style de la carte elle-même. Utile pour `flexShrink: 1` quand le contenu
+  // est scrollable : sans ça la carte garde sa hauteur naturelle et déborde
+  // de l'écran au lieu de se limiter à la place disponible.
+  cardStyle?: ViewStyle;
   keyboardVerticalOffset?: number;
   // Fiable pour focus un champ (autoFocus ne se redéclenche pas quand le
   // Modal reste monté et ne fait que changer de `visible` — onShow, si, à
@@ -125,7 +130,10 @@ export function Dialog({
             }}
             pointerEvents="box-none"
           >
-            <View className="w-full max-w-md self-center rounded-3xl border border-border dark:border-slate-800 bg-card dark:bg-slate-900 shadow-2xl overflow-hidden" style={maxWidth ? { maxWidth } : undefined}>
+            <View
+              className="w-full max-w-md self-center rounded-3xl border border-border dark:border-slate-800 bg-card dark:bg-slate-900 shadow-2xl overflow-hidden"
+              style={{ ...(maxWidth ? { maxWidth } : null), ...cardStyle }}
+            >
               {children}
             </View>
           </View>

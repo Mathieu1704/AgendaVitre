@@ -89,7 +89,7 @@ export default function InterventionDetailScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isDark } = useTheme();
-  const { width } = useWindowDimensions();
+  const { width, height: windowHeight } = useWindowDimensions();
 
   const isDesktop = width >= 768;
   const insets = useSafeAreaInsets();
@@ -138,8 +138,10 @@ export default function InterventionDetailScreen() {
   const [showAllDoneConfirm, setShowAllDoneConfirm] = useState(false);
   const [showItemsChecklist, setShowItemsChecklist] = useState(false);
   const [notDoneIds, setNotDoneIds] = useState<Set<string>>(new Set());
-  // Motif saisi par prestation décochée (employé ou sous-traitant), clé = item.id.
-  const [notDoneNotes, setNotDoneNotes] = useState<Record<string, string>>({});
+  // Motif unique pour toutes les prestations décochées (employé ou sous-traitant).
+  // Le backend stocke une note par prestation : on lui envoie le même texte pour
+  // chacune (cf. `buildNotDoneNotes`).
+  const [notDoneReason, setNotDoneReason] = useState("");
   // Ajustements ad-hoc à la clôture : déduction partielle sur une prestation
   // décochée, ou supplément imprévu. `price` est ce qui compte réellement
   // dans le Total (positif dans les deux cas : le crédit pour la part faite
@@ -559,13 +561,17 @@ export default function InterventionDetailScreen() {
     onError: () => toast.error("Erreur", "Impossible de clôturer l'intervention."),
   });
 
+  // Le motif est unique côté UI, mais l'API attend une note par prestation :
+  // on duplique le même texte sur chaque prestation décochée.
+  const buildNotDoneNotes = (notDoneItemIds: string[]): Record<string, string> => {
+    const reason = notDoneReason.trim();
+    if (!reason) return {};
+    return Object.fromEntries(notDoneItemIds.map((itemId) => [itemId, reason]));
+  };
+
   const subcontractorChecklistMutation = useMutation({
     mutationFn: async (notDoneItemIds: string[]) => {
-      const notes = Object.fromEntries(
-        notDoneItemIds
-          .map((itemId) => [itemId, (notDoneNotes[itemId] || "").trim()])
-          .filter(([, n]) => !!n),
-      );
+      const notes = buildNotDoneNotes(notDoneItemIds);
       // Note globale envoyée à l'admin (notification /no-reprise) : les motifs
       // par prestation, concaténés avec leur libellé.
       const note = (intervention?.items || [])
@@ -602,7 +608,7 @@ export default function InterventionDetailScreen() {
     },
     onSuccess: (_data, notDoneItemIds) => {
       setShowItemsChecklist(false);
-      setNotDoneNotes({});
+      setNotDoneReason("");
       toast.success(
         notDoneItemIds.length > 0 ? "Enregistré" : "Terminée",
         isOnlineNow()
@@ -1736,7 +1742,7 @@ export default function InterventionDetailScreen() {
                 return;
               }
               setNotDoneIds(new Set());
-              setNotDoneNotes({});
+              setNotDoneReason("");
               setShowAllDoneConfirm(true);
             }}
             loading={isSubcontractor && subcontractorDoneMutation.isPending}
@@ -2029,13 +2035,33 @@ export default function InterventionDetailScreen() {
           setShowItemsChecklist(false);
           setAdjustments([]);
           setAdjustmentDraft(null);
-          setNotDoneNotes({});
+          setNotDoneReason("");
         }}
+        cardStyle={{ flexShrink: 1 }}
       >
-        <View style={{ padding: 20, gap: 16 }}>
-          <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", textAlign: "center" }}>
+        {/* La carte est bornée à la hauteur de l'écran : titre et pied fixes,
+            liste des prestations scrollable au milieu (sinon avec beaucoup de
+            prestations décochées la carte débordait de l'écran). */}
+        <View
+          style={{
+            paddingVertical: 20,
+            gap: 16,
+            // flexShrink pour que la hauteur réellement dispo (carte réduite
+            // quand le clavier monte) redescende jusqu'à la ScrollView : sans
+            // ça la View garde sa hauteur pleine et le pied est rogné.
+            flexShrink: 1,
+            maxHeight: Math.max(320, windowHeight - insets.top - insets.bottom - 48),
+          }}
+        >
+          <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", textAlign: "center", paddingHorizontal: 20 }}>
             Quelles prestations ont été faites ?
           </Text>
+          <ScrollView
+            style={{ flexShrink: 1 }}
+            contentContainerStyle={{ paddingHorizontal: 20, gap: 16 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator
+          >
           <View style={{ gap: 10 }}>
             {(intervention?.items || []).map((item: any) => {
               const checked = !notDoneIds.has(item.id);
@@ -2138,21 +2164,21 @@ export default function InterventionDetailScreen() {
                     </View>
                   )}
 
-                  {/* Prestation décochée : motif (pourquoi ce n'est pas fait) */}
-                  {!checked && (
-                    <Input
-                      placeholder="Pourquoi ?"
-                      value={notDoneNotes[item.id] || ""}
-                      onChangeText={(t) =>
-                        setNotDoneNotes((prev) => ({ ...prev, [item.id]: t }))
-                      }
-                      style={{ height: 40, width: "100%" }}
-                    />
-                  )}
                 </View>
               );
             })}
           </View>
+
+          {/* Motif unique, commun à toutes les prestations décochées */}
+          {notDoneIds.size > 0 && (
+            <Input
+              label="Pourquoi ?"
+              placeholder="Ex : accès impossible"
+              value={notDoneReason}
+              onChangeText={setNotDoneReason}
+              style={{ height: 52, width: "100%" }}
+            />
+          )}
 
           {/* Suppléments imprévus (pas liés à une prestation précise) */}
           {!isSubcontractor && (
@@ -2268,7 +2294,9 @@ export default function InterventionDetailScreen() {
               </View>
             </View>
           )}
+          </ScrollView>
 
+          <View style={{ paddingHorizontal: 20, gap: 16 }}>
           {!isSubcontractor && (
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTopWidth: 1, borderTopColor: isDark ? "#1E293B" : "#E2E8F0" }}>
               <Text style={{ fontWeight: "700", fontSize: 16, color: isDark ? "#F8FAFC" : "#09090B" }}>
@@ -2293,7 +2321,7 @@ export default function InterventionDetailScreen() {
                 setShowItemsChecklist(false);
                 setAdjustments([]);
                 setAdjustmentDraft(null);
-                setNotDoneNotes({});
+                setNotDoneReason("");
               }}
               style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: isDark ? "#1E293B" : "#F1F5F9" }}
             >
@@ -2325,12 +2353,14 @@ export default function InterventionDetailScreen() {
                     pending_adjustments: JSON.stringify(
                       adjustments.map(({ label, price }) => ({ label, price })),
                     ),
-                    pending_not_done_notes: JSON.stringify(notDoneNotes),
+                    pending_not_done_notes: JSON.stringify(
+                      buildNotDoneNotes(Array.from(notDoneIds)),
+                    ),
                   },
                 });
                 setAdjustments([]);
                 setAdjustmentDraft(null);
-                setNotDoneNotes({});
+                setNotDoneReason("");
               }}
               disabled={isSubcontractor ? subcontractorChecklistMutation.isPending : false}
               style={{ flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: "center", backgroundColor: "#3B82F6", opacity: isSubcontractor && subcontractorChecklistMutation.isPending ? 0.6 : 1 }}
@@ -2339,6 +2369,7 @@ export default function InterventionDetailScreen() {
                 Valider
               </Text>
             </Pressable>
+          </View>
           </View>
         </View>
       </Dialog>
