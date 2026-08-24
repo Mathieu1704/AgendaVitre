@@ -165,6 +165,32 @@ function placeNotes(
   }
 }
 
+// Regroupe TOUTES les cartes partageant la même ville ensemble (pas seulement
+// les cartes consécutives) : sinon une ville coupée par d'autres entre deux
+// de ses passages réapparaît avec un en-tête dupliqué plus loin dans la liste.
+function groupByCity(items: any[], timeDefined: boolean): { code: string | null; items: any[] }[] {
+  if (timeDefined) return [{ code: null, items }];
+
+  const order: (string | null)[] = [];
+  const buckets = new Map<string | null, any[]>();
+  for (const item of items) {
+    const code = item.city ?? null;
+    let arr = buckets.get(code);
+    if (!arr) {
+      arr = [];
+      buckets.set(code, arr);
+      order.push(code);
+    }
+    arr.push(item);
+  }
+  order.sort((a, b) => {
+    if (a === null) return b === null ? 0 : 1;
+    if (b === null) return -1;
+    return a.localeCompare(b);
+  });
+  return order.map((code) => ({ code, items: buckets.get(code)! }));
+}
+
 // ─── FlatList support ─────────────────────────────────────────────────────────
 
 export type FlatRow =
@@ -239,13 +265,7 @@ export function buildFlatRows(
       // trie déjà par heure, l'affichage par zone n'apporte plus rien.
       const timeDefined = sg.status !== "unscheduled";
 
-      const cityGroups: { code: string | null; items: any[] }[] = [];
-      for (const item of tg.items) {
-        const code = timeDefined ? null : (item.city ?? null);
-        const last = cityGroups[cityGroups.length - 1];
-        if (last && last.code === code) last.items.push(item);
-        else cityGroups.push({ code, items: [item] });
-      }
+      const cityGroups = groupByCity(tg.items, timeDefined);
       const hasMultipleCities = !timeDefined && (cityGroups.length > 1 || (cityGroups.length === 1 && cityGroups[0].code !== null));
 
       for (const [zgIdx, zg] of cityGroups.entries()) {
@@ -346,13 +366,7 @@ export function renderInterventionGroups(
           // trie déjà par heure, l'affichage par zone n'apporte plus rien.
           const timeDefined = group.status !== "unscheduled";
 
-          const cityGroups: { code: string | null; items: any[] }[] = [];
-          for (const item of tg.items) {
-            const code = timeDefined ? null : (item.city ?? null);
-            const last = cityGroups[cityGroups.length - 1];
-            if (last && last.code === code) last.items.push(item);
-            else cityGroups.push({ code, items: [item] });
-          }
+          const cityGroups = groupByCity(tg.items, timeDefined);
           const hasMultipleCities = !timeDefined && (cityGroups.length > 1 || (cityGroups.length === 1 && cityGroups[0].code !== null));
 
           return (
