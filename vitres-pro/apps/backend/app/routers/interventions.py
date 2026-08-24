@@ -459,6 +459,8 @@ def create_recurring_bulk(
         db.add(new_intervention)
         created_ids.append(new_intervention.id)
 
+    db.flush()  # l'audit reference created_ids[0] : les lignes doivent exister
+
     _add_audit(
         db, "created", current_user.id, created_ids[0],
         f"Série récurrente créée : {payload.title} ({len(created_ids)} occurrences)",
@@ -742,6 +744,7 @@ def create_reinforcement(
     )
     reinforcement.employees = [employee]
     db.add(reinforcement)
+    db.flush()  # l'audit reference l'id : il doit exister en base avant l'insert
 
     _add_audit(
         db, "created", current_user.id, reinforcement.id,
