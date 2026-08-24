@@ -68,6 +68,7 @@ import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useAuth } from "../../../src/hooks/useAuth";
 import { useCompanySettings } from "../../../src/hooks/useCompanySettingsSync";
 import { useEmployees } from "../../../src/hooks/useEmployees";
+import { cityIdentityKey, useCities } from "../../../src/hooks/useCities";
 import { useCreateReinforcement } from "../../../src/hooks/useInterventions";
 import { OptionsModal } from "../../../src/ui/components/OptionsModal";
 import { ConfirmModal } from "../../../src/ui/components/ConfirmModal";
@@ -164,12 +165,19 @@ export default function InterventionDetailScreen() {
     sign: "+" | "-";
   }>(null);
   const [editingField, setEditingField] = useState<null | {
-    field: "address" | "phone" | "email";
+    field: "phone" | "email";
     label: string;
     value: string;
     target: "client" | "intervention";
   }>(null);
   const editingFieldInputRef = useRef<TextInput>(null);
+  const [editingLocation, setEditingLocation] = useState<null | {
+    address: string;
+    city: string;
+    target: "client" | "intervention";
+  }>(null);
+  const locationAddressInputRef = useRef<TextInput>(null);
+  const locationCityInputRef = useRef<TextInput>(null);
 
   // Repli sur la liste du planning déjà en cache.
   // La fiche a sa propre requête ; hors réseau, une intervention jamais ouverte
@@ -215,6 +223,7 @@ export default function InterventionDetailScreen() {
   });
 
   const { data: companySettings } = useCompanySettings();
+  const { cities } = useCities();
   const hideCash = companySettings?.hide_cash ?? false;
 
   // Fil de notes : ouvert à l'admin et à tout employé (assigné ou non — un
@@ -366,11 +375,11 @@ export default function InterventionDetailScreen() {
     },
   });
 
-  // Édition rapide (admin) de l'adresse/téléphone/email depuis les boutons
-  // "Y aller"/"Appeler"/"Email" : corrige une valeur mal encodée (client lié),
-  // ou encode ces coordonnées directement sur l'intervention (pas de client).
+  // Édition rapide (admin) du téléphone/email depuis les boutons d'action :
+  // corrige le client lié, ou encode la coordonnée directement sur
+  // l'intervention lorsqu'elle n'a pas de client.
   const updateClientFieldMutation = useMutation({
-    mutationFn: async ({ field, value }: { field: "address" | "phone" | "email"; value: string }) => {
+    mutationFn: async ({ field, value }: { field: "phone" | "email"; value: string }) => {
       if (!intervention?.client?.id) throw new Error("no client");
       const res = await api.patch(`/api/clients/${intervention.client.id}`, {
         [field]: value,
@@ -388,14 +397,13 @@ export default function InterventionDetailScreen() {
     onError: () => toast.error("Erreur", "Impossible de mettre à jour le client."),
   });
 
-  const CONTACT_FIELD_LABELS: Record<"address" | "phone" | "email", string> = {
-    address: "adresse",
+  const CONTACT_FIELD_LABELS: Record<"phone" | "email", string> = {
     phone: "téléphone",
     email: "email",
   };
 
   const updateInterventionContactMutation = useMutation({
-    mutationFn: async ({ field, value }: { field: "address" | "phone" | "email"; value: string }) => {
+    mutationFn: async ({ field, value }: { field: "phone" | "email"; value: string }) => {
       applyEditIntervention(queryClient, String(id), { [field]: value });
       await enqueue({
         kind: "edit-intervention",
@@ -413,6 +421,71 @@ export default function InterventionDetailScreen() {
       setEditingField(null);
     },
     onError: () => toast.error("Erreur", "Impossible de mettre à jour l'intervention."),
+  });
+
+  // L'adresse conserve sa cible historique (client lié ou intervention),
+  // tandis que la ville est toujours portée par l'intervention : c'est ce
+  // champ qui détermine son regroupement dans le planning.
+  const updateLocationMutation = useMutation({
+    mutationFn: async ({
+      address,
+      city,
+      target,
+    }: {
+      address: string;
+      city: string;
+      target: "client" | "intervention";
+    }) => {
+      const trimmedAddress = address.trim();
+      const trimmedCity = city.trim();
+      const cityRow = trimmedCity
+        ? cities.find((item) => cityIdentityKey(item.city) === cityIdentityKey(trimmedCity))
+        : undefined;
+
+      if (trimmedCity && !cityRow) {
+        throw new Error("unknown-city");
+      }
+
+      if (target === "client") {
+        if (!intervention?.client?.id) throw new Error("no-client");
+        await api.patch(`/api/clients/${intervention.client.id}`, {
+          address: trimmedAddress || null,
+        });
+      }
+
+      const interventionPayload = {
+        ...(target === "intervention" ? { address: trimmedAddress || null } : {}),
+        city: cityRow?.city ?? null,
+        ...(cityRow ? { zone: cityRow.zone } : {}),
+      };
+      applyEditIntervention(queryClient, String(id), interventionPayload);
+      await enqueue({
+        kind: "edit-intervention",
+        method: "PATCH",
+        url: `/api/interventions/${id}`,
+        body: interventionPayload,
+        label: "Modification adresse et ville",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
+      queryClient.invalidateQueries({ queryKey: ["client", intervention?.client?.id] });
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      queryClient.invalidateQueries({ queryKey: ["unassigned-interventions"] });
+      toast.success(
+        "Succès",
+        isOnlineNow() ? "Adresse et ville mises à jour." : "Sera synchronisé au retour du réseau.",
+      );
+      setEditingLocation(null);
+    },
+    onError: (error: Error) => {
+      if (error.message === "unknown-city") {
+        toast.error("Ville inconnue", "Choisis une ville dans les propositions.");
+        return;
+      }
+      toast.error("Erreur", "Impossible de mettre à jour l'adresse et la ville.");
+    },
   });
 
   // 4. HELPER FUNCTIONS
@@ -767,6 +840,22 @@ export default function InterventionDetailScreen() {
     note: { label: "Note", color: "#64748B", bg: "#F8FAFC", bgDark: "#1E293B" },
   };
   const typeBadge = TYPE_BADGE[intervType] ?? TYPE_BADGE["intervention"];
+  const cityQuery = cityIdentityKey(editingLocation?.city ?? "");
+  const exactCityMatch = cityQuery
+    ? cities.find((item) => cityIdentityKey(item.city) === cityQuery)
+    : undefined;
+  const citySuggestions = cityQuery && !exactCityMatch
+    ? cities
+        .filter((item) => cityIdentityKey(item.city).includes(cityQuery))
+        .sort((a, b) => {
+          const aStarts = cityIdentityKey(a.city).startsWith(cityQuery);
+          const bStarts = cityIdentityKey(b.city).startsWith(cityQuery);
+          if (aStarts !== bStarts) return aStarts ? -1 : 1;
+          return a.city.localeCompare(b.city, "fr");
+        })
+        .slice(0, 4)
+    : [];
+  const cityValueIsValid = !cityQuery || !!exactCityMatch;
 
   return (
     <View
@@ -1237,7 +1326,12 @@ export default function InterventionDetailScreen() {
             const contactAddress = intervention.client?.address ?? intervention.address;
             const contactPhone = intervention.client?.phone ?? intervention.phone;
             const contactEmail = intervention.client?.email ?? intervention.email;
-            const openFieldEditor = (field: "address" | "phone" | "email", label: string, value?: string | null) => {
+            const contactCity = intervention.city ?? intervention.client?.city;
+            const navigationAddress = [contactAddress, contactCity]
+              .map((part) => part?.trim())
+              .filter(Boolean)
+              .join(", ");
+            const openFieldEditor = (field: "phone" | "email", label: string, value?: string | null) => {
               if (!isAdmin) return;
               setEditingField({ field, label, value: value ?? "", target: contactTarget });
             };
@@ -1252,8 +1346,8 @@ export default function InterventionDetailScreen() {
               <Pressable
                 className="flex-1 bg-card dark:bg-slate-900 border border-border dark:border-slate-800 p-4 rounded-3xl items-center justify-center active:scale-95 transition-transform"
                 onPress={() => {
-                  if (contactAddress) {
-                    const query = encodeURIComponent(contactAddress);
+                  if (navigationAddress) {
+                    const query = encodeURIComponent(navigationAddress);
                     const url = Platform.select({
                       ios: `https://maps.google.com/maps?q=${query}`,
                       android: `geo:0,0?q=${query}`,
@@ -1261,10 +1355,17 @@ export default function InterventionDetailScreen() {
                     });
                     Linking.openURL(url!);
                   } else {
-                    toast.error("Pas d'adresse", "Aucune adresse renseignée.");
+                    toast.error("Localisation inconnue", "Aucune adresse ni ville renseignée.");
                   }
                 }}
-                onLongPress={() => openFieldEditor("address", "Adresse", contactAddress)}
+                onLongPress={() => {
+                  if (!isAdmin) return;
+                  setEditingLocation({
+                    address: contactAddress ?? "",
+                    city: contactCity ?? "",
+                    target: contactTarget,
+                  });
+                }}
                 delayLongPress={400}
               >
                 <View className="bg-emerald-500/10 p-3 rounded-full mb-2">
@@ -2469,6 +2570,113 @@ export default function InterventionDetailScreen() {
               Annuler
             </Button>
             <Button onPress={handleSaveTime} style={{ flex: 1 }} disabled={timeMutation.isPending}>
+              Enregistrer
+            </Button>
+          </View>
+        </View>
+      </Dialog>
+
+      <Dialog
+        open={!!editingLocation}
+        onClose={() => setEditingLocation(null)}
+        position="center"
+        keyboardVerticalOffset={-80}
+        onShow={() => {
+          const ref = editingLocation?.address.trim()
+            ? locationAddressInputRef
+            : locationCityInputRef;
+          ref.current?.focus();
+        }}
+      >
+        <View style={{ padding: 16, gap: 16 }}>
+          <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", textAlign: "center" }}>
+            Modifier la localisation
+          </Text>
+
+          <Input
+            ref={locationAddressInputRef}
+            label="Adresse"
+            placeholder="Rue et numéro (facultatif)"
+            value={editingLocation?.address ?? ""}
+            onChangeText={(address) =>
+              setEditingLocation((previous) => previous ? { ...previous, address } : previous)
+            }
+          />
+
+          <View style={{ gap: 6 }}>
+            <Input
+              ref={locationCityInputRef}
+              label="Ville"
+              placeholder="Commence à écrire une ville"
+              value={editingLocation?.city ?? ""}
+              autoCapitalize="words"
+              onChangeText={(city) =>
+                setEditingLocation((previous) => previous ? { ...previous, city } : previous)
+              }
+            />
+
+            {citySuggestions.length > 0 && (
+              <View
+                style={{
+                  borderWidth: 1,
+                  borderColor: isDark ? "#334155" : "#E2E8F0",
+                  borderRadius: 14,
+                  overflow: "hidden",
+                  backgroundColor: isDark ? "#0F172A" : "#FFFFFF",
+                }}
+              >
+                {citySuggestions.map((city, index) => (
+                  <Pressable
+                    key={city.city}
+                    onPress={() => {
+                      setEditingLocation((previous) => previous ? { ...previous, city: city.city } : previous);
+                      Keyboard.dismiss();
+                    }}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 11,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      borderBottomWidth: index === citySuggestions.length - 1 ? 0 : 1,
+                      borderBottomColor: isDark ? "#1E293B" : "#F1F5F9",
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: isDark ? "#F8FAFC" : "#0F172A" }}>
+                      {city.city}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: isDark ? "#94A3B8" : "#64748B" }}>
+                      {city.zone === "ardennes" ? "Ardennes" : "Hainaut"}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            {!!cityQuery && !cityValueIsValid && citySuggestions.length === 0 && (
+              <Text style={{ fontSize: 12, color: "#EF4444", paddingHorizontal: 2 }}>
+                Aucune ville correspondante. Crée-la d'abord dans Paramètres → Villes.
+              </Text>
+            )}
+            {!!cityQuery && !cityValueIsValid && citySuggestions.length > 0 && (
+              <Text style={{ fontSize: 12, color: isDark ? "#94A3B8" : "#64748B", paddingHorizontal: 2 }}>
+                Sélectionne une ville proposée pour l'utiliser dans le tri.
+              </Text>
+            )}
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <Button variant="outline" onPress={() => setEditingLocation(null)} style={{ flex: 1 }}>
+              Annuler
+            </Button>
+            <Button
+              onPress={() => {
+                if (!editingLocation || !cityValueIsValid) return;
+                updateLocationMutation.mutate(editingLocation);
+              }}
+              style={{ flex: 1 }}
+              disabled={!cityValueIsValid || updateLocationMutation.isPending}
+            >
               Enregistrer
             </Button>
           </View>

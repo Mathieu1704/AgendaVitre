@@ -1,14 +1,47 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List
+from sqlalchemy.orm import Session, selectinload
+from typing import List, Optional
 from uuid import UUID
 
-from app.models.models import get_db, City, Client, Intervention, HourlyRate, CompanySettings
-from app.schemas.schemas import CityOut, CityCreate, CityUpdate, AssignInterventionCityIn, HourlyRateOut, HourlyRateCreate, normalize_city
+from app.models.models import get_db, City, CityGroup, Client, Intervention, HourlyRate, CompanySettings
+from app.schemas.schemas import CityOut, CityCreate, CityUpdate, CityGroupOut, CityGroupCreate, CityGroupUpdate, AssignInterventionCityIn, HourlyRateOut, HourlyRateCreate, normalize_city, city_identity_key
 from app.core.deps import get_current_user
 from pydantic import BaseModel
 
 router = APIRouter()
+
+
+def _find_city(db: Session, value: str, *, exclude: Optional[str] = None):
+    """Résout aussi les variantes de ponctuation/casse d'un nom de ville."""
+    name = normalize_city(value)
+    exact = db.query(City).filter(City.city == name).first()
+    if exact and exact.city != exclude:
+        return exact
+    identity = city_identity_key(name)
+    if not identity:
+        return None
+    return next(
+        (
+            row for row in db.query(City).all()
+            if row.city != exclude and city_identity_key(row.city) == identity
+        ),
+        None,
+    )
+
+
+def _clean_group_name(value: str) -> str:
+    return " ".join((value or "").strip().split())
+
+
+def _find_group_by_name(db: Session, zone: str, name: str, *, exclude_id: Optional[UUID] = None):
+    identity = _clean_group_name(name).casefold()
+    return next(
+        (
+            row for row in db.query(CityGroup).filter(CityGroup.zone == zone).all()
+            if row.id != exclude_id and row.name.casefold() == identity
+        ),
+        None,
+    )
 
 
 class CompanySettingsPatch(BaseModel):
@@ -17,7 +50,63 @@ class CompanySettingsPatch(BaseModel):
 
 @router.get("/cities", response_model=List[CityOut])
 def list_cities(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    return db.query(City).order_by(City.zone, City.position, City.city).all()
+    return db.query(City).options(selectinload(City.group)).order_by(City.zone, City.position, City.city).all()
+
+
+@router.get("/city-groups", response_model=List[CityGroupOut])
+def list_city_groups(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    return db.query(CityGroup).order_by(CityGroup.zone, CityGroup.position, CityGroup.name).all()
+
+
+@router.post("/city-groups", response_model=CityGroupOut)
+def create_city_group(body: CityGroupCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    name = _clean_group_name(body.name)
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom du groupe est requis")
+    if _find_group_by_name(db, body.zone, name):
+        raise HTTPException(status_code=400, detail="Un groupe portant ce nom existe déjà dans cette zone")
+    max_pos = db.query(CityGroup).filter(CityGroup.zone == body.zone).count()
+    group = CityGroup(name=name, zone=body.zone, color=body.color, position=max_pos)
+    db.add(group)
+    db.commit()
+    db.refresh(group)
+    return group
+
+
+@router.patch("/city-groups/{group_id}", response_model=CityGroupOut)
+def update_city_group(group_id: UUID, body: CityGroupUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    group = db.query(CityGroup).filter(CityGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Groupe introuvable")
+    if body.name is not None:
+        name = _clean_group_name(body.name)
+        if not name:
+            raise HTTPException(status_code=400, detail="Le nom du groupe est requis")
+        if _find_group_by_name(db, group.zone, name, exclude_id=group.id):
+            raise HTTPException(status_code=400, detail="Un groupe portant ce nom existe déjà dans cette zone")
+        group.name = name
+    if body.color is not None:
+        group.color = body.color
+    db.commit()
+    db.refresh(group)
+    return group
+
+
+@router.delete("/city-groups/{group_id}")
+def delete_city_group(group_id: UUID, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    group = db.query(CityGroup).filter(CityGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Groupe introuvable")
+    db.query(City).filter(City.group_id == group.id).update({"group_id": None}, synchronize_session=False)
+    db.delete(group)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/cities", response_model=CityOut)
@@ -25,10 +114,16 @@ def create_city(body: CityCreate, db: Session = Depends(get_db), current_user=De
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Accès réservé aux admins")
     name = normalize_city(body.city)
-    if db.query(City).filter(City.city == name).first():
-        raise HTTPException(status_code=400, detail="Cette ville existe déjà")
+    existing = _find_city(db, name)
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Cette ville existe déjà sous le nom « {existing.city} »")
+    group = None
+    if body.group_id:
+        group = db.query(CityGroup).filter(CityGroup.id == body.group_id).first()
+        if not group or group.zone != body.zone:
+            raise HTTPException(status_code=400, detail="Ce groupe n'appartient pas à la zone choisie")
     max_pos = db.query(City).filter(City.zone == body.zone).count()
-    city = City(city=name, zone=body.zone, color=body.color, position=max_pos)
+    city = City(city=name, zone=body.zone, color=body.color, position=max_pos, group_id=group.id if group else None)
     db.add(city)
     db.commit()
     db.refresh(city)
@@ -41,24 +136,39 @@ def update_city(city: str, body: CityUpdate, db: Session = Depends(get_db), curr
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Accès réservé aux admins")
     city = normalize_city(city)
-    row = db.query(City).filter(City.city == city).first()
+    row = _find_city(db, city)
     if not row:
         raise HTTPException(status_code=404, detail="Ville introuvable")
 
-    new_name = normalize_city(body.city) if body.city else city
+    old_name = row.city
+    new_name = normalize_city(body.city) if body.city else old_name
     new_zone = body.zone or row.zone
 
-    if new_name != city and db.query(City).filter(City.city == new_name).first():
-        raise HTTPException(status_code=400, detail="Une ville avec ce nom existe déjà")
+    if "group_id" in body.model_fields_set:
+        if body.group_id is None:
+            row.group_id = None
+        else:
+            group = db.query(CityGroup).filter(CityGroup.id == body.group_id).first()
+            if not group or group.zone != new_zone:
+                raise HTTPException(status_code=400, detail="Ce groupe n'appartient pas à la zone choisie")
+            row.group_id = group.id
+    elif row.group_id:
+        current_group = db.query(CityGroup).filter(CityGroup.id == row.group_id).first()
+        if not current_group or current_group.zone != new_zone:
+            row.group_id = None
+
+    duplicate = _find_city(db, new_name, exclude=row.city)
+    if duplicate:
+        raise HTTPException(status_code=400, detail=f"Une ville équivalente existe déjà : « {duplicate.city} »")
 
     row.city = new_name
     row.zone = new_zone
     if body.color is not None:
         row.color = body.color
 
-    if new_name != city:
-        db.query(Client).filter(Client.city == city).update({"city": new_name})
-    db.query(Intervention).filter(Intervention.city == city).update(
+    if new_name != old_name:
+        db.query(Client).filter(Client.city == old_name).update({"city": new_name})
+    db.query(Intervention).filter(Intervention.city == old_name).update(
         {"city": new_name, "zone": new_zone}, synchronize_session=False
     )
 
@@ -72,10 +182,10 @@ def delete_city(city: str, db: Session = Depends(get_db), current_user=Depends(g
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Accès réservé aux admins")
     city = normalize_city(city)
-    row = db.query(City).filter(City.city == city).first()
+    row = _find_city(db, city)
     if not row:
         raise HTTPException(status_code=404, detail="Ville introuvable")
-    intervention_count = db.query(Intervention).filter(Intervention.city == city).count()
+    intervention_count = db.query(Intervention).filter(Intervention.city == row.city).count()
     if intervention_count > 0:
         raise HTTPException(status_code=400, detail=f"Impossible de supprimer : {intervention_count} intervention(s) rattachée(s).")
     db.delete(row)
@@ -110,16 +220,16 @@ def assign_intervention_city(body: AssignInterventionCityIn, db: Session = Depen
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Accès réservé aux admins")
     city = normalize_city(body.city)
-    city_row = db.query(City).filter(City.city == city).first()
+    city_row = _find_city(db, city)
     if not city_row:
         raise HTTPException(status_code=404, detail="Ville inconnue — crée-la d'abord dans les paramètres.")
     if not body.intervention_ids:
         raise HTTPException(status_code=400, detail="Aucune intervention fournie")
     db.query(Intervention).filter(Intervention.id.in_(body.intervention_ids)).update(
-        {"city": city, "zone": city_row.zone}, synchronize_session=False
+        {"city": city_row.city, "zone": city_row.zone}, synchronize_session=False
     )
     db.commit()
-    return {"ok": True, "city": city, "zone": city_row.zone, "count": len(body.intervention_ids)}
+    return {"ok": True, "city": city_row.city, "zone": city_row.zone, "count": len(body.intervention_ids)}
 
 
 # --- TAUX HORAIRES ---

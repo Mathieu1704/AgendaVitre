@@ -84,12 +84,12 @@ export const useCreateReinforcement = () => {
 export const useBulkAssignEmployees = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ date, city, employeeIds, skipAssigned = true }: {
-      date: string; city: string; employeeIds: string[]; skipAssigned?: boolean;
+    mutationFn: ({ date, cities, employeeIds, skipAssigned = true }: {
+      date: string; cities: string[]; employeeIds: string[]; skipAssigned?: boolean;
     }) => api.patch("/api/interventions/bulk-assign", {
-      date, city, employee_ids: employeeIds, skip_assigned: skipAssigned,
+      date, cities, employee_ids: employeeIds, skip_assigned: skipAssigned,
     }),
-    onSuccess: (_data, { date, city, employeeIds, skipAssigned = true }) => {
+    onSuccess: (_data, { date, cities, employeeIds, skipAssigned = true }) => {
       const allEmployees = qc.getQueryData<any[]>(["employees"]) ?? [];
       const selectedEmps = allEmployees.filter((e) => employeeIds.includes(e.id));
       const targetTime = new Date(`${date}T12:00:00`).getTime();
@@ -109,7 +109,7 @@ export const useBulkAssignEmployees = () => {
             ? toBrusselsDateTimeString(new Date(item.start_time)).split("T")[0]
             : "";
           if (
-            item?.city !== city ||
+            !cities.includes(item?.city) ||
             itemDate !== date ||
             (skipAssigned && (item.employees?.length ?? 0) > 0)
           ) {

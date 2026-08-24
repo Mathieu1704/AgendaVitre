@@ -8,7 +8,7 @@ export type AssignModalState =
   | {
       mode: "city";
       date: string;
-      city: string;
+      cities: string[];
       label: string;
       color: string;
     }

@@ -31,14 +31,45 @@ raw_event_employees = Table(
 
 # --- TABLES ---
 
+class CityGroup(Base):
+    """Groupe d'affichage facultatif sous une zone géographique fixe."""
+    __tablename__ = "city_groups"
+    __table_args__ = (
+        UniqueConstraint("zone", "name", name="uq_city_groups_zone_name"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False)
+    zone = Column(String(20), nullable=False)  # "hainaut" | "ardennes"
+    color = Column(String(20), nullable=True)
+    position = Column(Integer, default=0, nullable=False)
+
+    cities = relationship("City", back_populates="group")
+
+
 class City(Base):
-    """Ville → zone (hainaut/ardennes). Remplace l'ancien niveau intermédiaire
-    de sous-zone : chaque intervention est rattachée à sa ville précise."""
+    """Ville rattachée à Hainaut/Ardennes et, facultativement, à un groupe."""
     __tablename__ = "cities"
     city = Column(String(100), primary_key=True)
     zone = Column(String(20), nullable=False)  # "hainaut" | "ardennes"
     color = Column(String(20), nullable=True)
     position = Column(Integer, default=0)
+    group_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("city_groups.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    group = relationship("CityGroup", back_populates="cities")
+
+    @property
+    def group_name(self):
+        return self.group.name if self.group else None
+
+    @property
+    def group_color(self):
+        return self.group.color if self.group else None
 
 
 class CompanySettings(Base):

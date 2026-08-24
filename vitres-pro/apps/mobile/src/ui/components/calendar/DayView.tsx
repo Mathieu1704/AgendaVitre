@@ -11,6 +11,7 @@ import {
   AssignModalState,
   buildFlatRows,
   FlatRow,
+  CityPlanningInfo,
   STATUS_LABELS,
   STATUS_COLORS,
   TYPE_LABELS,
@@ -29,7 +30,7 @@ interface DayViewProps {
   viewMode: string;
   selectedDate: string;
   filterItem: (item: any) => boolean;
-  cityMap: Map<string, { zone: string; color: string }>;
+  cityMap: Map<string, CityPlanningInfo>;
   activeTypes: Set<string>;
   activeStatuses: Set<string>;
   toggleType: (id: string) => void;
@@ -125,7 +126,7 @@ export const DayView = React.memo(function DayView({
                 onPress={() => {
                   const existingIds = [...new Set(row.items.flatMap((it: any) => (it.employees ?? []).map((e: any) => e.id as string)))];
                   setTimeout(() => {
-                    setAssignModal({ mode: "city", date: iso, city: row.code, label: row.label, color: row.color });
+                    setAssignModal({ mode: "city", date: iso, cities: row.cities, label: row.label, color: row.color });
                     setSelectedAssignIds(existingIds);
                     setInitialAssignIds(existingIds);
                   }, 100);

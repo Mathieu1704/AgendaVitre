@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { toISODate, startOfMonth, endOfMonth } from "../../../lib/date";
 import { useRawEventsByRange } from "../../../hooks/useRawEvents";
 import { RawEventCard } from "./RawEventCard";
-import { FilterChipsBar, renderInterventionGroups, AssignModalState, InterventionGroupsCtx } from "./InterventionGroups";
+import { FilterChipsBar, renderInterventionGroups, AssignModalState, CityPlanningInfo, InterventionGroupsCtx } from "./InterventionGroups";
 import { PlanningHeader } from "../PlanningHeader";
 import { DayStartRow, DayEndRow } from "./DayTrackerBar";
 
@@ -22,7 +22,7 @@ interface MonthViewProps {
   effectiveZone: string;
   userZone?: string;
   filterItem: (item: any) => boolean;
-  cityMap: Map<string, { zone: string; color: string }>;
+  cityMap: Map<string, CityPlanningInfo>;
   viewMode: string;
   activeTypes: Set<string>;
   activeStatuses: Set<string>;

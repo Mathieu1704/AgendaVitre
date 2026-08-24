@@ -5,7 +5,7 @@ import { usePlanningRangeStats } from "../../../hooks/usePlanning";
 import { useRawEventsByRange } from "../../../hooks/useRawEvents";
 import { RawCalendarEvent } from "../../../types";
 import { RawEventCard } from "./RawEventCard";
-import { renderInterventionGroups, AssignModalState, InterventionGroupsCtx } from "./InterventionGroups";
+import { renderInterventionGroups, AssignModalState, CityPlanningInfo, InterventionGroupsCtx } from "./InterventionGroups";
 
 function fmtH(h: number): string {
   // Arrondi au quart d'heure — aligné sur l'écran "Session taux" (mobile)
@@ -27,7 +27,7 @@ interface WeekViewProps {
   viewMode: string;
   selectedDate: string;
   filterItem: (item: any) => boolean;
-  cityMap: Map<string, { zone: string; color: string }>;
+  cityMap: Map<string, CityPlanningInfo>;
   setAssignModal: React.Dispatch<React.SetStateAction<AssignModalState>>;
   setSelectedAssignIds: React.Dispatch<React.SetStateAction<string[]>>;
   setInitialAssignIds: React.Dispatch<React.SetStateAction<string[]>>;

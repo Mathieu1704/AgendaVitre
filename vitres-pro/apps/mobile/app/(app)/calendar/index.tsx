@@ -284,9 +284,9 @@ export default function CalendarScreen() {
   const [assignModal, setAssignModal] = useState<
     | { mode: "single"; interventionId: string; currentIds: string[] }
     | {
-        mode: "city";
-        date: string;
-        city: string;
+      mode: "city";
+      date: string;
+      cities: string[];
         label: string;
         color: string;
       }
@@ -301,11 +301,15 @@ export default function CalendarScreen() {
 
   const { cities } = useCities();
   const cityMap = useMemo(() => {
-    const m = new Map<string, { zone: string; color: string }>();
+    const m = new Map<string, { zone: string; color: string; groupId: string | null; groupName: string | null; groupColor: string | null }>();
     for (const c of cities) {
+      const zoneColor = c.zone === "ardennes" ? "#22C55E" : "#3B82F6";
       m.set(c.city, {
         zone: c.zone,
-        color: c.color ?? (c.zone === "ardennes" ? "#22C55E" : "#3B82F6"),
+        color: c.color ?? zoneColor,
+        groupId: c.group_id,
+        groupName: c.group_name,
+        groupColor: c.group_id ? (c.group_color ?? zoneColor) : null,
       });
     }
     return m;
@@ -1053,7 +1057,7 @@ export default function CalendarScreen() {
                   } else {
                     await bulkAssign.mutateAsync({
                       date: assignModal.date,
-                      city: assignModal.city,
+                      cities: assignModal.cities,
                       employeeIds: idsToSend,
                       skipAssigned: false,
                     });

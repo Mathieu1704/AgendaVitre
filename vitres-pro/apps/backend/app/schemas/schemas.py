@@ -15,6 +15,22 @@ def normalize_city(v: Optional[str]) -> Optional[str]:
         v = v.replace(char, "'")
     return v
 
+
+def city_identity_key(v: Optional[str]) -> str:
+    """Clé d'identité tolérante pour repérer les variantes d'une même ville.
+
+    Les accents, espaces, tirets, apostrophes et différences de casse ne
+    distinguent pas deux villes (ex. Braine le Comte / Braine-le-Comte).
+    Le libellé original reste néanmoins conservé pour l'affichage.
+    """
+    normalized = normalize_city(v)
+    if not normalized:
+        return ""
+    decomposed = unicodedata.normalize("NFKD", normalized.casefold())
+    decomposed = decomposed.replace("œ", "oe").replace("æ", "ae")
+    ascii_value = decomposed.encode("ascii", "ignore").decode("ascii")
+    return "".join(char for char in ascii_value if char.isalnum())
+
 VALID_WEEKDAY_KEYS = {"1", "2", "3", "4", "5"}
 
 def validate_hours_per_weekday(v: Optional[Dict[str, float]]) -> Optional[Dict[str, float]]:
@@ -95,6 +111,9 @@ class CityOut(BaseModel):
     zone: str
     color: Optional[str] = None
     position: int = 0
+    group_id: Optional[UUID] = None
+    group_name: Optional[str] = None
+    group_color: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -102,10 +121,30 @@ class CityCreate(BaseModel):
     city: str
     zone: Literal["hainaut", "ardennes"]
     color: Optional[str] = None
+    group_id: Optional[UUID] = None
 
 class CityUpdate(BaseModel):
     city: Optional[str] = None
     zone: Optional[Literal["hainaut", "ardennes"]] = None
+    color: Optional[str] = None
+    group_id: Optional[UUID] = None
+
+class CityGroupOut(BaseModel):
+    id: UUID
+    name: str
+    zone: str
+    color: Optional[str] = None
+    position: int = 0
+    class Config:
+        from_attributes = True
+
+class CityGroupCreate(BaseModel):
+    name: str
+    zone: Literal["hainaut", "ardennes"]
+    color: Optional[str] = None
+
+class CityGroupUpdate(BaseModel):
+    name: Optional[str] = None
     color: Optional[str] = None
 
 class AssignInterventionCityIn(BaseModel):

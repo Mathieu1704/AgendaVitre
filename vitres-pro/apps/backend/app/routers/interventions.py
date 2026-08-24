@@ -18,11 +18,27 @@ from app.schemas.schemas import (
     InterventionCreate, InterventionOut, InterventionRecurringCreate,
     InterventionServiceCreate, InterventionServiceOut, InterventionServiceUpdate,
     InterventionNoteCreate, InterventionNoteOut,
+    normalize_city, city_identity_key,
 )
 from app.core.deps import get_current_user
 from app.core.idempotency import already_processed, record_operation
 
 router = APIRouter()
+
+
+def _find_city(db: Session, value: Optional[str]):
+    """Retourne la ville canonique, ponctuation/accents/casse neutralisés."""
+    name = normalize_city(value)
+    if not name:
+        return None
+    exact = db.query(City).filter(City.city == name).first()
+    if exact:
+        return exact
+    identity = city_identity_key(name)
+    return next(
+        (row for row in db.query(City).all() if city_identity_key(row.city) == identity),
+        None,
+    )
 
 # Supplément "à la demande" par prestation : le prix de base (InterventionItem.price)
 # reste inchangé, la majoration se calcule à la volée partout où un total est sommé.
@@ -50,7 +66,8 @@ def _validate_payment_split(payment_mode, price_estimated, amount_cash, amount_i
 
 class BulkAssignBody(BaseModel):
     date: date
-    city: str
+    city: Optional[str] = None
+    cities: List[str] = []
     employee_ids: List[UUID] = []
     skip_assigned: bool = True
 
@@ -407,10 +424,16 @@ def create_recurring_bulk(
     if seen is not None:
         return {"created": 0, "recurrence_group_id": str(seen.result_id) if seen.result_id else None}
 
+    client = None
     if payload.client_id:
         client = db.query(Client).filter(Client.id == payload.client_id).first()
         if not client:
             raise HTTPException(status_code=404, detail="Client introuvable")
+
+    requested_city = payload.city or (client.city if client else None)
+    city_row = _find_city(db, requested_city)
+    canonical_city = city_row.city if city_row else normalize_city(requested_city)
+    canonical_zone = city_row.zone if city_row else payload.zone
 
     employees = (
         db.query(Employee).filter(Employee.id.in_(payload.employee_ids)).all()
@@ -436,8 +459,8 @@ def create_recurring_bulk(
             payment_mode=payload.payment_mode,
             amount_cash=payload.amount_cash,
             amount_invoice=payload.amount_invoice,
-            zone=payload.zone,
-            city=payload.city,
+            zone=canonical_zone,
+            city=canonical_city,
             client_id=payload.client_id,
             address=payload.address,
             phone=payload.phone,
@@ -517,9 +540,12 @@ def create_intervention(
     if not data.get("city") and client and client.city:
         data["city"] = client.city
     if data.get("city"):
-        city_row = db.query(City).filter(City.city == data["city"]).first()
+        city_row = _find_city(db, data["city"])
         if city_row:
+            data["city"] = city_row.city
             data["zone"] = city_row.zone
+        else:
+            data["city"] = normalize_city(data["city"])
     if current_user.role != 'admin':
         data["zone"] = current_user.zone
         data["type"] = "intervention"
@@ -656,13 +682,16 @@ def bulk_assign_employees(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
-    """Assigne des employés à toutes les interventions d'une ville pour un jour donné.
+    """Assigne des employés aux interventions d'une ou plusieurs villes pour un jour donné.
     skip_assigned=True (défaut) : saute les interventions qui ont déjà des employés assignés."""
     if current_user.role != 'admin':
         raise HTTPException(status_code=403, detail="Réservé aux admins.")
+    target_cities = list(dict.fromkeys(body.cities or ([body.city] if body.city else [])))
+    if not target_cities:
+        raise HTTPException(status_code=400, detail="Aucune ville fournie.")
     interventions = db.query(Intervention).options(selectinload(Intervention.employees)).filter(
         func.date(Intervention.start_time) == body.date,
-        Intervention.city == body.city,
+        Intervention.city.in_(target_cities),
         ~Intervention.tour_run.has(),
     ).all()
 
@@ -810,6 +839,14 @@ def update_intervention(
     old_status = db_intervention.status
     old_type = db_intervention.type
 
+    if "city" in intervention_update and intervention_update["city"]:
+        city_row = _find_city(db, intervention_update["city"])
+        if city_row:
+            intervention_update["city"] = city_row.city
+            intervention_update["zone"] = city_row.zone
+        else:
+            intervention_update["city"] = normalize_city(intervention_update["city"])
+
     # Si l'admin fixe une vraie heure, lever le flag time_tbd en avance
     # (la boucle ci-dessous peut le remettre à True si time_tbd est explicitement envoyé)
     if "start_time" in intervention_update or "end_time" in intervention_update:
@@ -839,11 +876,6 @@ def update_intervention(
                 ))
         elif hasattr(db_intervention, key):
             setattr(db_intervention, key, value)
-
-    if "city" in intervention_update and intervention_update["city"]:
-        city_row = db.query(City).filter(City.city == intervention_update["city"]).first()
-        if city_row:
-            db_intervention.zone = city_row.zone
 
     # Cloture : on retient qui a reellement termine (et donc encaisse), pas
     # seulement les employes assignes — voir _weekly_cash_amount.
