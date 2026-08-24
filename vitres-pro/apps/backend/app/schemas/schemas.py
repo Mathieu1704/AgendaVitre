@@ -285,6 +285,9 @@ class InterventionRecurringCreate(BaseModel):
     recurrence_group_id: Optional[UUID] = None
     occurrences: List[RecurringOccurrence]
     client_operation_id: Optional[UUID] = None
+    # Devis source (bouton "Changer en intervention") quand la série créée
+    # est "sans fin" : permet de marquer le devis comme converti.
+    reprise_of_id: Optional[UUID] = None
 
 class InterventionOutLite(BaseModel):
     id: UUID

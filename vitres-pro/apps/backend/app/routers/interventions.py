@@ -459,6 +459,20 @@ def create_recurring_bulk(
         f"Série récurrente créée : {payload.title} ({len(created_ids)} occurrences)",
         {"recurrence_group_id": str(recurrence_group_id), "count": len(created_ids)},
     )
+
+    # Conversion devis -> intervention pour une série "sans fin" (bouton
+    # "Changer en intervention") : même logique que create_intervention.
+    if payload.reprise_of_id and payload.type == "intervention":
+        devis_source = db.query(Intervention).filter(
+            Intervention.id == payload.reprise_of_id, Intervention.type == "devis",
+        ).first()
+        if devis_source and not devis_source.devis_converted_at:
+            devis_source.devis_converted_at = datetime.now(timezone.utc)
+            _add_audit(
+                db, "devis_converted", current_user.id, devis_source.id,
+                "Devis converti en intervention",
+            )
+
     record_operation(
         db, payload.client_operation_id, current_user.id,
         "POST /api/interventions/recurring-bulk", recurrence_group_id,

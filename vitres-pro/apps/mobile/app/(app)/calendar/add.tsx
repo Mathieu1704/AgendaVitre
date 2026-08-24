@@ -1551,6 +1551,9 @@ export default function AddInterventionScreen() {
             time_tbd: isAdmin ? timeTbd : true,
             recurrence_rule: recurrenceRule,
             recurrence_group_id: groupId,
+            // Série "sans fin" convertie depuis un devis : permet au backend
+            // de marquer le devis source comme converti (voir create_recurring_bulk).
+            ...(isConvertingDevis && repriseSourceId ? { reprise_of_id: repriseSourceId } : {}),
             occurrences: occurrences.map((o) => ({
               start_time: o.start.toISOString(),
               end_time: o.end.toISOString(),
@@ -1979,20 +1982,24 @@ export default function AddInterventionScreen() {
               <Text className="text-2xl font-extrabold text-foreground dark:text-white text-center">
                 {isRepriseMode
                   ? "Reprise RDV"
-                  : isDuplicateMode
-                    ? "Dupliquer"
-                    : isEditMode
-                      ? "Modifier"
-                      : "Planifier"}
+                  : isConvertingDevis
+                    ? "Devis → Intervention"
+                    : isDuplicateMode
+                      ? "Dupliquer"
+                      : isEditMode
+                        ? "Modifier"
+                        : "Planifier"}
               </Text>
               <Text className="mt-1 text-muted-foreground text-center font-medium">
                 {isRepriseMode
                   ? "Planifie le prochain RDV pour ce client"
-                  : isDuplicateMode
-                    ? "Copie sur un autre jour"
-                    : isEditMode
-                      ? "Mise à jour intervention"
-                      : "Nouvelle intervention"}
+                  : isConvertingDevis
+                    ? "Choisis la ou les dates de l'intervention"
+                    : isDuplicateMode
+                      ? "Copie sur un autre jour"
+                      : isEditMode
+                        ? "Mise à jour intervention"
+                        : "Nouvelle intervention"}
               </Text>
             </CardHeader>
 
@@ -3243,11 +3250,13 @@ export default function AddInterventionScreen() {
                       ? "Envoi..."
                       : isRepriseMode
                         ? "Confirmer"
-                        : isDuplicateMode
-                          ? "Dupliquer"
-                          : isEditMode
-                            ? (isQuickPrepMode ? "Confirmer" : "Mettre à jour")
-                            : "Valider"}
+                        : isConvertingDevis
+                          ? "Convertir"
+                          : isDuplicateMode
+                            ? "Dupliquer"
+                            : isEditMode
+                              ? (isQuickPrepMode ? "Confirmer" : "Mettre à jour")
+                              : "Valider"}
                   </Button>
                 </View>
               </View>
