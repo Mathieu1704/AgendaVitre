@@ -369,6 +369,11 @@ def read_intervention(
     if current_user.role == 'subcontractor':
         _strip_prices([intervention])
     intervention.pending_deferred_amount = _pending_deferred_amount(db, intervention)
+    if intervention.type == "devis" and intervention.devis_converted_at:
+        converted = db.query(Intervention).filter(
+            Intervention.reprise_of_id == intervention.id,
+        ).order_by(Intervention.start_time.asc()).first()
+        intervention.converted_intervention_id = converted.id if converted else None
     return intervention
 
 

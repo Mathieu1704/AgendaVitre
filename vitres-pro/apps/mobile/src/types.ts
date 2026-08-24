@@ -61,6 +61,9 @@ export interface Intervention {
   // Horodatage de la conversion d'un devis en intervention (bouton "Changer
   // en intervention") — trace visible même après que type soit "intervention".
   devis_converted_at?: string | null;
+  // Première intervention créée depuis ce devis — présent seulement quand
+  // devis_converted_at est renseigné (voir GET /interventions/{id}).
+  converted_intervention_id?: string | null;
   client?: Client;
   employees: Employee[]; // Liste d'employés maintenant
   // Uniquement utilisées quand aucun client n'est lié (voir client.address/phone/email sinon)

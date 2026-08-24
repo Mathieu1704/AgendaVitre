@@ -1735,12 +1735,19 @@ export default function InterventionDetailScreen() {
         style={{ paddingBottom: Math.max(insets.bottom, 16) }}
       >
         {isAdmin && intervType === "devis" && !!intervention.devis_converted_at && (
-          <View className="w-full h-14 bg-violet-500/15 rounded-full items-center justify-center flex-row">
+          <Pressable
+            onPress={() => {
+              if (!intervention.converted_intervention_id) return;
+              router.push(`/(app)/calendar/${intervention.converted_intervention_id}` as any);
+            }}
+            className="w-full h-14 bg-violet-500/15 rounded-full items-center justify-center flex-row"
+            style={{ borderWidth: 1.5, borderColor: "#8B5CF6" }}
+          >
             <CheckCircle2 size={20} color="#8B5CF6" strokeWidth={2.5} />
             <Text className="ml-2 text-lg font-extrabold tracking-wide" style={{ color: "#8B5CF6" }}>
               Devis converti
             </Text>
-          </View>
+          </Pressable>
         )}
 
         {isAdmin &&

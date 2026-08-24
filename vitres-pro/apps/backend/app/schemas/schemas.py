@@ -343,6 +343,9 @@ class InterventionOut(BaseModel):
     carried_over_deferred_amount: Optional[float] = None
     closed_by_employee_id: Optional[UUID] = None
     devis_converted_at: Optional[datetime] = None
+    # Première intervention créée à partir de ce devis (bouton "Devis
+    # converti" → navigation directe) — calculé à la volée, pas une colonne.
+    converted_intervention_id: Optional[UUID] = None
     reinforcement_for_id: Optional[UUID] = None
     reinforcement_for_employees: List[EmployeeOut] = []
     reinforcement_employees: List[ReinforcementEmployeeOut] = []
