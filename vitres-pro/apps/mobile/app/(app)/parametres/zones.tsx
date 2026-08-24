@@ -91,28 +91,36 @@ function CityRow({
   );
 }
 
-function GroupCard({
-  group,
-  groupCities,
+function CollapsibleCityList({
+  title,
+  count,
   color,
   isDark,
-  onRename,
+  onRenameTitle,
   onCreateCity,
   onDelete,
-  renderCity,
+  emptyLabel,
+  children,
 }: {
-  group: CityGroupOut;
-  groupCities: CityOut[];
+  title: string;
+  count: number;
   color: string;
   isDark: boolean;
-  onRename: () => void;
+  onRenameTitle?: () => void;
   onCreateCity: () => void;
-  onDelete: () => void;
-  renderCity: (city: CityOut, color: string) => React.ReactNode;
+  onDelete?: () => void;
+  emptyLabel: string;
+  children: React.ReactNode;
 }) {
-  const [expanded, setExpanded] = useState(true);
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  const [expanded, setExpanded] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(-8)).current;
+
+  const PAGE_SIZE = 40;
+  const allRows = React.Children.toArray(children);
+  const visibleRows = showAll ? allRows : allRows.slice(0, PAGE_SIZE);
+  const hiddenCount = allRows.length - visibleRows.length;
 
   const toggle = () => {
     if (!expanded) {
@@ -144,25 +152,45 @@ function GroupCard({
           <ChevronDown size={16} color={isDark ? "#94A3B8" : "#64748B"} />
         )}
         <View style={{ flex: 1, marginLeft: 8 }}>
-          <Pressable onPress={onRename} hitSlop={4} style={{ alignSelf: "flex-start", maxWidth: "100%" }}>
-            <Text className="text-base font-bold text-foreground dark:text-white">{group.name}</Text>
-          </Pressable>
-          <Text className="text-xs text-muted-foreground">{groupCities.length} ville{groupCities.length === 1 ? "" : "s"}</Text>
+          {onRenameTitle ? (
+            <Pressable onPress={onRenameTitle} hitSlop={4} style={{ alignSelf: "flex-start", maxWidth: "100%" }}>
+              <Text className="text-base font-bold text-foreground dark:text-white">{title}</Text>
+            </Pressable>
+          ) : (
+            <Text className="text-base font-bold text-foreground dark:text-white">{title}</Text>
+          )}
+          <Text className="text-xs text-muted-foreground">{count} ville{count === 1 ? "" : "s"}</Text>
         </View>
         <Pressable onPress={onCreateCity} hitSlop={8} style={{ padding: 6 }}>
           <Plus size={17} color={color} />
         </Pressable>
-        <Pressable onPress={onDelete} hitSlop={8} style={{ padding: 6 }}>
-          <Trash2 size={15} color="#EF4444" />
-        </Pressable>
+        {onDelete && (
+          <Pressable onPress={onDelete} hitSlop={8} style={{ padding: 6 }}>
+            <Trash2 size={15} color="#EF4444" />
+          </Pressable>
+        )}
       </Pressable>
       {expanded && (
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          {groupCities.length === 0 ? (
+          {count === 0 ? (
             <Text className="text-xs text-muted-foreground" style={{ paddingHorizontal: 14, paddingVertical: 12, fontStyle: "italic", borderTopWidth: 1, borderTopColor: isDark ? "#1E293B" : "#F1F5F9" }}>
-              Aucune ville dans ce groupe
+              {emptyLabel}
             </Text>
-          ) : groupCities.map((city) => renderCity(city, color))}
+          ) : (
+            <>
+              {visibleRows}
+              {hiddenCount > 0 && (
+                <Pressable
+                  onPress={() => setShowAll(true)}
+                  style={{ paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 1, borderTopColor: isDark ? "#1E293B" : "#F1F5F9" }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "700", color }}>
+                    Afficher les {hiddenCount} ville{hiddenCount === 1 ? "" : "s"} restante{hiddenCount === 1 ? "" : "s"}
+                  </Text>
+                </Pressable>
+              )}
+            </>
+          )}
         </Animated.View>
       )}
     </View>
@@ -296,32 +324,32 @@ export default function ZonesScreen() {
             .sort((a, b) => a.city.localeCompare(b.city, "fr"));
           const groupColor = group.color ?? color;
           return (
-            <GroupCard
+            <CollapsibleCityList
               key={group.id}
-              group={group}
-              groupCities={groupCities}
+              title={group.name}
+              count={groupCities.length}
               color={groupColor}
               isDark={isDark}
-              onRename={() => openNameModal({ kind: "rename-group", group })}
+              onRenameTitle={() => openNameModal({ kind: "rename-group", group })}
               onCreateCity={() => openNameModal({ kind: "create-city", zone, groupId: group.id })}
               onDelete={() => setDeleteTarget({ kind: "group", group })}
-              renderCity={renderCity}
-            />
+              emptyLabel="Aucune ville dans ce groupe"
+            >
+              {groupCities.map((city) => renderCity(city, groupColor))}
+            </CollapsibleCityList>
           );
         })}
 
-        <View style={{ borderWidth: 1, borderColor: isDark ? "#334155" : "#E2E8F0", borderRadius: 16, overflow: "hidden", backgroundColor: isDark ? "#0F172A" : "#FFFFFF" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 11 }}>
-            <View style={{ flex: 1 }}>
-              <Text className="text-sm font-bold text-foreground dark:text-white">Sans groupe</Text>
-              <Text className="text-xs text-muted-foreground">{ungrouped.length} ville{ungrouped.length === 1 ? "" : "s"}</Text>
-            </View>
-            <Pressable onPress={() => openNameModal({ kind: "create-city", zone, groupId: null })} hitSlop={8} style={{ padding: 6 }}>
-              <Plus size={17} color={color} />
-            </Pressable>
-          </View>
+        <CollapsibleCityList
+          title={label}
+          count={ungrouped.length}
+          color={color}
+          isDark={isDark}
+          onCreateCity={() => openNameModal({ kind: "create-city", zone, groupId: null })}
+          emptyLabel="Aucune ville"
+        >
           {ungrouped.map((city) => renderCity(city, color))}
-        </View>
+        </CollapsibleCityList>
       </View>
     );
   };
