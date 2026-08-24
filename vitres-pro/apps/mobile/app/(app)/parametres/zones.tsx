@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronLeft, FolderInput, Pencil, Plus, Trash2, X } from "lucide-react-native";
+import { ChevronDown, ChevronLeft, ChevronRight, FolderInput, Pencil, Plus, Trash2, X } from "lucide-react-native";
 import { Button } from "../../../src/ui/components/Button";
 import { Dialog } from "../../../src/ui/components/Dialog";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
@@ -107,6 +107,16 @@ export default function ZonesScreen() {
   const [nameValue, setNameValue] = useState("");
   const [moveCity, setMoveCity] = useState<CityOut | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  const toggleGroup = (id: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const groupsByZone = useMemo(() => {
     const result: Record<ZoneKey, CityGroupOut[]> = { hainaut: [], ardennes: [] };
@@ -216,31 +226,43 @@ export default function ZonesScreen() {
             .filter((city) => city.group_id === group.id)
             .sort((a, b) => a.city.localeCompare(b.city, "fr"));
           const groupColor = group.color ?? color;
+          const isCollapsed = collapsedGroups.has(group.id);
           return (
             <View
               key={group.id}
               style={{ borderWidth: 1, borderColor: isDark ? "#334155" : "#E2E8F0", borderRadius: 16, overflow: "hidden", backgroundColor: isDark ? "#0F172A" : "#FFFFFF", marginBottom: 10 }}
             >
-              <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, backgroundColor: groupColor + "10" }}>
-                <View style={{ flex: 1 }}>
+              <Pressable
+                onPress={() => toggleGroup(group.id)}
+                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, backgroundColor: groupColor + "10" }}
+              >
+                {isCollapsed ? (
+                  <ChevronRight size={16} color={isDark ? "#94A3B8" : "#64748B"} />
+                ) : (
+                  <ChevronDown size={16} color={isDark ? "#94A3B8" : "#64748B"} />
+                )}
+                <Pressable
+                  onPress={() => openNameModal({ kind: "rename-group", group })}
+                  hitSlop={6}
+                  style={{ flex: 1, marginLeft: 8 }}
+                >
                   <Text className="text-base font-bold text-foreground dark:text-white">{group.name}</Text>
                   <Text className="text-xs text-muted-foreground">{groupCities.length} ville{groupCities.length === 1 ? "" : "s"}</Text>
-                </View>
+                </Pressable>
                 <Pressable onPress={() => openNameModal({ kind: "create-city", zone, groupId: group.id })} hitSlop={8} style={{ padding: 6 }}>
                   <Plus size={17} color={groupColor} />
-                </Pressable>
-                <Pressable onPress={() => openNameModal({ kind: "rename-group", group })} hitSlop={8} style={{ padding: 6 }}>
-                  <Pencil size={15} color={isDark ? "#94A3B8" : "#64748B"} />
                 </Pressable>
                 <Pressable onPress={() => setDeleteTarget({ kind: "group", group })} hitSlop={8} style={{ padding: 6 }}>
                   <Trash2 size={15} color="#EF4444" />
                 </Pressable>
-              </View>
-              {groupCities.length === 0 ? (
-                <Text className="text-xs text-muted-foreground" style={{ paddingHorizontal: 14, paddingVertical: 12, fontStyle: "italic", borderTopWidth: 1, borderTopColor: isDark ? "#1E293B" : "#F1F5F9" }}>
-                  Aucune ville dans ce groupe
-                </Text>
-              ) : groupCities.map((city) => renderCity(city, groupColor))}
+              </Pressable>
+              {!isCollapsed && (
+                groupCities.length === 0 ? (
+                  <Text className="text-xs text-muted-foreground" style={{ paddingHorizontal: 14, paddingVertical: 12, fontStyle: "italic", borderTopWidth: 1, borderTopColor: isDark ? "#1E293B" : "#F1F5F9" }}>
+                    Aucune ville dans ce groupe
+                  </Text>
+                ) : groupCities.map((city) => renderCity(city, groupColor))
+              )}
             </View>
           );
         })}
