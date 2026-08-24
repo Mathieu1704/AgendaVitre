@@ -513,6 +513,21 @@ def create_intervention(
         new_intervention.id = uuid.uuid4()
     new_intervention.reprise_of_id = intervention.reprise_of_id
 
+    # Conversion devis -> intervention (bouton "Changer en intervention") :
+    # la nouvelle intervention pointe vers le devis via reprise_of_id, on
+    # marque juste le devis source comme converti — il garde son type
+    # "devis" et sert d'archive du chiffrage initial.
+    if intervention.reprise_of_id and new_intervention.type == "intervention":
+        devis_source = db.query(Intervention).filter(
+            Intervention.id == intervention.reprise_of_id, Intervention.type == "devis",
+        ).first()
+        if devis_source and not devis_source.devis_converted_at:
+            devis_source.devis_converted_at = datetime.now(timezone.utc)
+            _add_audit(
+                db, "devis_converted", current_user.id, devis_source.id,
+                "Devis converti en intervention",
+            )
+
     # Chaîne de reprises : identité stable reliant une intervention sans
     # client à ses reprises suivantes (sert de catalogue "intervention_services").
     # Non pertinent quand il y a un client : client_id joue déjà ce rôle.

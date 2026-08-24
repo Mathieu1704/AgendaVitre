@@ -392,6 +392,7 @@ export default function AddInterventionScreen() {
     id,
     reprise_of,
     duplicate_of,
+    convert_devis,
     from_view,
     from_date,
     from_zone,
@@ -402,6 +403,11 @@ export default function AddInterventionScreen() {
     id?: string;
     reprise_of?: string;
     duplicate_of?: string;
+    // "1" quand on arrive depuis le bouton "Changer en intervention" d'un
+    // devis : réutilise le mécanisme de duplication (prestations, client,
+    // prix pré-remplis) mais force le type "Intervention" au lieu de copier
+    // "Devis" — voir l'effet de pré-remplissage plus bas.
+    convert_devis?: string;
     from_view?: string;
     from_date?: string;
     from_zone?: string;
@@ -414,6 +420,7 @@ export default function AddInterventionScreen() {
   }>();
   const isEditMode = !!id && !reprise_of && !duplicate_of;
   const isRepriseMode = !!reprise_of;
+  const isConvertingDevis = !!duplicate_of && convert_devis === "1";
   // Duplication : même mécanisme de pré-remplissage que la reprise (catalogue,
   // taux horaire, prestations), mais sans le suivi "reprise prise/pas prise"
   // (ce n'est pas un RDV de suite, juste une copie sur un autre jour — utile
@@ -1091,7 +1098,8 @@ export default function AddInterventionScreen() {
         (repriseSource.payment_mode as any) ??
           (repriseSource.is_invoice ? "invoice" : "cash"),
       );
-      if (repriseSource.type) setIntervType(repriseSource.type as IntervType);
+      if (isConvertingDevis) setIntervType("intervention");
+      else if (repriseSource.type) setIntervType(repriseSource.type as IntervType);
       if (repriseSource.zone)
         setZone(repriseSource.zone as "hainaut" | "ardennes");
 
@@ -1693,9 +1701,11 @@ export default function AddInterventionScreen() {
           ? `${occurrences.length} interventions créées !`
           : isRepriseMode
             ? "RDV de reprise planifié !"
-            : isDuplicateMode
-              ? "Intervention dupliquée !"
-              : "Intervention créée !";
+            : isConvertingDevis
+              ? "Devis converti en intervention !"
+              : isDuplicateMode
+                ? "Intervention dupliquée !"
+                : "Intervention créée !";
       toast.success(
         "Succès",
         isOnlineNow() ? msg : `${msg} Sera synchronisé au retour du réseau.`,
@@ -1904,9 +1914,11 @@ export default function AddInterventionScreen() {
         <Text className="text-lg font-bold ml-2 text-foreground dark:text-white">
           {isRepriseMode
             ? "Planifier la reprise"
-            : isDuplicateMode
-              ? "Dupliquer l'intervention"
-              : isEditMode
+            : isConvertingDevis
+              ? "Changer en intervention"
+              : isDuplicateMode
+                ? "Dupliquer l'intervention"
+                : isEditMode
                 ? "Modifier l'intervention"
                 : "Nouvelle intervention"}
         </Text>
