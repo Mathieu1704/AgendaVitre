@@ -18,6 +18,14 @@ function formatTime(iso: string): string {
   return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }
 
+/** Convertit un nombre d'heures décimal (ex. 6.7) en "6h42". */
+function formatHoursDuration(hours: number): string {
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h}h${m.toString().padStart(2, "0")}`;
+}
+
 /** Petit connecteur vertical façon "chemin" entre le pointage et les RDV. */
 function PathLine({ isDark }: { isDark: boolean }) {
   return (
@@ -197,7 +205,7 @@ export function DayEndRow({ date }: { date: string }) {
             <Text style={{ color: isDark ? "#94A3B8" : "#64748B", fontWeight: "600", fontSize: 13 }}>
               Journée terminée
               {typeof data.worked_hours === "number"
-                ? ` · ${data.worked_hours.toFixed(1)}h travaillées`
+                ? ` · ${formatHoursDuration(data.worked_hours)} travaillées`
                 : ""}
             </Text>
           </View>
