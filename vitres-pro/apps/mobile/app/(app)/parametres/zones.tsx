@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -12,7 +13,7 @@ import {
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronDown, ChevronLeft, ChevronRight, FolderInput, Pencil, Plus, Trash2, X } from "lucide-react-native";
+import { ChevronDown, ChevronLeft, ChevronUp, FolderInput, Pencil, Plus, Trash2, X } from "lucide-react-native";
 import { Button } from "../../../src/ui/components/Button";
 import { Dialog } from "../../../src/ui/components/Dialog";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
@@ -90,6 +91,82 @@ function CityRow({
   );
 }
 
+function GroupCard({
+  group,
+  groupCities,
+  color,
+  isDark,
+  onRename,
+  onCreateCity,
+  onDelete,
+  renderCity,
+}: {
+  group: CityGroupOut;
+  groupCities: CityOut[];
+  color: string;
+  isDark: boolean;
+  onRename: () => void;
+  onCreateCity: () => void;
+  onDelete: () => void;
+  renderCity: (city: CityOut, color: string) => React.ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  const toggle = () => {
+    if (!expanded) {
+      setExpanded(true);
+      fadeAnim.setValue(0);
+      slideAnim.setValue(-8);
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.spring(slideAnim, { toValue: 0, damping: 18, stiffness: 200, useNativeDriver: true }),
+      ]).start();
+    } else {
+      Animated.timing(fadeAnim, { toValue: 0, duration: 140, useNativeDriver: true }).start(() =>
+        setExpanded(false)
+      );
+    }
+  };
+
+  return (
+    <View
+      style={{ borderWidth: 1, borderColor: isDark ? "#334155" : "#E2E8F0", borderRadius: 16, overflow: "hidden", backgroundColor: isDark ? "#0F172A" : "#FFFFFF", marginBottom: 10 }}
+    >
+      <Pressable
+        onPress={toggle}
+        style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, backgroundColor: color + "10" }}
+      >
+        {expanded ? (
+          <ChevronUp size={16} color={isDark ? "#94A3B8" : "#64748B"} />
+        ) : (
+          <ChevronDown size={16} color={isDark ? "#94A3B8" : "#64748B"} />
+        )}
+        <Pressable onPress={onRename} hitSlop={6} style={{ flex: 1, marginLeft: 8 }}>
+          <Text className="text-base font-bold text-foreground dark:text-white">{group.name}</Text>
+          <Text className="text-xs text-muted-foreground">{groupCities.length} ville{groupCities.length === 1 ? "" : "s"}</Text>
+        </Pressable>
+        <Pressable onPress={onCreateCity} hitSlop={8} style={{ padding: 6 }}>
+          <Plus size={17} color={color} />
+        </Pressable>
+        <Pressable onPress={onDelete} hitSlop={8} style={{ padding: 6 }}>
+          <Trash2 size={15} color="#EF4444" />
+        </Pressable>
+      </Pressable>
+      {expanded && (
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          {groupCities.length === 0 ? (
+            <Text className="text-xs text-muted-foreground" style={{ paddingHorizontal: 14, paddingVertical: 12, fontStyle: "italic", borderTopWidth: 1, borderTopColor: isDark ? "#1E293B" : "#F1F5F9" }}>
+              Aucune ville dans ce groupe
+            </Text>
+          ) : groupCities.map((city) => renderCity(city, color))}
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
 export default function ZonesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -107,16 +184,6 @@ export default function ZonesScreen() {
   const [nameValue, setNameValue] = useState("");
   const [moveCity, setMoveCity] = useState<CityOut | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-
-  const toggleGroup = (id: string) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
 
   const groupsByZone = useMemo(() => {
     const result: Record<ZoneKey, CityGroupOut[]> = { hainaut: [], ardennes: [] };
@@ -226,44 +293,18 @@ export default function ZonesScreen() {
             .filter((city) => city.group_id === group.id)
             .sort((a, b) => a.city.localeCompare(b.city, "fr"));
           const groupColor = group.color ?? color;
-          const isCollapsed = collapsedGroups.has(group.id);
           return (
-            <View
+            <GroupCard
               key={group.id}
-              style={{ borderWidth: 1, borderColor: isDark ? "#334155" : "#E2E8F0", borderRadius: 16, overflow: "hidden", backgroundColor: isDark ? "#0F172A" : "#FFFFFF", marginBottom: 10 }}
-            >
-              <Pressable
-                onPress={() => toggleGroup(group.id)}
-                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, backgroundColor: groupColor + "10" }}
-              >
-                {isCollapsed ? (
-                  <ChevronRight size={16} color={isDark ? "#94A3B8" : "#64748B"} />
-                ) : (
-                  <ChevronDown size={16} color={isDark ? "#94A3B8" : "#64748B"} />
-                )}
-                <Pressable
-                  onPress={() => openNameModal({ kind: "rename-group", group })}
-                  hitSlop={6}
-                  style={{ flex: 1, marginLeft: 8 }}
-                >
-                  <Text className="text-base font-bold text-foreground dark:text-white">{group.name}</Text>
-                  <Text className="text-xs text-muted-foreground">{groupCities.length} ville{groupCities.length === 1 ? "" : "s"}</Text>
-                </Pressable>
-                <Pressable onPress={() => openNameModal({ kind: "create-city", zone, groupId: group.id })} hitSlop={8} style={{ padding: 6 }}>
-                  <Plus size={17} color={groupColor} />
-                </Pressable>
-                <Pressable onPress={() => setDeleteTarget({ kind: "group", group })} hitSlop={8} style={{ padding: 6 }}>
-                  <Trash2 size={15} color="#EF4444" />
-                </Pressable>
-              </Pressable>
-              {!isCollapsed && (
-                groupCities.length === 0 ? (
-                  <Text className="text-xs text-muted-foreground" style={{ paddingHorizontal: 14, paddingVertical: 12, fontStyle: "italic", borderTopWidth: 1, borderTopColor: isDark ? "#1E293B" : "#F1F5F9" }}>
-                    Aucune ville dans ce groupe
-                  </Text>
-                ) : groupCities.map((city) => renderCity(city, groupColor))
-              )}
-            </View>
+              group={group}
+              groupCities={groupCities}
+              color={groupColor}
+              isDark={isDark}
+              onRename={() => openNameModal({ kind: "rename-group", group })}
+              onCreateCity={() => openNameModal({ kind: "create-city", zone, groupId: group.id })}
+              onDelete={() => setDeleteTarget({ kind: "group", group })}
+              renderCity={renderCity}
+            />
           );
         })}
 
