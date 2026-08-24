@@ -1924,6 +1924,10 @@ export default function AddInterventionScreen() {
   const typeNeedsClient = NEEDS_CLIENT.includes(intervType);
   const typeNeedsItems = NEEDS_ITEMS.includes(intervType);
 
+  // Un devis n'est pas encore une prestation planifiée ni encaissée : pas de
+  // taux horaire (comptage d'heures) ni de mode de paiement tant qu'il n'est
+  // pas converti en intervention.
+  const typeNeedsPayment = typeNeedsClient && intervType !== "devis";
   const recurrenceLabel = getRecurrenceLabel(recurrence, startDateStr);
 
   return (
@@ -3262,6 +3266,7 @@ export default function AddInterventionScreen() {
 
               {/* TAUX HORAIRE (admin uniquement) */}
               {isAdmin &&
+                intervType !== "devis" &&
                 Array.isArray(hourlyRates) &&
                 hourlyRates.length > 0 &&
                 (totalPrice > 0 || (hourlyRates as any[]).some((r: any) => r.time_only)) && (
@@ -3356,7 +3361,7 @@ export default function AddInterventionScreen() {
               </View>
 
               {/* PAIEMENT */}
-              {isAdmin && typeNeedsClient && (
+              {isAdmin && typeNeedsPayment && (
                 <View className="pt-4 mt-4 border-t border-border dark:border-slate-800">
                   <Text className="text-sm font-semibold text-foreground dark:text-white mb-2">
                     Paiement
