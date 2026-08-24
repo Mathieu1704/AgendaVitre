@@ -1740,8 +1740,12 @@ export default function InterventionDetailScreen() {
               if (!intervention.converted_intervention_id) return;
               router.push(`/(app)/calendar/${intervention.converted_intervention_id}` as any);
             }}
-            className="w-full h-14 bg-violet-500/15 rounded-full items-center justify-center flex-row"
-            style={{ borderWidth: 1.5, borderColor: "#8B5CF6" }}
+            className="w-full h-14 rounded-full items-center justify-center flex-row"
+            style={{
+              borderWidth: 1.5,
+              borderColor: "#8B5CF6",
+              backgroundColor: isDark ? "#2E1065" : "#F5F3FF",
+            }}
           >
             <CheckCircle2 size={20} color="#8B5CF6" strokeWidth={2.5} />
             <Text className="ml-2 text-lg font-extrabold tracking-wide" style={{ color: "#8B5CF6" }}>
