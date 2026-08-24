@@ -1811,7 +1811,7 @@ export default function InterventionDetailScreen() {
                   return;
                 }
                 router.push({
-                  pathname: "/(app)/calendar/add",
+                  pathname: "/(app)/calendar/reprise-choice",
                   params: { reprise_of: id, from_view, from_date, from_zone },
                 });
                 return;
@@ -2093,7 +2093,7 @@ export default function InterventionDetailScreen() {
             return;
           }
           router.push({
-            pathname: "/(app)/calendar/add",
+            pathname: "/(app)/calendar/reprise-choice",
             params: { reprise_of: id, from_view, from_date, from_zone },
           });
         }}
@@ -2418,7 +2418,7 @@ export default function InterventionDetailScreen() {
                 // l'intervention reste inchangée, comme si rien ne s'était passé.
                 setShowItemsChecklist(false);
                 router.push({
-                  pathname: "/(app)/calendar/add",
+                  pathname: "/(app)/calendar/reprise-choice",
                   params: {
                     reprise_of: id,
                     from_view,

@@ -407,7 +407,7 @@ export default function AddInterventionScreen() {
     from_zone?: string;
     // Checklist de clôture pas encore enregistrée : transmise depuis la fiche
     // intervention, à n'appliquer que si cette reprise (ou "pas de reprise")
-    // est réellement confirmée ici — voir handleSubmit / handleNoReprise.
+    // est réellement confirmée ici — voir handleSubmit.
     pending_not_done?: string;
     pending_adjustments?: string;
     pending_not_done_notes?: string;
@@ -694,8 +694,6 @@ export default function AddInterventionScreen() {
   const [customEndDate, setCustomEndDate] = useState("");
 
   // --- Reprise : mode "non repris" ---
-  const [noRepriseMode, setNoRepriseMode] = useState(false);
-  const [noRepriseNote, setNoRepriseNote] = useState("");
 
   // --- Nouveau client ---
   const [showNewClient, setShowNewClient] = useState(false);
@@ -1198,8 +1196,6 @@ export default function AddInterventionScreen() {
         setEndDateStr(defaultEnd);
         setTimeTbd(true);
         setRecurrence(DEFAULT_RECURRENCE);
-        setNoRepriseMode(false);
-        setNoRepriseNote("");
         setShowRecurrenceDropdown(false);
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1841,62 +1837,6 @@ export default function AddInterventionScreen() {
     }
   };
 
-  // --- "RDV non repris" ---
-  const [isSubmittingNoReprise, setIsSubmittingNoReprise] = useState(false);
-
-  const handleNoReprise = async () => {
-    if (!reprise_of) return;
-    setIsSubmittingNoReprise(true);
-    try {
-      const note = noRepriseNote.trim();
-      applyMarkDone(queryClient, String(reprise_of), {
-        repriseTaken: false,
-        note,
-      });
-      await enqueue({
-        kind: "no-reprise",
-        method: "POST",
-        url: `/api/interventions/${reprise_of}/no-reprise`,
-        body: { note },
-        label: "Clôture sans reprise",
-      });
-      // Checklist de clôture préparée sur la fiche d'origine, appliquée
-      // seulement maintenant que "pas de reprise" est réellement confirmé.
-      if (hasPendingChecklist) {
-        applyItemsDone(queryClient, String(reprise_of), pendingNotDoneIds, pendingAdjustmentItems);
-        await enqueue({
-          kind: "items-done",
-          method: "PATCH",
-          url: `/api/interventions/${reprise_of}/items-done`,
-          body: {
-            not_done_item_ids: pendingNotDoneIds,
-            new_items: pendingAdjustmentItems,
-            not_done_notes: pendingNotDoneNotes,
-          },
-          label: "Prestations réalisées",
-        });
-      }
-      toast.success(
-        "Enregistré",
-        isOnlineNow()
-          ? "Intervention clôturée sans reprise."
-          : "Clôturée sans reprise. Sera synchronisé au retour du réseau.",
-      );
-      router.replace({
-        pathname: "/(app)/calendar",
-        params: {
-          ...(from_view ? { view: from_view } : {}),
-          ...(from_date ? { date: from_date } : {}),
-          ...(from_zone ? { zone: from_zone } : {}),
-        },
-      });
-    } catch (err: any) {
-      toast.error("Erreur", err.response?.data?.detail || "Erreur inconnue");
-    } finally {
-      setIsSubmittingNoReprise(false);
-    }
-  };
-
   const contextualOptions = useMemo(
     () => getContextualOptions(startDateStr),
     [startDateStr],
@@ -1923,11 +1863,11 @@ export default function AddInterventionScreen() {
 
   const typeNeedsClient = NEEDS_CLIENT.includes(intervType);
   const typeNeedsItems = NEEDS_ITEMS.includes(intervType);
-
   // Un devis n'est pas encore une prestation planifiée ni encaissée : pas de
   // taux horaire (comptage d'heures) ni de mode de paiement tant qu'il n'est
   // pas converti en intervention.
   const typeNeedsPayment = typeNeedsClient && intervType !== "devis";
+
   const recurrenceLabel = getRecurrenceLabel(recurrence, startDateStr);
 
   return (
@@ -2005,202 +1945,7 @@ export default function AddInterventionScreen() {
           contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         >
           <Card className="max-w-2xl w-full self-center rounded-[40px] overflow-hidden">
-            {/* BANNIÈRE "RDV NON REPRIS" (mode reprise uniquement) */}
-            {isRepriseMode && (
-              <View style={{ padding: 16 }}>
-                {!noRepriseMode ? (
-                  <Pressable
-                    onPress={() => setNoRepriseMode(true)}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: "#F97316",
-                      borderRadius: 20,
-                      paddingVertical: 16,
-                      paddingHorizontal: 20,
-                      gap: 10,
-                      shadowColor: "#F97316",
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.35,
-                      shadowRadius: 8,
-                      elevation: 6,
-                    }}
-                  >
-                    <AlertTriangle size={20} color="white" />
-                    <Text
-                      style={{
-                        color: "white",
-                        fontWeight: "800",
-                        fontSize: 16,
-                        letterSpacing: 0.3,
-                      }}
-                    >
-                      Pas de reprise ?
-                    </Text>
-                  </Pressable>
-                ) : (
-                  <View
-                    style={{
-                      backgroundColor: isDark ? "#1E293B" : "white",
-                      borderWidth: 2,
-                      borderColor: "#F97316",
-                      borderRadius: 20,
-                      padding: 16,
-                      gap: 12,
-                      shadowColor: "#F97316",
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.2,
-                      shadowRadius: 6,
-                      elevation: 4,
-                    }}
-                  >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <AlertTriangle size={18} color="#F97316" />
-                      <Text
-                        style={{
-                          color: "#F97316",
-                          fontWeight: "800",
-                          fontSize: 15,
-                          flex: 1,
-                        }}
-                      >
-                        Clôturer sans reprise
-                      </Text>
-                      <Pressable
-                        onPress={() => setNoRepriseMode(false)}
-                        style={{ padding: 4 }}
-                      >
-                        <X size={18} color="#94A3B8" />
-                      </Pressable>
-                    </View>
-                    {upcomingClientInterventions.length > 0 ? (
-                      <View style={{ gap: 6 }}>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#C2410C" }}>
-                          {upcomingClientInterventions.length > 1
-                            ? `Ce client a déjà ${upcomingClientInterventions.length} RDV prévus`
-                            : "Ce client a déjà un RDV prévu"}
-                        </Text>
-                        <ScrollView style={{ maxHeight: 340 }} nestedScrollEnabled>
-                          <View style={{ gap: 6 }}>
-                            {upcomingClientInterventions.map((it: any) => (
-                              <Pressable
-                                key={it.id}
-                                onPress={() =>
-                                  router.push({
-                                    pathname: "/(app)/calendar/add",
-                                    params: { id: it.id },
-                                  } as any)
-                                }
-                                style={({ pressed }) => ({
-                                  flexDirection: "row",
-                                  alignItems: "center",
-                                  gap: 10,
-                                  paddingVertical: 8,
-                                  paddingHorizontal: 10,
-                                  borderRadius: 12,
-                                  backgroundColor: pressed
-                                    ? (isDark ? "rgba(249,115,22,0.2)" : "#FFEDD5")
-                                    : (isDark ? "rgba(15,23,42,0.4)" : "#FFFFFF"),
-                                  borderWidth: 1,
-                                  borderColor: isDark ? "rgba(249,115,22,0.25)" : "#FED7AA",
-                                })}
-                              >
-                                <View
-                                  style={{
-                                    width: 30,
-                                    height: 30,
-                                    borderRadius: 9,
-                                    backgroundColor: "#F97316",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                  }}
-                                >
-                                  <CalendarClock size={15} color="#fff" />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                  <Text style={{ fontSize: 12, fontWeight: "700", color: isDark ? "#FDBA74" : "#C2410C" }}>
-                                    {new Date(it.start_time).toLocaleDateString("fr-FR", {
-                                      weekday: "short",
-                                      day: "numeric",
-                                      month: "short",
-                                    })}
-                                  </Text>
-                                  <Text
-                                    style={{ fontSize: 12, color: isDark ? "#CBD5E1" : "#78716C" }}
-                                    numberOfLines={1}
-                                  >
-                                    {it.title}
-                                  </Text>
-                                </View>
-                                <ChevronRight size={16} color={isDark ? "#FDBA74" : "#EA580C"} />
-                              </Pressable>
-                            ))}
-                          </View>
-                        </ScrollView>
-                      </View>
-                    ) : (
-                      <TextInput
-                        value={noRepriseNote}
-                        onChangeText={setNoRepriseNote}
-                        placeholder="Note optionnelle (raison, contexte...)"
-                        placeholderTextColor="#94A3B8"
-                        multiline
-                        numberOfLines={3}
-                        style={[
-                          {
-                            fontSize: 14,
-                            color: isDark ? "#F1F5F9" : "#0f172a",
-                            backgroundColor: isDark ? "#0F172A" : "#FFF7ED",
-                            borderRadius: 12,
-                            padding: 12,
-                            minHeight: 70,
-                            borderWidth: 1.5,
-                            borderColor: "#FED7AA",
-                          },
-                          Platform.OS === "web"
-                            ? ({ outlineStyle: "none" } as any)
-                            : {},
-                        ]}
-                      />
-                    )}
-                    <Pressable
-                      onPress={handleNoReprise}
-                      disabled={isSubmittingNoReprise}
-                      style={{
-                        backgroundColor: "#F97316",
-                        borderRadius: 14,
-                        padding: 14,
-                        alignItems: "center",
-                        opacity: isSubmittingNoReprise ? 0.6 : 1,
-                      }}
-                    >
-                      {isSubmittingNoReprise ? (
-                        <ActivityIndicator color="white" />
-                      ) : (
-                        <Text
-                          style={{
-                            color: "white",
-                            fontWeight: "800",
-                            fontSize: 15,
-                          }}
-                        >
-                          Confirmer sans reprise
-                        </Text>
-                      )}
-                    </Pressable>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {isRepriseMode && !noRepriseMode && pendingDeferredAmount > 0 && (
+            {isRepriseMode && pendingDeferredAmount > 0 && (
               <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
                 <View
                   style={{
@@ -2218,8 +1963,6 @@ export default function AddInterventionScreen() {
               </View>
             )}
 
-            {!noRepriseMode && (
-            <>
             <CardHeader className="p-6 pb-2">
               <Text className="text-2xl font-extrabold text-foreground dark:text-white text-center">
                 {isRepriseMode
@@ -2484,6 +2227,18 @@ export default function AddInterventionScreen() {
               )}
 
               {/* TITRE + DATE + DURÉE */}
+              {/* Prépa rapide : le seul champ d'horaire utile est la date —
+                  déplacer un RDV futur d'un jour est le cas courant depuis
+                  l'écran de choix de reprise. */}
+              {isQuickPrepMode && (
+                <DateTimePicker
+                  value={startDateStr}
+                  onChange={setStartDateStr}
+                  label="Date de l'intervention"
+                  dateOnly
+                />
+              )}
+
               {!isQuickPrepMode && (
               <View style={{ gap: 16 }}>
                 <Input
@@ -3485,8 +3240,6 @@ export default function AddInterventionScreen() {
                 </View>
               </View>
             </CardContent>
-            </>
-            )}
           </Card>
         </ScrollView>
       </KeyboardAvoidingView>

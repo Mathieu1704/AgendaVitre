@@ -6,6 +6,7 @@ export default function CalendarLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="[id]" />
       <Stack.Screen name="add" />
+      <Stack.Screen name="reprise-choice" />
       <Stack.Screen name="rate-session" />
     </Stack>
   );
