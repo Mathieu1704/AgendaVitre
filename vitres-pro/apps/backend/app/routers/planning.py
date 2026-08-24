@@ -148,6 +148,7 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
         Intervention.start_time >= day_start,
         Intervention.start_time < day_end,
         Intervention.status != "cancelled",
+        Intervention.type != "devis",
         ~Intervention.tour_run.has() | Intervention.tour_run.has(TourRun.publication_status == "published"),
     )
     if sub_zone:
@@ -247,6 +248,7 @@ def get_range_stats_endpoint(
         Intervention.start_time >= range_start_utc,
         Intervention.start_time < range_end_utc,
         Intervention.status != "cancelled",
+        Intervention.type != "devis",
         ~Intervention.tour_run.has() | Intervention.tour_run.has(TourRun.publication_status == "published"),
     )
     if sub_zone:

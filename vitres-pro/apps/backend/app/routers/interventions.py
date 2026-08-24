@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import func, or_
 from typing import Dict, List, Literal, Optional
 from uuid import UUID
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import math
 import re
 import uuid
@@ -764,6 +764,7 @@ def update_intervention(
         intervention_update = {k: v for k, v in intervention_update.items() if k in EMPLOYEE_ALLOWED}
 
     old_status = db_intervention.status
+    old_type = db_intervention.type
 
     # Si l'admin fixe une vraie heure, lever le flag time_tbd en avance
     # (la boucle ci-dessous peut le remettre à True si time_tbd est explicitement envoyé)
@@ -799,6 +800,17 @@ def update_intervention(
     # seulement les employes assignes — voir _weekly_cash_amount.
     if db_intervention.status == "done" and old_status != "done":
         db_intervention.closed_by_employee_id = current_user.id
+
+    # Conversion devis -> intervention (bouton "Changer en intervention") :
+    # on garde une trace visible (badge cote mobile) plutot que de perdre
+    # le fait que ce RDV etait initialement un devis.
+    if old_type == "devis" and db_intervention.type == "intervention":
+        db_intervention.devis_converted_at = datetime.now(timezone.utc)
+        _add_audit(
+            db, "devis_converted", current_user.id, intervention_id,
+            "Devis converti en intervention",
+            {"start_time": intervention_update.get("start_time")},
+        )
 
     _validate_payment_split(
         db_intervention.payment_mode, db_intervention.price_estimated,

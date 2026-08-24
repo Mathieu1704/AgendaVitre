@@ -191,7 +191,7 @@ const TYPE_CONFIG: Record<
 };
 
 const NEEDS_CLIENT: IntervType[] = ["intervention", "devis"];
-const NEEDS_ITEMS: IntervType[] = ["intervention"];
+const NEEDS_ITEMS: IntervType[] = ["intervention", "devis"];
 
 type RecurrenceFreq =
   | "none"

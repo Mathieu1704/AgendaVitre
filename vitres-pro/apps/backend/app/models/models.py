@@ -278,6 +278,11 @@ class Intervention(Base):
     )
     closed_by_employee = relationship("Employee", foreign_keys=[closed_by_employee_id])
 
+    # Horodatage de la conversion d'un devis en intervention (bouton "Changer
+    # en intervention"). NULL = jamais converti (ou pas un ancien devis) —
+    # sert de trace visible une fois que type est passé à "intervention".
+    devis_converted_at = Column(DateTime(timezone=True), nullable=True)
+
     @property
     def reinforcement_for_employees(self):
         """Employés de l'intervention source, quand celle-ci EST un renfort —

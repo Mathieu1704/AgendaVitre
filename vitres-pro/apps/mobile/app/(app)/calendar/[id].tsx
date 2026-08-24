@@ -625,6 +625,50 @@ export default function InterventionDetailScreen() {
   const [editStartStr, setEditStartStr] = useState("");
   const [editEndStr, setEditEndStr] = useState("");
 
+  const [showDevisConvert, setShowDevisConvert] = useState(false);
+  const [devisStartStr, setDevisStartStr] = useState("");
+  const [devisEndStr, setDevisEndStr] = useState("");
+
+  const convertDevisMutation = useMutation({
+    mutationFn: async ({ startIso, endIso }: { startIso: string; endIso: string }) =>
+      api.patch(`/api/interventions/${id}`, {
+        type: "intervention",
+        start_time: startIso,
+        end_time: endIso,
+        time_tbd: false,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
+      setShowDevisConvert(false);
+      toast.success("Devis converti", "Ce RDV est maintenant une intervention.");
+    },
+    onError: () => toast.error("Erreur", "Impossible de convertir ce devis."),
+  });
+
+  const openDevisConvert = () => {
+    if (!intervention) return;
+    setDevisStartStr(toBrusselsDateTimeString(new Date(intervention.start_time)));
+    setDevisEndStr(
+      intervention.end_time ? toBrusselsDateTimeString(new Date(intervention.end_time)) : "",
+    );
+    setShowDevisConvert(true);
+  };
+
+  const handleConvertDevis = () => {
+    const startParsed = parseBrusselsDateTimeString(devisStartStr);
+    const endParsed = devisEndStr ? parseBrusselsDateTimeString(devisEndStr) : null;
+    if (endParsed && endParsed.getTime() <= startParsed.getTime()) {
+      toast.error("Horaires", "L'heure de fin doit être après l'heure de début.");
+      return;
+    }
+    convertDevisMutation.mutate({
+      startIso: startParsed.toISOString(),
+      endIso: endParsed?.toISOString() ?? "",
+    });
+  };
+
   const timeMutation = useMutation({
     mutationFn: async ({ startIso, endIso }: { startIso: string; endIso: string }) =>
       api.patch(`/api/interventions/${id}`, { start_time: startIso, end_time: endIso, time_tbd: false }),
@@ -805,6 +849,20 @@ export default function InterventionDetailScreen() {
               {typeBadge.label.toUpperCase()}
             </Text>
           </View>
+          {!!intervention.devis_converted_at && (
+            <View
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 20,
+                backgroundColor: isDark ? "#2E1065" : "#F5F3FF",
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "#8B5CF6" }}>
+                CONVERTI D'UN DEVIS
+              </Text>
+            </View>
+          )}
           <StatusBadge status={intervention.status} />
           {isAdmin && (
             <Pressable
@@ -1395,7 +1453,7 @@ export default function InterventionDetailScreen() {
             </View>
           )}
 
-          {(intervType === "intervention" || !!intervention.description) && (
+          {(intervType === "intervention" || intervType === "devis" || !!intervention.description) && (
             <View className="w-full mt-4">
               <Card className="rounded-3xl">
                 <CardContent className="p-5">
@@ -1434,8 +1492,8 @@ export default function InterventionDetailScreen() {
                     )
                   )}
 
-                  {/* Prix — uniquement pour les interventions, jamais pour un sous-traitant */}
-                  {!isSubcontractor && intervType === "intervention" && (
+                  {/* Prix — interventions et devis, jamais pour un sous-traitant */}
+                  {!isSubcontractor && (intervType === "intervention" || intervType === "devis") && (
                     <>
                       <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
                         Détail de la prestation
@@ -1727,7 +1785,24 @@ export default function InterventionDetailScreen() {
         className="absolute bottom-0 left-0 right-0 px-4 pt-4"
         style={{ paddingBottom: Math.max(insets.bottom, 16) }}
       >
-        {(intervention.status === "planned" || intervention.status === "in_progress") && (
+        {intervType === "devis" &&
+          (intervention.status === "planned" || intervention.status === "in_progress") && (
+            <Button
+              onPress={openDevisConvert}
+              loading={convertDevisMutation.isPending}
+              className="w-full h-14 bg-blue-500 hover:bg-blue-600 rounded-full"
+            >
+              <View className="flex-row items-center">
+                <CheckCircle2 size={20} color="white" strokeWidth={2.5} />
+                <Text className="text-white font-bold text-lg ml-2">
+                  Changer en intervention
+                </Text>
+              </View>
+            </Button>
+          )}
+
+        {intervType !== "devis" &&
+          (intervention.status === "planned" || intervention.status === "in_progress") && (
           <Button
             onPress={() => {
               if (!intervention.items || intervention.items.length === 0) {
@@ -2425,6 +2500,52 @@ export default function InterventionDetailScreen() {
             </Button>
             <Button onPress={handleSaveTime} style={{ flex: 1 }} disabled={timeMutation.isPending}>
               Enregistrer
+            </Button>
+          </View>
+        </View>
+      </Dialog>
+
+      <Dialog open={showDevisConvert} onClose={() => setShowDevisConvert(false)} position="bottom" containerStyle={{ paddingBottom: 120 }}>
+        <View style={{ padding: 16, gap: 16 }}>
+          <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#09090B", textAlign: "center" }}>
+            Changer en intervention
+          </Text>
+          <Text style={{ fontSize: 13, color: isDark ? "#94A3B8" : "#64748B", textAlign: "center" }}>
+            Choisis la date et l'heure du rendez-vous. Les prestations du devis seront conservées.
+          </Text>
+          <DateTimePicker
+            value={devisStartStr}
+            onChange={(v) => {
+              setDevisStartStr(v);
+              if (devisEndStr) {
+                const [, st = "00:00"] = v.split("T");
+                const [, et = "00:00"] = devisEndStr.split("T");
+                const [sh, sm] = st.split(":").map(Number);
+                const [eh, em] = et.split(":").map(Number);
+                if (eh * 60 + em <= sh * 60 + sm) {
+                  const adjH = Math.min(sh + 1, 23);
+                  setDevisEndStr(`${v.split("T")[0]}T${String(adjH).padStart(2, "0")}:${String(sm).padStart(2, "0")}`);
+                } else {
+                  setDevisEndStr(`${v.split("T")[0]}T${et}`);
+                }
+              }
+            }}
+            label="Début"
+          />
+          {devisEndStr ? (
+            <DateTimePicker
+              value={devisEndStr}
+              onChange={setDevisEndStr}
+              label="Fin"
+              timeOnly
+            />
+          ) : null}
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <Button variant="outline" onPress={() => setShowDevisConvert(false)} style={{ flex: 1 }}>
+              Annuler
+            </Button>
+            <Button onPress={handleConvertDevis} style={{ flex: 1 }} disabled={convertDevisMutation.isPending}>
+              Convertir
             </Button>
           </View>
         </View>

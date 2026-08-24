@@ -57,6 +57,9 @@ export interface Intervention {
     byday?: string[] | number[];
   } | null;
   recurrence_group_id?: string | null;
+  // Horodatage de la conversion d'un devis en intervention (bouton "Changer
+  // en intervention") — trace visible même après que type soit "intervention".
+  devis_converted_at?: string | null;
   client?: Client;
   employees: Employee[]; // Liste d'employés maintenant
   // Uniquement utilisées quand aucun client n'est lié (voir client.address/phone/email sinon)
