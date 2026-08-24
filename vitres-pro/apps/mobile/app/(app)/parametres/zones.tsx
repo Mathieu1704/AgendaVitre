@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -12,55 +12,57 @@ import {
   PanResponder,
   Alert,
   KeyboardAvoidingView,
-  Keyboard,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronDown, ChevronUp, ChevronLeft, Pencil, Check, X, MapPin, Plus, Trash2 } from "lucide-react-native";
+import { ChevronLeft, Pencil, Check, X, ArrowLeftRight, Plus, Trash2 } from "lucide-react-native";
 import { Button } from "../../../src/ui/components/Button";
 import { Dialog } from "../../../src/ui/components/Dialog";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
-import { useSubZones, useUnassignedCities, useRenameZone, useReassignCity, useCreateZone, useDeleteZone, SubZoneOut } from "../../../src/hooks/useZones";
+import {
+  useCities,
+  usePatchCity,
+  useCreateCity,
+  useDeleteCity,
+  useUnassignedInterventions,
+  useAssignInterventionCity,
+  CityOut,
+  UnassignedInterventionGroup,
+} from "../../../src/hooks/useCities";
 import { toast } from "../../../src/ui/toast";
 
-const PARENT_LABELS: Record<string, string> = {
+const ZONE_LABELS: Record<string, string> = {
   hainaut: "Hainaut",
   ardennes: "Ardennes",
 };
 
-const PARENT_COLORS: Record<string, { pill: string }> = {
+const ZONE_COLORS: Record<string, { pill: string }> = {
   hainaut: { pill: "#3B82F6" },
   ardennes: { pill: "#22C55E" },
 };
 
 const DELETE_WIDTH = 72;
-const DELETE_GAP = 8; // espace entre la card et le bouton supprimer
+const DELETE_GAP = 8;
 
-// Composant sous-zone avec animation d'expansion
-function ZoneCard({
-  zone,
+function CityCard({
+  city,
   colors,
   isDark,
-  onReassign,
   onOpen,
 }: {
-  zone: SubZoneOut;
+  city: CityOut;
   colors: { pill: string };
   isDark: boolean;
-  onReassign: (city: string, zoneId: string) => void;
   onOpen: (close: () => void) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [editLabel, setEditLabel] = useState(zone.label);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(-8)).current;
+  const [editName, setEditName] = useState(city.city);
   const swipeX = useRef(new Animated.Value(0)).current;
   const swipeOpen = useRef(false);
   const justSwiped = useRef(false);
-  const renameZone = useRenameZone();
-  const deleteZone = useDeleteZone();
+  const patchCity = usePatchCity();
+  const deleteCity = useDeleteCity();
 
   const panResponder = useRef(
     PanResponder.create({
@@ -98,8 +100,8 @@ function ZoneCard({
 
   const doDelete = async () => {
     try {
-      await deleteZone.mutateAsync(zone.id);
-      toast.success("Sous-zone supprimée");
+      await deleteCity.mutateAsync(city.city);
+      toast.success("Ville supprimée");
     } catch (e: any) {
       closeSwipe();
       const msg = e?.response?.data?.detail ?? "Erreur lors de la suppression";
@@ -112,8 +114,8 @@ function ZoneCard({
       setConfirmDelete(true);
     } else {
       Alert.alert(
-        "Supprimer la sous-zone",
-        `Voulez-vous vraiment supprimer "${zone.label}" ?`,
+        "Supprimer la ville",
+        `Voulez-vous vraiment supprimer "${city.city}" ?`,
         [
           { text: "Annuler", style: "cancel", onPress: closeSwipe },
           { text: "Supprimer", style: "destructive", onPress: doDelete },
@@ -122,36 +124,29 @@ function ZoneCard({
     }
   };
 
-  const toggle = () => {
-    if (!expanded) {
-      setExpanded(true);
-      fadeAnim.setValue(0);
-      slideAnim.setValue(-8);
-      Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(slideAnim, { toValue: 0, damping: 18, stiffness: 200, useNativeDriver: true }),
-      ]).start();
-    } else {
-      Animated.timing(fadeAnim, { toValue: 0, duration: 140, useNativeDriver: true }).start(() =>
-        setExpanded(false)
-      );
-    }
-  };
-
   const handleRename = async () => {
-    if (!editLabel.trim() || editLabel === zone.label) { setEditing(false); return; }
+    if (!editName.trim() || editName === city.city) { setEditing(false); return; }
     try {
-      await renameZone.mutateAsync({ id: zone.id, label: editLabel.trim() });
-      toast.success("Sous-zone renommée");
+      await patchCity.mutateAsync({ city: city.city, city_name: editName.trim() });
+      toast.success("Ville renommée");
     } catch {
       toast.error("Erreur lors du renommage");
     }
     setEditing(false);
   };
 
+  const otherZone = city.zone === "hainaut" ? "ardennes" : "hainaut";
+  const handleMove = async () => {
+    try {
+      await patchCity.mutateAsync({ city: city.city, zone: otherZone });
+      toast.success(`${city.city} déplacée vers ${ZONE_LABELS[otherZone]}`);
+    } catch {
+      toast.error("Erreur lors du déplacement");
+    }
+  };
+
   return (
     <View className="mb-2" style={{ overflow: "hidden", borderRadius: 16 }}>
-      {/* Bouton supprimer (derrière) */}
       <View
         style={{
           position: "absolute", right: 0, top: 0, bottom: 0,
@@ -160,128 +155,95 @@ function ZoneCard({
         }}
       >
         <Pressable onPress={handleDelete} style={{ alignItems: "center", justifyContent: "center", flex: 1, width: "100%" }}>
-          {deleteZone.isPending
+          {deleteCity.isPending
             ? <ActivityIndicator color="white" size="small" />
             : <Trash2 size={20} color="white" />}
         </Pressable>
       </View>
 
-      {/* Card principale (par dessus, translate X) */}
       <Animated.View
         {...panResponder.panHandlers}
         style={[{ transform: [{ translateX: swipeX }], borderRadius: 16, borderWidth: 1, borderColor: isDark ? "#334155" : "#E2E8F0", backgroundColor: isDark ? "#0F172A" : "#FFFFFF", overflow: "hidden" }]}
       >
-      <Pressable
-        onPress={() => {
-          if (justSwiped.current) return;
-          if (swipeOpen.current) { closeSwipe(); return; }
-          toggle();
-        }}
-        className="flex-row items-center justify-between px-4 py-3"
-      >
-        <View className="flex-1 flex-row items-center gap-3">
-          {editing ? (
-            <TextInput
-              value={editLabel}
-              onChangeText={setEditLabel}
-              autoFocus
-              style={{
-                flex: 1, fontSize: 15, fontWeight: "600",
-                color: isDark ? "#fff" : "#0f172a",
-                borderBottomWidth: 1, borderBottomColor: colors.pill, paddingVertical: 2,
-                ...(Platform.OS === "web" ? { outlineStyle: "none" } as any : {}),
-              }}
-              onSubmitEditing={handleRename}
-            />
-          ) : (
-            <Text className="text-base font-semibold text-foreground dark:text-white flex-1">
-              {zone.label}
-            </Text>
-          )}
-          <Text className="text-xs text-muted-foreground ml-1">{zone.cities.length} villes</Text>
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          {editing ? (
-            <>
-              <Pressable onPress={handleRename} className="p-1" hitSlop={8}>
-                <Check size={18} color="#22C55E" />
-              </Pressable>
-              <Pressable onPress={() => { setEditing(false); setEditLabel(zone.label); }} className="p-1" hitSlop={8}>
-                <X size={18} color="#EF4444" />
-              </Pressable>
-            </>
-          ) : (
-            <Pressable
-              onPress={(e) => { e.stopPropagation(); setEditing(true); if (!expanded) toggle(); }}
-              style={{ marginLeft: 10 }}
-              className="p-1 mr-1" hitSlop={8}
-            >
-              <Pencil size={15} color={isDark ? "#94A3B8" : "#64748B"} />
-            </Pressable>
-          )}
-          {expanded
-            ? <ChevronUp size={18} color={isDark ? "#94A3B8" : "#64748B"} />
-            : <ChevronDown size={18} color={isDark ? "#94A3B8" : "#64748B"} />}
-        </View>
-      </Pressable>
-
-      {expanded && (
-        <Animated.View
-          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
-          className="border-t border-border dark:border-slate-700 px-4 py-2"
+        <Pressable
+          onPress={() => {
+            if (justSwiped.current) return;
+            if (swipeOpen.current) { closeSwipe(); return; }
+          }}
+          className="flex-row items-center justify-between px-4 py-3"
         >
-          {zone.cities.length === 0 ? (
-            <Text className="text-sm text-muted-foreground py-2 italic">Aucune ville</Text>
-          ) : (
-            zone.cities
-              .slice()
-              .sort((a, b) => a.localeCompare(b))
-              .map((city) => (
-                <View
-                  key={city}
-                  className="flex-row items-center justify-between py-1.5 border-b border-border/40 dark:border-slate-800/60 last:border-0"
+          <View className="flex-1 flex-row items-center gap-3">
+            {editing ? (
+              <TextInput
+                value={editName}
+                onChangeText={setEditName}
+                autoFocus
+                style={{
+                  flex: 1, fontSize: 15, fontWeight: "600",
+                  color: isDark ? "#fff" : "#0f172a",
+                  borderBottomWidth: 1, borderBottomColor: colors.pill, paddingVertical: 2,
+                  ...(Platform.OS === "web" ? { outlineStyle: "none" } as any : {}),
+                }}
+                onSubmitEditing={handleRename}
+              />
+            ) : (
+              <Text className="text-base font-semibold text-foreground dark:text-white flex-1">
+                {city.city}
+              </Text>
+            )}
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            {editing ? (
+              <>
+                <Pressable onPress={handleRename} className="p-1" hitSlop={8}>
+                  <Check size={18} color="#22C55E" />
+                </Pressable>
+                <Pressable onPress={() => { setEditing(false); setEditName(city.city); }} className="p-1" hitSlop={8}>
+                  <X size={18} color="#EF4444" />
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Pressable onPress={handleMove} hitSlop={8} className="p-1 mr-1" disabled={patchCity.isPending}>
+                  <ArrowLeftRight size={15} color={isDark ? "#94A3B8" : "#64748B"} />
+                </Pressable>
+                <Pressable
+                  onPress={(e) => { e.stopPropagation(); setEditing(true); }}
+                  className="p-1 mr-1" hitSlop={8}
                 >
-                  <Text className="text-sm text-foreground dark:text-slate-200 flex-1">{city}</Text>
-                  <Pressable
-                    onPress={() => onReassign(city, zone.id)}
-                    hitSlop={8}
-                    style={{ borderRadius: 10 }}
-                    className="px-2 py-1 bg-slate-100 dark:bg-slate-800"
-                  >
-                    <Text className="text-xs text-muted-foreground">Déplacer</Text>
-                  </Pressable>
-                </View>
-              ))
-          )}
-        </Animated.View>
-      )}
+                  <Pencil size={15} color={isDark ? "#94A3B8" : "#64748B"} />
+                </Pressable>
+              </>
+            )}
+          </View>
+        </Pressable>
       </Animated.View>
-    <Dialog open={confirmDelete} onClose={() => { setConfirmDelete(false); closeSwipe(); }}>
-      <View style={{ padding: 24, gap: 16 }}>
-        <Text style={{ fontSize: 17, fontWeight: "800" }} className="text-foreground dark:text-white">
-          Supprimer la sous-zone ?
-        </Text>
-        <Text className="text-muted-foreground">
-          Voulez-vous vraiment supprimer «{zone.label}» ?
-        </Text>
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          <Button
-            variant="outline"
-            style={{ flex: 1, borderRadius: 24 }}
-            onPress={() => { setConfirmDelete(false); closeSwipe(); }}
-          >
-            Annuler
-          </Button>
-          <Button
-            variant="destructive"
-            style={{ flex: 1, borderRadius: 24 }}
-            onPress={() => { setConfirmDelete(false); doDelete(); }}
-          >
-            Supprimer
-          </Button>
+      <Dialog open={confirmDelete} onClose={() => { setConfirmDelete(false); closeSwipe(); }}>
+        <View style={{ padding: 24, gap: 16 }}>
+          <Text style={{ fontSize: 17, fontWeight: "800" }} className="text-foreground dark:text-white">
+            Supprimer la ville ?
+          </Text>
+          <Text className="text-muted-foreground">
+            Voulez-vous vraiment supprimer «{city.city}» ?
+          </Text>
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <Button
+              variant="outline"
+              style={{ flex: 1, borderRadius: 24 }}
+              onPress={() => { setConfirmDelete(false); closeSwipe(); }}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              style={{ flex: 1, borderRadius: 24 }}
+              onPress={() => { setConfirmDelete(false); doDelete(); }}
+            >
+              Supprimer
+            </Button>
+          </View>
         </View>
-      </View>
-    </Dialog>
+      </Dialog>
     </View>
   );
 }
@@ -290,64 +252,60 @@ export default function ZonesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
-  const { subZones, isLoading } = useSubZones();
-  const { unassignedCities } = useUnassignedCities();
-  const reassignCity = useReassignCity();
+  const { cities, isLoading } = useCities();
+  const { unassignedGroups } = useUnassignedInterventions();
+  const assignCity = useAssignInterventionCity();
 
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  useEffect(() => {
-    const show = Keyboard.addListener("keyboardWillShow", () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener("keyboardWillHide", () => setKeyboardVisible(false));
-    return () => { show.remove(); hide.remove(); };
-  }, []);
-
-  const [reassignModal, setReassignModal] = useState<{ city: string; currentZoneId: string } | null>(null);
   const [createModal, setCreateModal] = useState<"hainaut" | "ardennes" | null>(null);
+  const [newCityName, setNewCityName] = useState("");
+  const createCity = useCreateCity();
   const activeSwipeClose = useRef<(() => void) | null>(null);
+
+  const [assignModal, setAssignModal] = useState<UnassignedInterventionGroup | null>(null);
+  const [assignCityName, setAssignCityName] = useState("");
 
   const handleCardOpen = (close: () => void) => {
     activeSwipeClose.current?.();
     activeSwipeClose.current = close;
   };
-  const [newZoneLabel, setNewZoneLabel] = useState("");
-  const createZone = useCreateZone();
 
-  const hainauts = subZones.filter((z) => z.parent_zone === "hainaut");
-  const ardennes = subZones.filter((z) => z.parent_zone === "ardennes");
+  const hainautCities = cities.filter((c) => c.zone === "hainaut");
+  const ardennesCities = cities.filter((c) => c.zone === "ardennes");
 
-  const handleReassign = async (newZoneId: string) => {
-    if (!reassignModal) return;
+  const handleCreateCity = async () => {
+    if (!newCityName.trim() || !createModal) return;
     try {
-      await reassignCity.mutateAsync({ city: reassignModal.city, sub_zone_id: newZoneId });
-      toast.success(`${reassignModal.city} déplacée`);
-    } catch {
-      toast.error("Erreur lors du déplacement");
-    }
-    setReassignModal(null);
-  };
-
-  const handleCreateZone = async () => {
-    if (!newZoneLabel.trim() || !createModal) return;
-    try {
-      await createZone.mutateAsync({ label: newZoneLabel.trim(), parent_zone: createModal });
-      toast.success("Sous-zone créée");
+      await createCity.mutateAsync({ city: newCityName.trim(), zone: createModal });
+      toast.success("Ville créée");
       setCreateModal(null);
-      setNewZoneLabel("");
-    } catch {
-      toast.error("Erreur lors de la création");
+      setNewCityName("");
+    } catch (e: any) {
+      toast.error("Erreur lors de la création", e?.response?.data?.detail);
     }
   };
 
-  const renderSection = (zones: SubZoneOut[], parentZone: string) => {
-    const colors = PARENT_COLORS[parentZone] ?? PARENT_COLORS.hainaut;
+  const handleAssign = async (targetCity: string) => {
+    if (!assignModal || !targetCity.trim()) return;
+    try {
+      await assignCity.mutateAsync({ intervention_ids: assignModal.intervention_ids, city: targetCity.trim() });
+      toast.success(`${assignModal.intervention_ids.length} intervention(s) assignée(s) à ${targetCity.trim()}`);
+      setAssignModal(null);
+      setAssignCityName("");
+    } catch (e: any) {
+      toast.error("Erreur lors de l'assignation", e?.response?.data?.detail);
+    }
+  };
+
+  const renderSection = (list: CityOut[], zone: string) => {
+    const colors = ZONE_COLORS[zone] ?? ZONE_COLORS.hainaut;
     return (
       <View className="mb-6">
         <View className="flex-row items-center justify-between mb-3">
           <View style={{ backgroundColor: colors.pill, borderRadius: 99 }} className="px-4 py-2">
-            <Text className="text-white font-bold text-sm">{PARENT_LABELS[parentZone]}</Text>
+            <Text className="text-white font-bold text-sm">{ZONE_LABELS[zone]} ({list.length})</Text>
           </View>
           <Pressable
-            onPress={() => { setCreateModal(parentZone as "hainaut" | "ardennes"); setNewZoneLabel(""); }}
+            onPress={() => { setCreateModal(zone as "hainaut" | "ardennes"); setNewCityName(""); }}
             hitSlop={8}
             style={{
               width: 32, height: 32, borderRadius: 16,
@@ -358,16 +316,22 @@ export default function ZonesScreen() {
             <Plus size={18} color={colors.pill} />
           </Pressable>
         </View>
-        {zones.map((zone) => (
-          <ZoneCard
-            key={zone.id}
-            zone={zone}
-            colors={colors}
-            isDark={isDark}
-            onReassign={(city, zoneId) => setReassignModal({ city, currentZoneId: zoneId })}
-            onOpen={handleCardOpen}
-          />
-        ))}
+        {list.length === 0 ? (
+          <Text className="text-sm text-muted-foreground py-2 italic">Aucune ville</Text>
+        ) : (
+          list
+            .slice()
+            .sort((a, b) => a.city.localeCompare(b.city))
+            .map((city) => (
+              <CityCard
+                key={city.city}
+                city={city}
+                colors={colors}
+                isDark={isDark}
+                onOpen={handleCardOpen}
+              />
+            ))
+        )}
       </View>
     );
   };
@@ -379,13 +343,12 @@ export default function ZonesScreen() {
         className="flex-1 bg-background dark:bg-slate-950"
         style={{ paddingTop: Platform.OS === "web" ? 0 : insets.top, backgroundColor: isDark ? "#020817" : "#FFFFFF" }}
       >
-        {/* Header */}
         <View className="px-4 pt-4 pb-2 flex-row items-center border-b border-border dark:border-slate-800">
           <Button variant="ghost" size="icon" onPress={() => router.push("/(app)/parametres")}>
             <ChevronLeft size={24} color={isDark ? "white" : "black"} />
           </Button>
           <Text className="text-xl font-bold text-foreground dark:text-white ml-2">
-            Zones géographiques
+            Villes
           </Text>
         </View>
 
@@ -402,29 +365,37 @@ export default function ZonesScreen() {
             ) : (
               <>
                 <Text className="text-xs text-muted-foreground mb-4">
-                  {subZones.length} sous-zones · {subZones.reduce((s, z) => s + z.cities.length, 0)} villes
-                  {unassignedCities.length > 0 ? ` · ${unassignedCities.length} non assignée(s)` : ""}
+                  {cities.length} villes
+                  {unassignedGroups.length > 0 ? ` · ${unassignedGroups.length} groupe(s) d'interventions sans ville` : ""}
                 </Text>
 
-                {unassignedCities.length > 0 && (
+                {unassignedGroups.length > 0 && (
                   <View className="mb-6">
                     <View style={{ backgroundColor: "#F59E0B", borderRadius: 99 }} className="px-4 py-2 self-start mb-3">
-                      <Text className="text-white font-bold text-sm">Non assignées ({unassignedCities.length})</Text>
+                      <Text className="text-white font-bold text-sm">Interventions sans ville ({unassignedGroups.length})</Text>
                     </View>
                     <View style={{ borderRadius: 16, borderWidth: 1, borderColor: isDark ? "#334155" : "#FDE68A", backgroundColor: isDark ? "#1C1408" : "#FFFBEB", overflow: "hidden" }}>
-                      {unassignedCities.map((city, i) => (
+                      {unassignedGroups.map((group, i) => (
                         <View
-                          key={city}
+                          key={`${group.title}-${i}`}
                           style={{
                             flexDirection: "row", alignItems: "center", justifyContent: "space-between",
                             paddingHorizontal: 16, paddingVertical: 12,
-                            borderBottomWidth: i < unassignedCities.length - 1 ? 1 : 0,
+                            borderBottomWidth: i < unassignedGroups.length - 1 ? 1 : 0,
                             borderBottomColor: isDark ? "#334155" : "#FDE68A",
                           }}
                         >
-                          <Text style={{ fontSize: 14, color: isDark ? "#FDE68A" : "#92400E", flex: 1 }}>{city}</Text>
+                          <View style={{ flex: 1, marginRight: 8 }}>
+                            <Text style={{ fontSize: 14, color: isDark ? "#FDE68A" : "#92400E", fontWeight: "600" }}>{group.title}</Text>
+                            {!!group.address && (
+                              <Text style={{ fontSize: 12, color: isDark ? "#FDE68A" : "#92400E", opacity: 0.8 }} numberOfLines={1}>{group.address}</Text>
+                            )}
+                            <Text style={{ fontSize: 11, color: isDark ? "#FDE68A" : "#92400E", opacity: 0.6 }}>
+                              {group.intervention_ids.length} intervention(s)
+                            </Text>
+                          </View>
                           <Pressable
-                            onPress={() => setReassignModal({ city, currentZoneId: "" })}
+                            onPress={() => { setAssignModal(group); setAssignCityName(""); }}
                             hitSlop={8}
                             style={{ borderRadius: 10, backgroundColor: "#F59E0B22", paddingHorizontal: 10, paddingVertical: 5 }}
                           >
@@ -436,15 +407,15 @@ export default function ZonesScreen() {
                   </View>
                 )}
 
-                {renderSection(hainauts, "hainaut")}
-                {renderSection(ardennes, "ardennes")}
+                {renderSection(hainautCities, "hainaut")}
+                {renderSection(ardennesCities, "ardennes")}
               </>
             )}
           </Pressable>
         </ScrollView>
       </View>
 
-      {/* Modal création sous-zone */}
+      {/* Modal création ville */}
       <Modal
         visible={!!createModal}
         transparent
@@ -466,10 +437,10 @@ export default function ZonesScreen() {
             <View className="px-5 pt-5 pb-3 border-b border-border dark:border-slate-700 flex-row items-start justify-between">
               <View className="flex-1 mr-3">
                 <Text className="text-base font-bold text-foreground dark:text-white">
-                  Nouvelle sous-zone
+                  Nouvelle ville
                 </Text>
                 <Text className="text-xs text-muted-foreground mt-0.5">
-                  {createModal ? PARENT_LABELS[createModal] : ""}
+                  {createModal ? ZONE_LABELS[createModal] : ""}
                 </Text>
               </View>
               <Pressable
@@ -486,28 +457,28 @@ export default function ZonesScreen() {
             </View>
             <View className="px-5 pt-4 pb-2 gap-3">
               <TextInput
-                value={newZoneLabel}
-                onChangeText={setNewZoneLabel}
-                placeholder="Nom de la sous-zone"
+                value={newCityName}
+                onChangeText={setNewCityName}
+                placeholder="Nom de la ville"
                 autoFocus
                 placeholderTextColor={isDark ? "#475569" : "#94A3B8"}
                 style={{
                   fontSize: 15, color: isDark ? "#fff" : "#0f172a",
-                  borderWidth: 1, borderColor: createModal ? PARENT_COLORS[createModal]?.pill : "#CBD5E1",
+                  borderWidth: 1, borderColor: createModal ? ZONE_COLORS[createModal]?.pill : "#CBD5E1",
                   borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
                 }}
-                onSubmitEditing={handleCreateZone}
+                onSubmitEditing={handleCreateCity}
                 returnKeyType="done"
               />
               <Pressable
-                onPress={handleCreateZone}
-                disabled={!newZoneLabel.trim() || createZone.isPending}
+                onPress={handleCreateCity}
+                disabled={!newCityName.trim() || createCity.isPending}
                 style={{
-                  backgroundColor: !newZoneLabel.trim() ? "#CBD5E1" : (createModal ? PARENT_COLORS[createModal]?.pill : "#3B82F6"),
+                  backgroundColor: !newCityName.trim() ? "#CBD5E1" : (createModal ? ZONE_COLORS[createModal]?.pill : "#3B82F6"),
                   borderRadius: 14, paddingVertical: 13, alignItems: "center",
                 }}
               >
-                {createZone.isPending
+                {createCity.isPending
                   ? <ActivityIndicator color="white" size="small" />
                   : <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Créer</Text>
                 }
@@ -515,36 +486,31 @@ export default function ZonesScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
-        {/* Visible uniquement quand le clavier est ouvert : comble ses coins arrondis */}
-        {keyboardVisible && (
-          <View
-            style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 350, backgroundColor: isDark ? "#0F172A" : "#FFFFFF" }}
-            pointerEvents="none"
-          />
-        )}
       </Modal>
 
-      {/* Modal réassignation */}
+      {/* Modal assignation ville à un groupe d'interventions */}
       <Modal
-        visible={!!reassignModal}
+        visible={!!assignModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setReassignModal(null)}
+        onRequestClose={() => setAssignModal(null)}
       >
-        <Pressable className="flex-1 bg-black/40" onPress={() => setReassignModal(null)} />
+        <Pressable className="flex-1 bg-black/40" onPress={() => setAssignModal(null)} />
         <View
           className="bg-white dark:bg-slate-900 rounded-t-3xl"
-          style={{ width: "100%", paddingBottom: insets.bottom + 80 }}
+          style={{ width: "100%", paddingBottom: insets.bottom + 24 }}
         >
           <View className="px-5 pt-5 pb-3 border-b border-border dark:border-slate-700 flex-row items-start justify-between">
             <View className="flex-1 mr-3">
               <Text className="text-base font-bold text-foreground dark:text-white">
-                Déplacer «{reassignModal?.city}»
+                Assigner «{assignModal?.title}»
               </Text>
-              <Text className="text-xs text-muted-foreground mt-0.5">Choisir la nouvelle sous-zone</Text>
+              <Text className="text-xs text-muted-foreground mt-0.5">
+                Choisir une ville existante ou en taper une nouvelle
+              </Text>
             </View>
             <Pressable
-              onPress={() => setReassignModal(null)}
+              onPress={() => setAssignModal(null)}
               hitSlop={12}
               style={{
                 width: 28, height: 28, borderRadius: 14,
@@ -555,26 +521,48 @@ export default function ZonesScreen() {
               <X size={14} color={isDark ? "#94A3B8" : "#64748B"} />
             </Pressable>
           </View>
-          <ScrollView style={{ maxHeight: 360 }}>
-            {subZones.map((zone) => {
-              const isCurrent = zone.id === reassignModal?.currentZoneId;
-              const colors = PARENT_COLORS[zone.parent_zone] ?? PARENT_COLORS.hainaut;
-              return (
+          <View className="px-5 pt-4 pb-2 gap-3">
+            <TextInput
+              value={assignCityName}
+              onChangeText={setAssignCityName}
+              placeholder="Nom de la ville"
+              placeholderTextColor={isDark ? "#475569" : "#94A3B8"}
+              style={{
+                fontSize: 15, color: isDark ? "#fff" : "#0f172a",
+                borderWidth: 1, borderColor: "#CBD5E1",
+                borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+              }}
+              onSubmitEditing={() => handleAssign(assignCityName)}
+              returnKeyType="done"
+            />
+            <Pressable
+              onPress={() => handleAssign(assignCityName)}
+              disabled={!assignCityName.trim() || assignCity.isPending}
+              style={{
+                backgroundColor: !assignCityName.trim() ? "#CBD5E1" : "#3B82F6",
+                borderRadius: 14, paddingVertical: 13, alignItems: "center",
+              }}
+            >
+              {assignCity.isPending
+                ? <ActivityIndicator color="white" size="small" />
+                : <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Assigner</Text>
+              }
+            </Pressable>
+          </View>
+          <ScrollView style={{ maxHeight: 280 }}>
+            {cities
+              .slice()
+              .sort((a, b) => a.city.localeCompare(b.city))
+              .map((c) => (
                 <Pressable
-                  key={zone.id}
-                  onPress={() => !isCurrent && handleReassign(zone.id)}
-                  className={`px-5 py-3.5 flex-row items-center justify-between border-b border-border/40 dark:border-slate-800 ${isCurrent ? "opacity-40" : ""}`}
+                  key={c.city}
+                  onPress={() => handleAssign(c.city)}
+                  className="px-5 py-3 flex-row items-center justify-between border-b border-border/40 dark:border-slate-800"
                 >
-                  <View className="flex-row items-center gap-3">
-                    <View style={{ backgroundColor: colors.pill + "22", borderRadius: 6, padding: 4 }}>
-                      <MapPin size={14} color={colors.pill} />
-                    </View>
-                    <Text className="text-sm font-medium text-foreground dark:text-white">{zone.label}</Text>
-                  </View>
-                  {isCurrent && <Text className="text-xs text-muted-foreground">actuelle</Text>}
+                  <Text className="text-sm font-medium text-foreground dark:text-white">{c.city}</Text>
+                  <Text className="text-xs text-muted-foreground">{ZONE_LABELS[c.zone]}</Text>
                 </Pressable>
-              );
-            })}
+              ))}
           </ScrollView>
         </View>
       </Modal>

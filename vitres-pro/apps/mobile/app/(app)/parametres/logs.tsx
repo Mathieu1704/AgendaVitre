@@ -65,7 +65,7 @@ const FIELD_LABELS: Record<string, string> = {
   notes:             "notes",
   employee_ids:      "employés assignés",
   items:             "prestations",
-  sub_zone:          "sous-zone",
+  city:              "ville",
   time_tbd:          "heure à définir",
   reprise_taken:     "reprise RDV",
   reprise_note:      "note reprise",

@@ -89,16 +89,28 @@ class AbsenceOut(BaseModel):
     class Config:
         from_attributes = True
 
-# --- SUB ZONE ---
-class SubZoneOut(BaseModel):
-    id: UUID
-    code: str
-    label: str
-    parent_zone: str
-    position: int
-    cities: List[str] = []
+# --- CITY ---
+class CityOut(BaseModel):
+    city: str
+    zone: str
+    color: Optional[str] = None
+    position: int = 0
     class Config:
         from_attributes = True
+
+class CityCreate(BaseModel):
+    city: str
+    zone: Literal["hainaut", "ardennes"]
+    color: Optional[str] = None
+
+class CityUpdate(BaseModel):
+    city: Optional[str] = None
+    zone: Optional[Literal["hainaut", "ardennes"]] = None
+    color: Optional[str] = None
+
+class AssignInterventionCityIn(BaseModel):
+    intervention_ids: List[UUID]
+    city: str
 
 # --- CLIENT ---
 class ClientBase(BaseModel):
@@ -121,7 +133,6 @@ class ClientCreate(ClientBase):
 
 class ClientOutLite(ClientBase):
     id: UUID
-    sub_zone: Optional[str] = None
     created_at: datetime
     class Config:
         from_attributes = True
@@ -220,6 +231,7 @@ class InterventionBase(BaseModel):
     amount_cash: Optional[float] = None
     amount_invoice: Optional[float] = None
     zone: str = "hainaut"  # "hainaut" ou "ardennes"
+    city: Optional[str] = None
     client_id: Optional[UUID] = None
     employee_ids: List[UUID] = []
     items: List[InterventionItemCreate] = []
@@ -258,7 +270,7 @@ class InterventionRecurringCreate(BaseModel):
     amount_cash: Optional[float] = None
     amount_invoice: Optional[float] = None
     zone: str = "hainaut"
-    sub_zone: Optional[str] = None
+    city: Optional[str] = None
     client_id: Optional[UUID] = None
     address: Optional[str] = None
     phone: Optional[str] = None
@@ -317,7 +329,7 @@ class InterventionOut(BaseModel):
     amount_cash: Optional[float] = None
     amount_invoice: Optional[float] = None
     zone: Optional[str] = None
-    sub_zone: Optional[str] = None
+    city: Optional[str] = None
     reprise_taken: Optional[bool] = None
     reprise_note: Optional[str] = None
     reprise_chain_id: Optional[UUID] = None

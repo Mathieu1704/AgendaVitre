@@ -114,14 +114,6 @@ function RatePill({
   );
 }
 
-function fmtZone(subZone: string): string {
-  return subZone
-    .split("_")
-    .slice(1)
-    .map((p) => p.charAt(0) + p.slice(1).toLowerCase())
-    .join(" ");
-}
-
 function fmtH(h: number): string {
   const rounded = Math.round(h * 4) / 4;
   const hours = Math.floor(rounded);
@@ -189,8 +181,8 @@ export default function RateSessionScreen() {
         return true;
       })
       .sort((a: any, b: any) => {
-        const za = a.sub_zone ?? "";
-        const zb = b.sub_zone ?? "";
+        const za = a.city ?? "";
+        const zb = b.city ?? "";
         if (za !== zb) return za.localeCompare(zb);
         return (
           new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
@@ -515,16 +507,14 @@ export default function RateSessionScreen() {
               <View
                 className="w-2 h-2 rounded-full"
                 style={{
-                  backgroundColor: current.sub_zone ? "#3B82F6" : "#94A3B8",
+                  backgroundColor: current.city ? "#3B82F6" : "#94A3B8",
                 }}
               />
               <Text
                 className="text-xs font-bold uppercase tracking-wider"
-                style={{ color: current.sub_zone ? "#3B82F6" : "#94A3B8" }}
+                style={{ color: current.city ? "#3B82F6" : "#94A3B8" }}
               >
-                {current.sub_zone
-                  ? fmtZone(current.sub_zone)
-                  : "Sans sous-zone"}
+                {current.city ?? "Sans ville"}
               </Text>
             </View>
             <Text className="text-xl font-bold text-foreground dark:text-white leading-snug">

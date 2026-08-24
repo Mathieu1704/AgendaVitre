@@ -96,7 +96,7 @@ def intervention_hours(interv) -> float:
     return 0.0
 
 
-def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = None, sub_zone: Optional[str] = None):
+def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = None, city: Optional[str] = None):
     settings = db.query(CompanySettings).first()
     tolerance = settings.overtime_tolerance_hours if settings else 3.0
 
@@ -151,8 +151,8 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
         Intervention.type != "devis",
         ~Intervention.tour_run.has() | Intervention.tour_run.has(TourRun.publication_status == "published"),
     )
-    if sub_zone:
-        int_query = int_query.filter(Intervention.sub_zone == sub_zone)
+    if city:
+        int_query = int_query.filter(Intervention.city == city)
     elif zone:
         int_query = int_query.filter(Intervention.zone == zone)
     interventions = int_query.all()
@@ -188,19 +188,19 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
 def get_daily_stats_endpoint(
     date_str: str,
     zone: Optional[str] = None,
-    sub_zone: Optional[str] = None,
+    city: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
     d = datetime.strptime(date_str, "%Y-%m-%d").date()
-    return calculate_day_stats(d, db, zone=zone, sub_zone=sub_zone)
+    return calculate_day_stats(d, db, zone=zone, city=city)
 
 @router.get("/range-stats")
 def get_range_stats_endpoint(
     start_str: str,
     end_str: str,
     zone: Optional[str] = None,
-    sub_zone: Optional[str] = None,
+    city: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -251,8 +251,8 @@ def get_range_stats_endpoint(
         Intervention.type != "devis",
         ~Intervention.tour_run.has() | Intervention.tour_run.has(TourRun.publication_status == "published"),
     )
-    if sub_zone:
-        int_query = int_query.filter(Intervention.sub_zone == sub_zone)
+    if city:
+        int_query = int_query.filter(Intervention.city == city)
     elif zone:
         int_query = int_query.filter(Intervention.zone == zone)
     interventions = int_query.all()

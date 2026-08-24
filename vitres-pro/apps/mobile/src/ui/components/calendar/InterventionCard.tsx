@@ -6,9 +6,9 @@ import { useQueryClient } from "@tanstack/react-query";
 export type AssignModalState =
   | { mode: "single"; interventionId: string; currentIds: string[] }
   | {
-      mode: "zone";
+      mode: "city";
       date: string;
-      subZone: string;
+      city: string;
       label: string;
       color: string;
     }

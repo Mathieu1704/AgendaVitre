@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from app.models.models import (
     get_db, Intervention, Client, Employee, InterventionItem,
     intervention_employees, RawCalendarEvent, AuditLog, InAppNotification,
-    InterventionService, InterventionNote, TourRun
+    InterventionService, InterventionNote, TourRun, City
 )
 from app.schemas.schemas import (
     InterventionCreate, InterventionOut, InterventionRecurringCreate,
@@ -50,7 +50,7 @@ def _validate_payment_split(payment_mode, price_estimated, amount_cash, amount_i
 
 class BulkAssignBody(BaseModel):
     date: date
-    sub_zone: str
+    city: str
     employee_ids: List[UUID] = []
     skip_assigned: bool = True
 
@@ -145,7 +145,7 @@ FIELD_LABELS = {
     "notes": "notes",
     "employee_ids": "employés assignés",
     "items": "prestations",
-    "sub_zone": "sous-zone",
+    "city": "ville",
     "time_tbd": "heure à définir",
     "reprise_taken": "reprise RDV",
     "reprise_note": "note reprise",
@@ -432,7 +432,7 @@ def create_recurring_bulk(
             amount_cash=payload.amount_cash,
             amount_invoice=payload.amount_invoice,
             zone=payload.zone,
-            sub_zone=payload.sub_zone,
+            city=payload.city,
             client_id=payload.client_id,
             address=payload.address,
             phone=payload.phone,
@@ -484,6 +484,7 @@ def create_intervention(
         if existing:
             return existing
 
+    client = None
     if intervention.client_id:
         client = db.query(Client).filter(Client.id == intervention.client_id).first()
         if not client:
@@ -492,6 +493,12 @@ def create_intervention(
     data = intervention.model_dump(
         exclude={"employee_ids", "items", "reprise_of_id", "client_operation_id", "settle_deferred_intervention_id"}
     )
+    if not data.get("city") and client and client.city:
+        data["city"] = client.city
+    if data.get("city"):
+        city_row = db.query(City).filter(City.city == data["city"]).first()
+        if city_row:
+            data["zone"] = city_row.zone
     if current_user.role != 'admin':
         data["zone"] = current_user.zone
         data["type"] = "intervention"
@@ -613,13 +620,13 @@ def bulk_assign_employees(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user),
 ):
-    """Assigne des employés à toutes les interventions d'une sous-zone pour un jour donné.
+    """Assigne des employés à toutes les interventions d'une ville pour un jour donné.
     skip_assigned=True (défaut) : saute les interventions qui ont déjà des employés assignés."""
     if current_user.role != 'admin':
         raise HTTPException(status_code=403, detail="Réservé aux admins.")
     interventions = db.query(Intervention).options(selectinload(Intervention.employees)).filter(
         func.date(Intervention.start_time) == body.date,
-        Intervention.sub_zone == body.sub_zone,
+        Intervention.city == body.city,
         ~Intervention.tour_run.has(),
     ).all()
 
@@ -687,7 +694,7 @@ def create_reinforcement(
         phone=source.phone,
         email=source.email,
         zone=source.zone,
-        sub_zone=source.sub_zone,
+        city=source.city,
         start_time=start_time,
         end_time=end_time,
         time_tbd=body.time_tbd,
@@ -795,6 +802,11 @@ def update_intervention(
                 ))
         elif hasattr(db_intervention, key):
             setattr(db_intervention, key, value)
+
+    if "city" in intervention_update and intervention_update["city"]:
+        city_row = db.query(City).filter(City.city == intervention_update["city"]).first()
+        if city_row:
+            db_intervention.zone = city_row.zone
 
     # Cloture : on retient qui a reellement termine (et donc encaisse), pas
     # seulement les employes assignes — voir _weekly_cash_amount.

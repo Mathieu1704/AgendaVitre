@@ -22,7 +22,7 @@ interface MonthViewProps {
   effectiveZone: string;
   userZone?: string;
   filterItem: (item: any) => boolean;
-  subZoneMap: Map<string, { label: string; color: string }>;
+  cityMap: Map<string, { zone: string; color: string }>;
   viewMode: string;
   activeTypes: Set<string>;
   activeStatuses: Set<string>;
@@ -50,7 +50,7 @@ export const MonthView = React.memo(function MonthView({
   itemsByDate,
   effectiveZone,
   filterItem,
-  subZoneMap,
+  cityMap,
   viewMode,
   activeTypes,
   activeStatuses,
@@ -116,7 +116,7 @@ export const MonthView = React.memo(function MonthView({
   const dayRawEvents = monthRawEvents.filter((e) => e.start_time.split("T")[0] === selectedDate);
 
   const ctx: InterventionGroupsCtx = {
-    isDark, isAdmin, subZoneMap, viewMode, selectedDate, effectiveZone,
+    isDark, isAdmin, cityMap, viewMode, selectedDate, effectiveZone,
     setAssignModal, setSelectedAssignIds, setInitialAssignIds,
   };
 

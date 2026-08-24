@@ -1,163 +1,125 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
-import re
 
-from app.models.models import get_db, SubZone, CitySubZone, Client, Intervention, HourlyRate, CompanySettings
-from app.schemas.schemas import SubZoneOut, HourlyRateOut, HourlyRateCreate, normalize_city
+from app.models.models import get_db, City, Client, Intervention, HourlyRate, CompanySettings
+from app.schemas.schemas import CityOut, CityCreate, CityUpdate, AssignInterventionCityIn, HourlyRateOut, HourlyRateCreate, normalize_city
 from app.core.deps import get_current_user
 from pydantic import BaseModel
 
 router = APIRouter()
 
 
-class LabelUpdate(BaseModel):
-    label: str
-
-
-class SubZoneCreate(BaseModel):
-    label: str
-    parent_zone: str  # "hainaut" | "ardennes"
-
-
-class CityReassign(BaseModel):
-    sub_zone_id: UUID
-
-
 class CompanySettingsPatch(BaseModel):
     hide_cash: bool
 
 
-@router.get("/zones", response_model=List[SubZoneOut])
-def list_zones(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    zones = db.query(SubZone).options(joinedload(SubZone.cities)).order_by(
-        SubZone.parent_zone, SubZone.position
-    ).all()
-    result = []
-    for z in zones:
-        out = SubZoneOut(
-            id=z.id,
-            code=z.code,
-            label=z.label,
-            parent_zone=z.parent_zone,
-            position=z.position,
-            cities=sorted(set(normalize_city(c.city) for c in z.cities)),
-        )
-        result.append(out)
-    return result
+@router.get("/cities", response_model=List[CityOut])
+def list_cities(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    return db.query(City).order_by(City.zone, City.position, City.city).all()
 
 
-@router.post("/zones", response_model=SubZoneOut)
-def create_zone(body: SubZoneCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+@router.post("/cities", response_model=CityOut)
+def create_city(body: CityCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Accès réservé aux admins")
-    if body.parent_zone not in ("hainaut", "ardennes"):
-        raise HTTPException(status_code=400, detail="parent_zone doit être 'hainaut' ou 'ardennes'")
-
-    # Générer un code unique depuis le label
-    slug = re.sub(r"[^a-z0-9]+", "_", body.label.lower().strip()).strip("_")
-    code = f"{body.parent_zone.upper()}_{slug.upper()}"
-    # S'assurer de l'unicité
-    existing_codes = {z.code for z in db.query(SubZone.code).all()}
-    base_code = code
-    i = 2
-    while code in existing_codes:
-        code = f"{base_code}_{i}"
-        i += 1
-
-    # Position = max existant + 1 pour ce parent
-    max_pos = db.query(SubZone).filter(SubZone.parent_zone == body.parent_zone).count()
-
-    zone = SubZone(code=code, label=body.label.strip(), parent_zone=body.parent_zone, position=max_pos)
-    db.add(zone)
+    name = normalize_city(body.city)
+    if db.query(City).filter(City.city == name).first():
+        raise HTTPException(status_code=400, detail="Cette ville existe déjà")
+    max_pos = db.query(City).filter(City.zone == body.zone).count()
+    city = City(city=name, zone=body.zone, color=body.color, position=max_pos)
+    db.add(city)
     db.commit()
-    db.refresh(zone)
-    return SubZoneOut(id=zone.id, code=zone.code, label=zone.label,
-                      parent_zone=zone.parent_zone, position=zone.position, cities=[])
+    db.refresh(city)
+    return city
 
 
-@router.delete("/zones/{zone_id}")
-def delete_zone(zone_id: UUID, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+@router.patch("/cities/{city}", response_model=CityOut)
+def update_city(city: str, body: CityUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Renomme une ville et/ou change sa zone ; répercute sur clients + interventions."""
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Accès réservé aux admins")
-    zone = db.query(SubZone).filter(SubZone.id == zone_id).first()
-    if not zone:
-        raise HTTPException(status_code=404, detail="Sous-zone introuvable")
-    city_count = db.query(CitySubZone).filter(CitySubZone.sub_zone_id == zone_id).count()
-    if city_count > 0:
-        raise HTTPException(status_code=400, detail=f"Impossible de supprimer : {city_count} ville(s) rattachée(s). Déplace-les d'abord.")
-    db.delete(zone)
+    city = normalize_city(city)
+    row = db.query(City).filter(City.city == city).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Ville introuvable")
+
+    new_name = normalize_city(body.city) if body.city else city
+    new_zone = body.zone or row.zone
+
+    if new_name != city and db.query(City).filter(City.city == new_name).first():
+        raise HTTPException(status_code=400, detail="Une ville avec ce nom existe déjà")
+
+    row.city = new_name
+    row.zone = new_zone
+    if body.color is not None:
+        row.color = body.color
+
+    if new_name != city:
+        db.query(Client).filter(Client.city == city).update({"city": new_name})
+    db.query(Intervention).filter(Intervention.city == city).update(
+        {"city": new_name, "zone": new_zone}, synchronize_session=False
+    )
+
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/cities/{city}")
+def delete_city(city: str, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    city = normalize_city(city)
+    row = db.query(City).filter(City.city == city).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Ville introuvable")
+    intervention_count = db.query(Intervention).filter(Intervention.city == city).count()
+    if intervention_count > 0:
+        raise HTTPException(status_code=400, detail=f"Impossible de supprimer : {intervention_count} intervention(s) rattachée(s).")
+    db.delete(row)
     db.commit()
     return {"ok": True}
 
 
-@router.patch("/zones/{zone_id}/label", response_model=SubZoneOut)
-def rename_zone(zone_id: UUID, body: LabelUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+@router.get("/interventions/unassigned-cities")
+def list_unassigned_interventions(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Interventions sans ville assignée, groupées par titre/adresse pour assignation en masse."""
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Accès réservé aux admins")
-    zone = db.query(SubZone).filter(SubZone.id == zone_id).first()
-    if not zone:
-        raise HTTPException(status_code=404, detail="Sous-zone introuvable")
-    zone.label = body.label
-    db.commit()
-    db.refresh(zone)
-    cities = db.query(CitySubZone).filter(CitySubZone.sub_zone_id == zone.id).all()
-    return SubZoneOut(
-        id=zone.id, code=zone.code, label=zone.label,
-        parent_zone=zone.parent_zone, position=zone.position,
-        cities=sorted(set(normalize_city(c.city) for c in cities)),
+    rows = db.query(Intervention).filter(
+        Intervention.city.is_(None)
+    ).order_by(Intervention.title, Intervention.start_time).all()
+    groups: dict = {}
+    for i in rows:
+        key = (i.title or "").strip().lower() + "|" + (i.address or "").strip().lower()
+        group = groups.setdefault(key, {
+            "title": i.title,
+            "address": i.address,
+            "zone": i.zone,
+            "intervention_ids": [],
+        })
+        group["intervention_ids"].append(str(i.id))
+    return list(groups.values())
+
+
+@router.post("/interventions/assign-city")
+def assign_intervention_city(body: AssignInterventionCityIn, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Assigne une ville (et sa zone) à un lot d'interventions sans ville."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    city = normalize_city(body.city)
+    city_row = db.query(City).filter(City.city == city).first()
+    if not city_row:
+        raise HTTPException(status_code=404, detail="Ville inconnue — crée-la d'abord dans les paramètres.")
+    if not body.intervention_ids:
+        raise HTTPException(status_code=400, detail="Aucune intervention fournie")
+    db.query(Intervention).filter(Intervention.id.in_(body.intervention_ids)).update(
+        {"city": city, "zone": city_row.zone}, synchronize_session=False
     )
-
-
-@router.get("/zones/cities")
-def list_all_cities(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Toutes les villes connues dans city_sub_zones (pour autocomplete)."""
-    rows = db.query(CitySubZone.city).order_by(CitySubZone.city).all()
-    return [r.city for r in rows]
-
-
-@router.get("/zones/unassigned-cities")
-def list_unassigned_cities(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Villes présentes sur des clients mais sans mapping dans city_sub_zones."""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
-    from sqlalchemy import select
-    assigned = {normalize_city(row.city) for row in db.query(CitySubZone.city).all()}
-    cities = db.query(Client.city).filter(Client.city != None, Client.city != "").distinct().all()
-    unassigned = sorted({normalize_city(c.city) for c in cities if normalize_city(c.city) not in assigned})
-    return unassigned
-
-
-@router.patch("/zones/cities/{city}")
-def reassign_city(city: str, body: CityReassign, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Réassigne une ville à une nouvelle sous-zone et met à jour clients + interventions."""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
-    city = normalize_city(city)
-    new_zone = db.query(SubZone).filter(SubZone.id == body.sub_zone_id).first()
-    if not new_zone:
-        raise HTTPException(status_code=404, detail="Sous-zone cible introuvable")
-
-    # Mettre à jour city_sub_zones
-    mapping = db.query(CitySubZone).filter(CitySubZone.city == city).first()
-    if mapping:
-        mapping.sub_zone_id = body.sub_zone_id
-    else:
-        db.add(CitySubZone(city=city, sub_zone_id=body.sub_zone_id))
-
-    # Mettre à jour clients
-    db.query(Client).filter(Client.city == city).update({"sub_zone": new_zone.code})
-
-    # Mettre à jour interventions via leurs clients
-    client_ids = [c.id for c in db.query(Client).filter(Client.city == city).all()]
-    if client_ids:
-        db.query(Intervention).filter(Intervention.client_id.in_(client_ids)).update(
-            {"sub_zone": new_zone.code}, synchronize_session=False
-        )
-
     db.commit()
-    return {"ok": True, "city": city, "new_sub_zone": new_zone.code}
+    return {"ok": True, "city": city, "zone": city_row.zone, "count": len(body.intervention_ids)}
 
 
 # --- TAUX HORAIRES ---

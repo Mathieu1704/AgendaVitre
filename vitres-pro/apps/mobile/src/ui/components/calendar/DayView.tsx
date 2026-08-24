@@ -29,7 +29,7 @@ interface DayViewProps {
   viewMode: string;
   selectedDate: string;
   filterItem: (item: any) => boolean;
-  subZoneMap: Map<string, { label: string; color: string }>;
+  cityMap: Map<string, { zone: string; color: string }>;
   activeTypes: Set<string>;
   activeStatuses: Set<string>;
   toggleType: (id: string) => void;
@@ -56,7 +56,7 @@ export const DayView = React.memo(function DayView({
   viewMode,
   selectedDate,
   filterItem,
-  subZoneMap,
+  cityMap,
   activeTypes,
   activeStatuses,
   toggleType,
@@ -82,9 +82,9 @@ export const DayView = React.memo(function DayView({
   const hasAnything = list.length > 0 || rawEvents.length > 0;
 
   const flatRows = useMemo(
-    () => buildFlatRows(list, iso, subZoneMap),
+    () => buildFlatRows(list, iso, cityMap),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [list, iso, subZoneMap],
+    [list, iso, cityMap],
   );
 
   const renderRow = useCallback(
@@ -125,7 +125,7 @@ export const DayView = React.memo(function DayView({
                 onPress={() => {
                   const existingIds = [...new Set(row.items.flatMap((it: any) => (it.employees ?? []).map((e: any) => e.id as string)))];
                   setTimeout(() => {
-                    setAssignModal({ mode: "zone", date: iso, subZone: row.code, label: row.label, color: row.color });
+                    setAssignModal({ mode: "city", date: iso, city: row.code, label: row.label, color: row.color });
                     setSelectedAssignIds(existingIds);
                     setInitialAssignIds(existingIds);
                   }, 100);

@@ -57,7 +57,7 @@ import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { Avatar } from "../../../src/ui/components/Avatar";
 import { useAuth } from "../../../src/hooks/useAuth";
 import { useCompanySettings } from "../../../src/hooks/useCompanySettingsSync";
-import { useSubZones } from "../../../src/hooks/useZones";
+import { useCities } from "../../../src/hooks/useCities";
 import {
   useAssignEmployees,
   useBulkAssignEmployees,
@@ -284,9 +284,9 @@ export default function CalendarScreen() {
   const [assignModal, setAssignModal] = useState<
     | { mode: "single"; interventionId: string; currentIds: string[] }
     | {
-        mode: "zone";
+        mode: "city";
         date: string;
-        subZone: string;
+        city: string;
         label: string;
         color: string;
       }
@@ -299,17 +299,17 @@ export default function CalendarScreen() {
   const assignEmployees = useAssignEmployees();
   const bulkAssign = useBulkAssignEmployees();
 
-  const { subZones } = useSubZones();
-  const subZoneMap = useMemo(() => {
-    const m = new Map<string, { label: string; color: string }>();
-    for (const z of subZones) {
-      m.set(z.code, {
-        label: z.label,
-        color: z.parent_zone === "ardennes" ? "#22C55E" : "#3B82F6",
+  const { cities } = useCities();
+  const cityMap = useMemo(() => {
+    const m = new Map<string, { zone: string; color: string }>();
+    for (const c of cities) {
+      m.set(c.city, {
+        zone: c.zone,
+        color: c.color ?? (c.zone === "ardennes" ? "#22C55E" : "#3B82F6"),
       });
     }
     return m;
-  }, [subZones]);
+  }, [cities]);
 
   useEffect(() => {
     if (params.view) {
@@ -456,9 +456,9 @@ export default function CalendarScreen() {
       for (const k of Object.keys(map)) {
         map[k].sort((a, b) => {
           if (a.time_tbd !== b.time_tbd) return a.time_tbd ? 1 : -1;
-          const za = a.sub_zone ?? a.zone ?? "";
-          const zb = b.sub_zone ?? b.zone ?? "";
-          if (za !== zb) return za.localeCompare(zb);
+          const ca = a.city ?? a.zone ?? "";
+          const cb = b.city ?? b.zone ?? "";
+          if (ca !== cb) return ca.localeCompare(cb);
           return a.start_time.localeCompare(b.start_time);
         });
       }
@@ -790,7 +790,7 @@ export default function CalendarScreen() {
               viewMode={viewMode}
               selectedDate={selectedDate}
               filterItem={filterItem}
-              subZoneMap={subZoneMap}
+              cityMap={cityMap}
               activeTypes={activeTypes}
               activeStatuses={activeStatuses}
               toggleType={toggleType}
@@ -831,7 +831,7 @@ export default function CalendarScreen() {
                   itemsByDate={itemsByDate}
                   effectiveZone={effectiveZone}
                   filterItem={filterItem}
-                  subZoneMap={subZoneMap}
+                  cityMap={cityMap}
                   viewMode={viewMode}
                   activeTypes={activeTypes}
                   activeStatuses={activeStatuses}
@@ -858,7 +858,7 @@ export default function CalendarScreen() {
                   viewMode={viewMode}
                   selectedDate={selectedDate}
                   filterItem={filterItem}
-                  subZoneMap={subZoneMap}
+                  cityMap={cityMap}
                   setAssignModal={setAssignModal}
                   setSelectedAssignIds={setSelectedAssignIds}
                   setInitialAssignIds={setInitialAssignIds}
@@ -933,12 +933,12 @@ export default function CalendarScreen() {
                   color: isDark ? "#fff" : "#0F172A",
                 }}
               >
-                {assignModal?.mode === "zone"
+                {assignModal?.mode === "city"
                   ? `Assigner — ${assignModal.label}`
                   : "Assigner des employés"}
               </Text>
               <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>
-                {assignModal?.mode === "zone"
+                {assignModal?.mode === "city"
                   ? "Remplace les assignations existantes"
                   : "Sélectionner un ou plusieurs employés"}
               </Text>
@@ -1053,7 +1053,7 @@ export default function CalendarScreen() {
                   } else {
                     await bulkAssign.mutateAsync({
                       date: assignModal.date,
-                      subZone: assignModal.subZone,
+                      city: assignModal.city,
                       employeeIds: idsToSend,
                       skipAssigned: false,
                     });

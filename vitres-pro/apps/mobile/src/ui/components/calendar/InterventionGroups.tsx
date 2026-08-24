@@ -10,7 +10,7 @@ export type { AssignModalState };
 export type InterventionGroupsCtx = {
   isDark: boolean;
   isAdmin: boolean;
-  subZoneMap: Map<string, { label: string; color: string }>;
+  cityMap: Map<string, { zone: string; color: string }>;
   viewMode: string;
   selectedDate: string;
   effectiveZone: string;
@@ -176,7 +176,7 @@ export type FlatRow =
 export function buildFlatRows(
   list: any[],
   dateStr: string,
-  subZoneMap: Map<string, { label: string; color: string }>,
+  cityMap: Map<string, { zone: string; color: string }>,
 ): FlatRow[] {
   if (list.length === 0) return [];
 
@@ -239,24 +239,24 @@ export function buildFlatRows(
       // trie déjà par heure, l'affichage par zone n'apporte plus rien.
       const timeDefined = sg.status !== "unscheduled";
 
-      const szGroups: { code: string | null; items: any[] }[] = [];
+      const cityGroups: { code: string | null; items: any[] }[] = [];
       for (const item of tg.items) {
-        const code = timeDefined ? null : (item.sub_zone ?? null);
-        const last = szGroups[szGroups.length - 1];
+        const code = timeDefined ? null : (item.city ?? null);
+        const last = cityGroups[cityGroups.length - 1];
         if (last && last.code === code) last.items.push(item);
-        else szGroups.push({ code, items: [item] });
+        else cityGroups.push({ code, items: [item] });
       }
-      const hasMultipleSubZones = !timeDefined && (szGroups.length > 1 || (szGroups.length === 1 && szGroups[0].code !== null));
+      const hasMultipleCities = !timeDefined && (cityGroups.length > 1 || (cityGroups.length === 1 && cityGroups[0].code !== null));
 
-      for (const [zgIdx, zg] of szGroups.entries()) {
-        const sz = zg.code ? subZoneMap.get(zg.code) : null;
-        const barColor = sz?.color ?? "#CBD5E1";
+      for (const [zgIdx, zg] of cityGroups.entries()) {
+        const cityInfo = zg.code ? cityMap.get(zg.code) : null;
+        const barColor = cityInfo?.color ?? "#CBD5E1";
 
-        if (hasMultipleSubZones && zg.code) {
+        if (hasMultipleCities && zg.code) {
           rows.push({
             kind: "zone-header",
             code: zg.code,
-            label: sz?.label ?? "Sans zone",
+            label: zg.code,
             color: barColor,
             items: zg.items,
             dateStr,
@@ -282,7 +282,7 @@ export function renderInterventionGroups(
 ): React.ReactNode {
   if (list.length === 0) return null;
 
-  const { isDark, isAdmin, subZoneMap, viewMode, selectedDate, effectiveZone, setAssignModal, setSelectedAssignIds, setInitialAssignIds } = ctx;
+  const { isDark, isAdmin, cityMap, viewMode, selectedDate, effectiveZone, setAssignModal, setSelectedAssignIds, setInitialAssignIds } = ctx;
 
   const byTime = (a: any, b: any) =>
     new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
@@ -346,14 +346,14 @@ export function renderInterventionGroups(
           // trie déjà par heure, l'affichage par zone n'apporte plus rien.
           const timeDefined = group.status !== "unscheduled";
 
-          const szGroups: { code: string | null; items: any[] }[] = [];
+          const cityGroups: { code: string | null; items: any[] }[] = [];
           for (const item of tg.items) {
-            const code = timeDefined ? null : (item.sub_zone ?? null);
-            const last = szGroups[szGroups.length - 1];
+            const code = timeDefined ? null : (item.city ?? null);
+            const last = cityGroups[cityGroups.length - 1];
             if (last && last.code === code) last.items.push(item);
-            else szGroups.push({ code, items: [item] });
+            else cityGroups.push({ code, items: [item] });
           }
-          const hasMultipleSubZones = !timeDefined && (szGroups.length > 1 || (szGroups.length === 1 && szGroups[0].code !== null));
+          const hasMultipleCities = !timeDefined && (cityGroups.length > 1 || (cityGroups.length === 1 && cityGroups[0].code !== null));
 
           return (
             <View key={`${tg.type}-${tgIdx}`}>
@@ -366,40 +366,39 @@ export function renderInterventionGroups(
                   <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "#1E293B" : "#F1F5F9", marginLeft: 4 }} />
                 </View>
               )}
-              {szGroups.map((sg, idx) => {
-                const sz = sg.code ? subZoneMap.get(sg.code) : null;
+              {cityGroups.map((sg, idx) => {
+                const cityInfo = sg.code ? cityMap.get(sg.code) : null;
+                const cityColor = cityInfo?.color ?? "#94A3B8";
                 return (
                   <View key={`${sg.code ?? "null"}-${idx}`} style={{ marginTop: idx === 0 ? 0 : compact ? 4 : 10 }}>
-                    {!compact && hasMultipleSubZones && (
+                    {!compact && hasMultipleCities && sg.code && (
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6, marginLeft: 8 }}>
-                        <Text style={{ fontSize: 11, fontWeight: "800", color: sz?.color ?? "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6 }}>
-                          {sz ? sz.label : "Sans zone"}
+                        <Text style={{ fontSize: 11, fontWeight: "800", color: cityColor, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                          {sg.code}
                         </Text>
-                        <View style={{ flex: 1, height: 1, backgroundColor: (sz?.color ?? "#94A3B8") + "40", marginHorizontal: 6 }} />
-                        {sz && sg.code && isAdmin && (
+                        <View style={{ flex: 1, height: 1, backgroundColor: cityColor + "40", marginHorizontal: 6 }} />
+                        {isAdmin && (
                           <Pressable
                             hitSlop={10}
-                            style={{ backgroundColor: sz.color + "20", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, flexDirection: "row", alignItems: "center", gap: 4 }}
+                            style={{ backgroundColor: cityColor + "20", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, flexDirection: "row", alignItems: "center", gap: 4 }}
                             onPress={() => {
-                              const code = sg.code!;
-                              const label = sz.label;
-                              const color = sz.color;
+                              const city = sg.code!;
                               const existingIds = [...new Set(sg.items.flatMap((it: any) => (it.employees ?? []).map((e: any) => e.id as string)))];
                               setTimeout(() => {
-                                setAssignModal({ mode: "zone", date: dateStr, subZone: code, label, color });
+                                setAssignModal({ mode: "city", date: dateStr, city, label: city, color: cityColor });
                                 setSelectedAssignIds(existingIds);
                                 setInitialAssignIds(existingIds);
                               }, 100);
                             }}
                           >
-                            <Users size={12} color={sz.color} />
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: sz.color }}>Assigner</Text>
+                            <Users size={12} color={cityColor} />
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: cityColor }}>Assigner</Text>
                           </Pressable>
                         )}
                       </View>
                     )}
                     <View style={{ flexDirection: "row", gap: 8 }}>
-                      <View style={{ width: 6, borderRadius: 3, backgroundColor: sz?.color ?? "#CBD5E1" }} />
+                      <View style={{ width: 6, borderRadius: 3, backgroundColor: cityInfo?.color ?? "#CBD5E1" }} />
                       <View style={{ flex: 1 }}>
                         {sg.items.map((item) => (
                           <InterventionCard

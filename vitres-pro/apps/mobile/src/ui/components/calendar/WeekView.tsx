@@ -27,7 +27,7 @@ interface WeekViewProps {
   viewMode: string;
   selectedDate: string;
   filterItem: (item: any) => boolean;
-  subZoneMap: Map<string, { label: string; color: string }>;
+  cityMap: Map<string, { zone: string; color: string }>;
   setAssignModal: React.Dispatch<React.SetStateAction<AssignModalState>>;
   setSelectedAssignIds: React.Dispatch<React.SetStateAction<string[]>>;
   setInitialAssignIds: React.Dispatch<React.SetStateAction<string[]>>;
@@ -43,7 +43,7 @@ export const WeekView = React.memo(function WeekView({
   viewMode,
   selectedDate,
   filterItem,
-  subZoneMap,
+  cityMap,
   setAssignModal,
   setSelectedAssignIds,
   setInitialAssignIds,
@@ -65,7 +65,7 @@ export const WeekView = React.memo(function WeekView({
   }, [weekRawEvents]);
 
   const ctx: InterventionGroupsCtx = {
-    isDark, isAdmin, subZoneMap, viewMode, selectedDate, effectiveZone,
+    isDark, isAdmin, cityMap, viewMode, selectedDate, effectiveZone,
     setAssignModal, setSelectedAssignIds, setInitialAssignIds,
   };
 

@@ -49,6 +49,7 @@ export interface Intervention {
   pending_deferred_amount?: number | null;
   carried_over_deferred_amount?: number | null;
   zone: "hainaut" | "ardennes";
+  city?: string | null;
   recurrence_rule?: {
     freq?: string;
     interval?: number;
