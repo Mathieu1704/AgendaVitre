@@ -244,6 +244,16 @@ def update_employee(
     if "role" in update_data and update_data["role"] not in ("admin", "employee", "subcontractor"):
         raise HTTPException(status_code=400, detail="Rôle invalide.")
 
+    # L'email sert aussi de login (compte Supabase Auth) : on synchronise les deux
+    # pour ne jamais désynchroniser la connexion de la fiche employé.
+    if "email" in update_data and update_data["email"] != db_obj.email:
+        try:
+            supabase_admin.auth.admin.update_user_by_id(
+                str(employee_id), {"email": update_data["email"]}
+            )
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Erreur Auth (email) : {str(e)}")
+
     # Si on change les heures par jour, on recalcule weekly_hours et daily_capacity depuis leur somme
     if update_data.get("hours_per_weekday"):
         update_data["weekly_hours"], update_data["daily_capacity"] = _compute_hours_from_weekday(

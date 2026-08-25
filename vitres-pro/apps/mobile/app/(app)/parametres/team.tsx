@@ -56,6 +56,7 @@ export default function TeamManagementScreen() {
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedRole, setSelectedRole] = useState<any>(null);
   const [editPhone, setEditPhone] = useState("");
+  const [editEmail, setEditEmail] = useState("");
   const [showAbsenceForm, setShowAbsenceForm] = useState(false);
   const [resetEmp, setResetEmp] = useState<any>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -111,6 +112,9 @@ export default function TeamManagementScreen() {
       queryClient.invalidateQueries({ queryKey: ["timetracking", "weekly-summary"] });
       toast.success("Succès", "Profil mis à jour");
       setEditingEmp(null);
+    },
+    onError: (err: any) => {
+      toast.error("Erreur", err.response?.data?.detail || "Impossible de mettre à jour");
     },
   });
 
@@ -179,6 +183,7 @@ export default function TeamManagementScreen() {
     setSelectedColor(emp.color);
     setSelectedRole(roleItems.find((r) => r.id === emp.role));
     setEditPhone(emp.phone || "");
+    setEditEmail(emp.email || "");
     setShowAbsenceForm(false);
     setAbsStart(toISODate(new Date()));
     const tomorrow = new Date();
@@ -431,6 +436,16 @@ export default function TeamManagementScreen() {
                 />
               </View>
 
+              {/* Input Email (login) */}
+              <Input
+                label="Email (Login)"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={editEmail}
+                onChangeText={setEditEmail}
+                containerStyle={{ marginBottom: 16 }}
+              />
+
               {/* Input Téléphone */}
               <Input
                 label="Téléphone"
@@ -481,16 +496,20 @@ export default function TeamManagementScreen() {
               <Button
                 className="h-14 rounded-[28px]"
                 style={{ width: "90%", alignSelf: "center", borderRadius: 28 }}
-                onPress={() =>
+                onPress={() => {
+                  if (!editEmail.trim()) {
+                    return toast.error("Oups", "L'email ne peut pas être vide.");
+                  }
                   updateMutation.mutate({
                     hours_per_weekday: hoursPerWeekday,
                     color: selectedColor,
                     role: selectedRole.id,
                     phone: editPhone || null,
+                    email: editEmail.trim(),
                     hours_valid_from: selectedRole.id === "subcontractor" ? hoursValidFrom : null,
                     hours_valid_until: selectedRole.id === "subcontractor" ? hoursValidUntil : null,
-                  })
-                }
+                  });
+                }}
                 loading={updateMutation.isPending}
               >
                 Sauvegarder

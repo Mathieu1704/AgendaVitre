@@ -72,6 +72,7 @@ class EmployeeOut(EmployeeBase):
 
 class EmployeeUpdate(BaseModel):
     full_name: Optional[str] = None
+    email: Optional[str] = None
     color: Optional[str] = None
     role: Optional[str] = None
     phone: Optional[str] = None
