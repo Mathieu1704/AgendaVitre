@@ -30,7 +30,7 @@ export type InterventionGroupsCtx = {
 // ─── renderInterventionGroups ─────────────────────────────────────────────────
 
 const STATUS_ORDER: Record<string, number> = { in_progress: 0, planned: 1, done: 2, cancelled: 3 };
-const UNSCHEDULED_TYPE_ORDER: Record<string, number> = { note: 0, intervention: 1, devis: 2, tournee: 3 };
+const TYPE_ORDER: Record<string, number> = { note: 0, intervention: 1, devis: 2, tournee: 3 };
 export const STATUS_LABELS: Record<string, string> = { in_progress: "En cours", planned: "Planifié", done: "Terminé", cancelled: "Annulé", unscheduled: "À planifier", note: "Note" };
 export const STATUS_COLORS: Record<string, string> = { in_progress: "#F97316", planned: "#3B82F6", done: "#22C55E", cancelled: "#EF4444", unscheduled: "#94A3B8", note: "#64748B" };
 export const TYPE_LABELS: Record<string, string> = { intervention: "Intervention", devis: "Devis", tournee: "Tournée", note: "Note" };
@@ -185,25 +185,11 @@ function placeNotes(
   }
 }
 
-// Les rendez-vous avec une heure conservent leurs blocs chronologiques. Sans
-// heure, chaque type forme au contraire un bloc unique et stable : notes,
-// interventions, devis, puis tournées. Une tournée ne peut donc plus couper
-// deux blocs d'interventions.
-function groupByType(
-  items: any[],
-  prioritizeType: boolean,
-): { type: string; items: any[] }[] {
-  if (!prioritizeType) {
-    const consecutive: { type: string; items: any[] }[] = [];
-    for (const item of items) {
-      const type = item.type ?? "intervention";
-      const last = consecutive[consecutive.length - 1];
-      if (last && last.type === type) last.items.push(item);
-      else consecutive.push({ type, items: [item] });
-    }
-    return consecutive;
-  }
-
+// Chaque type forme un bloc unique et stable, y compris dans les statuts
+// planifiés : notes, interventions, devis, puis tournées. Un devis (ou une
+// tournée) ne peut donc jamais couper deux blocs d'interventions, même
+// lorsque son horaire tombe chronologiquement entre les deux.
+function groupByType(items: any[]): { type: string; items: any[] }[] {
   const buckets = new Map<string, any[]>();
   for (const item of items) {
     const type = item.type ?? "intervention";
@@ -214,7 +200,7 @@ function groupByType(
 
   return [...buckets.entries()]
     .sort(([typeA], [typeB]) => {
-      const priority = (UNSCHEDULED_TYPE_ORDER[typeA] ?? 99) - (UNSCHEDULED_TYPE_ORDER[typeB] ?? 99);
+      const priority = (TYPE_ORDER[typeA] ?? 99) - (TYPE_ORDER[typeB] ?? 99);
       return priority !== 0 ? priority : typeA.localeCompare(typeB);
     })
     .map(([type, typeItems]) => ({ type, items: typeItems }));
@@ -330,7 +316,7 @@ export function buildFlatRows(
   for (const [sgIdx, sg] of statusGroups.entries()) {
     rows.push({ kind: "status-header", status: sg.status, count: sg.items.length, key: `sh-${sg.status}-${sgIdx}` });
 
-    const typeGroups = groupByType(sg.items, sg.status === "unscheduled");
+    const typeGroups = groupByType(sg.items);
     const multipleTypes = typeGroups.length > 1;
 
     for (const [tgIdx, tg] of typeGroups.entries()) {
@@ -386,7 +372,7 @@ export function renderInterventionGroups(
   // Les blocs planifiés restent chronologiques. Le groupe « À planifier » est
   // au contraire regroupé par type selon la priorité métier.
   return groups.map((group, groupIdx) => {
-    const typeGroups = groupByType(group.items, group.status === "unscheduled");
+    const typeGroups = groupByType(group.items);
     const multipleTypes = typeGroups.length > 1;
 
     return (
@@ -505,6 +491,8 @@ interface FilterChipsBarProps {
   // Un sous-traitant n'a rien à faire des devis/tournées ni des statuts —
   // seuls "Intervention" et "Note" le concernent, sans filtre de statut.
   isSubcontractor?: boolean;
+  // Ids des employés en congé/absence ce jour-là (badge visuel).
+  absentEmployeeIds?: Set<string>;
 }
 
 export const FilterChipsBar = React.memo(function FilterChipsBar({
@@ -519,6 +507,7 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
   setActiveEmployeeId,
   employees,
   isSubcontractor,
+  absentEmployeeIds,
 }: FilterChipsBarProps) {
   const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
   const hasFilters = activeTypes.size > 0 || activeStatuses.size > 0 || activeEmployeeId !== null;
@@ -610,6 +599,7 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
               const active = activeEmployeeId === emp.id;
               const firstName = emp.full_name?.split(" ")[0] ?? emp.full_name ?? "?";
               const chipColor = emp.color || "#3B82F6";
+              const isAbsent = absentEmployeeIds?.has(emp.id) ?? false;
               return (
                 <Pressable
                   key={emp.id}
@@ -624,6 +614,11 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
                   <Text style={{ fontSize: 13, fontWeight: active ? "700" : "500", color: active ? chipColor : isDark ? "#E2E8F0" : "#1E293B" }}>
                     {emp.full_name ?? firstName}
                   </Text>
+                  {isAbsent && (
+                    <View style={{ backgroundColor: "#EF444422", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "700", color: "#EF4444" }}>Absent</Text>
+                    </View>
+                  )}
                   {active && <Text style={{ marginLeft: "auto", color: chipColor, fontSize: 13, fontWeight: "700" }}>✓</Text>}
                 </Pressable>
               );

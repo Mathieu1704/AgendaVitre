@@ -2,9 +2,10 @@ import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { toBrusselsDateTimeString } from "../../../lib/date";
 
 export type AssignModalState =
-  | { mode: "single"; interventionId: string; currentIds: string[] }
+  | { mode: "single"; interventionId: string; currentIds: string[]; date: string | null }
   | {
       mode: "city";
       date: string;
@@ -145,7 +146,8 @@ export const InterventionCard = React.memo(function InterventionCard({
       }}
       onLongPress={item.tour_run?.id ? undefined : () => {
         const currentIds = employees.map((e: any) => e.id);
-        setAssignModal({ mode: "single", interventionId: item.id, currentIds });
+        const date = item.start_time ? toBrusselsDateTimeString(new Date(item.start_time)).split("T")[0] : null;
+        setAssignModal({ mode: "single", interventionId: item.id, currentIds, date });
         setSelectedAssignIds(currentIds);
         setInitialAssignIds(currentIds);
       }}

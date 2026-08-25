@@ -2,11 +2,29 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
+from datetime import date as date_type
 from app.models.models import get_db, Absence, Employee
 from app.schemas.schemas import AbsenceCreate, AbsenceOut
 from app.core.deps import get_current_user
+from app.routers.planning import _utc_bounds
 
 router = APIRouter()
+
+
+@router.get("/on-date")
+def read_absent_employee_ids(
+    date: date_type,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Ids des employés en congé/absence pour une journée donnée (badge planning)."""
+    day_start, day_end = _utc_bounds(date)
+    rows = db.query(Absence.employee_id).filter(
+        Absence.start_date < day_end,
+        Absence.end_date >= day_start,
+    ).distinct().all()
+    return [str(r.employee_id) for r in rows]
+
 
 @router.post("", response_model=AbsenceOut)
 def create_absence(

@@ -4,6 +4,7 @@ import { Calendar as RNCalendar, DateData } from "react-native-calendars";
 import { useRouter } from "expo-router";
 import { toISODate, startOfMonth, endOfMonth } from "../../../lib/date";
 import { useRawEventsByRange } from "../../../hooks/useRawEvents";
+import { useAbsentEmployeeIds } from "../../../hooks/useAbsences";
 import { RawEventCard } from "./RawEventCard";
 import { FilterChipsBar, renderInterventionGroups, AssignModalState, CityPlanningInfo, InterventionGroupsCtx } from "./InterventionGroups";
 import { PlanningHeader } from "../PlanningHeader";
@@ -114,6 +115,8 @@ export const MonthView = React.memo(function MonthView({
 
   const dayList = (itemsByDate[selectedDate] || []).filter(filterItem);
   const dayRawEvents = monthRawEvents.filter((e) => e.start_time.split("T")[0] === selectedDate);
+  const absentIds = useAbsentEmployeeIds(selectedDate);
+  const absentEmployeeIds = useMemo(() => new Set(absentIds), [absentIds]);
 
   const ctx: InterventionGroupsCtx = {
     isDark, isAdmin, cityMap, viewMode, selectedDate, effectiveZone,
@@ -183,6 +186,7 @@ export const MonthView = React.memo(function MonthView({
             setActiveEmployeeId={setActiveEmployeeId}
             employees={isAdmin ? employees : []}
             isSubcontractor={isSubcontractor}
+            absentEmployeeIds={absentEmployeeIds}
           />
           <DayStartRow date={selectedDate} />
           {dayList.length === 0 && dayRawEvents.length === 0 ? (

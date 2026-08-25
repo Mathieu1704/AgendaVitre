@@ -58,6 +58,7 @@ import { Avatar } from "../../../src/ui/components/Avatar";
 import { useAuth } from "../../../src/hooks/useAuth";
 import { useCompanySettings } from "../../../src/hooks/useCompanySettingsSync";
 import { useCities } from "../../../src/hooks/useCities";
+import { useAbsentEmployeeIds } from "../../../src/hooks/useAbsences";
 import {
   useAssignEmployees,
   useBulkAssignEmployees,
@@ -282,7 +283,7 @@ export default function CalendarScreen() {
   const [activeStatuses, setActiveStatuses] = useState<Set<string>>(new Set());
   const [activeEmployeeId, setActiveEmployeeId] = useState<string | null>(null);
   const [assignModal, setAssignModal] = useState<
-    | { mode: "single"; interventionId: string; currentIds: string[] }
+    | { mode: "single"; interventionId: string; currentIds: string[]; date: string | null }
     | {
       mode: "city";
       date: string;
@@ -298,6 +299,9 @@ export default function CalendarScreen() {
   const { employees: allEmployees } = useEmployees();
   const assignEmployees = useAssignEmployees();
   const bulkAssign = useBulkAssignEmployees();
+  const assignModalAbsentIds = useAbsentEmployeeIds(
+    assignModal?.mode === "single" ? assignModal.date : assignModal?.mode === "city" ? assignModal.date : null,
+  );
 
   const { cities } = useCities();
   const cityMap = useMemo(() => {
@@ -1009,6 +1013,11 @@ export default function CalendarScreen() {
                     >
                       {emp.full_name ?? emp.email}
                     </Text>
+                    {assignModalAbsentIds.includes(emp.id) && (
+                      <View style={{ backgroundColor: "#EF444422", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ fontSize: 10, fontWeight: "700", color: "#EF4444" }}>Absent</Text>
+                      </View>
+                    )}
                     <View
                       style={{
                         width: 22,

@@ -4,6 +4,7 @@ import { Clock, Users } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { toISODate } from "../../../lib/date";
 import { useRawEventsByDate } from "../../../hooks/useRawEvents";
+import { useAbsentEmployeeIds } from "../../../hooks/useAbsences";
 import { PlanningHeader } from "../PlanningHeader";
 import { RawEventCard } from "./RawEventCard";
 import {
@@ -77,6 +78,8 @@ export const DayView = React.memo(function DayView({
   const iso = toISODate(cursorDate);
   const list = (itemsByDate[iso] || []).filter(filterItem);
   const { rawEvents } = useRawEventsByDate(iso);
+  const absentIds = useAbsentEmployeeIds(iso);
+  const absentEmployeeIds = useMemo(() => new Set(absentIds), [absentIds]);
 
   const unassigned = rawEvents.filter((e) => !e.employee_id);
   const assigned = rawEvents.filter((e) => !!e.employee_id);
@@ -194,11 +197,12 @@ export const DayView = React.memo(function DayView({
           setActiveEmployeeId={setActiveEmployeeId}
           employees={isAdmin ? employees : []}
           isSubcontractor={isSubcontractor}
+          absentEmployeeIds={absentEmployeeIds}
         />
         <DayStartRow date={iso} />
       </View>
     ),
-    [iso, effectiveZone, isAdmin, isSubcontractor, unassigned, activeTypes, activeStatuses, isDark, toggleType, toggleStatus, setActiveTypes, setActiveStatuses, router, employees, activeEmployeeId, setActiveEmployeeId],
+    [iso, effectiveZone, isAdmin, isSubcontractor, unassigned, activeTypes, activeStatuses, isDark, toggleType, toggleStatus, setActiveTypes, setActiveStatuses, router, employees, activeEmployeeId, setActiveEmployeeId, absentEmployeeIds],
   );
 
   const listFooter = useMemo(
