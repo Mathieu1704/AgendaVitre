@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View, u
 import { Redirect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, CalendarCheck, ChevronLeft, ChevronRight, FileSpreadsheet, Map, Plus } from "lucide-react-native";
+import { Archive, CalendarCheck, ChevronLeft, ChevronRight, Eye, FileSpreadsheet, Map, Plus } from "lucide-react-native";
 
 import { api } from "../../../../src/lib/api";
 import { TourRun, TourTemplate, WEEKDAY_LABELS } from "../../../../src/lib/tours";
@@ -11,6 +11,7 @@ import { useAuth } from "../../../../src/hooks/useAuth";
 import { useTheme } from "../../../../src/ui/components/ThemeToggle";
 import { Card, CardContent } from "../../../../src/ui/components/Card";
 import { Button } from "../../../../src/ui/components/Button";
+import { MultiSelect } from "../../../../src/ui/components/MultiSelect";
 import { TourBillingView } from "../../../../src/ui/tours/TourBillingView";
 import { toast } from "../../../../src/ui/toast";
 
@@ -41,9 +42,9 @@ export default function ToursAdminScreen() {
     enabled: isAdmin,
   });
   const draftsQuery = useQuery<TourRun[]>({
-    queryKey: ["tour-drafts", 8],
-    queryFn: async () => (await api.get("/api/tours/drafts", { params: { weeks: 8 } })).data,
-    enabled: isAdmin && view === "preparation",
+    queryKey: ["tour-drafts", 2],
+    queryFn: async () => (await api.get("/api/tours/drafts", { params: { weeks: 2 } })).data,
+    enabled: isAdmin,
   });
   const employeesQuery = useQuery<any[]>({
     queryKey: ["employees"],
@@ -93,7 +94,7 @@ export default function ToursAdminScreen() {
         }} />}
       >
         <Text style={{ color: muted, marginBottom: 14 }}>Modèles récurrents, préparation hebdomadaire et facturation.</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 22 }}>
+        <View style={{ flexDirection: "row", gap: 6, marginBottom: 22 }}>
           {TABS.map((tab) => {
             const active = view === tab.key;
             return (
@@ -101,13 +102,13 @@ export default function ToursAdminScreen() {
                 key={tab.key}
                 onPress={() => setView(tab.key)}
                 style={{
-                  flexDirection: "row", alignItems: "center", gap: 7,
-                  paddingHorizontal: 16, paddingVertical: 11, borderRadius: 999,
+                  flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4,
+                  paddingHorizontal: 4, paddingVertical: 11, borderRadius: 999, overflow: "hidden",
                   backgroundColor: active ? "#3B82F6" : soft,
                 }}
               >
-                <tab.icon size={18} color={active ? "#FFFFFF" : muted} />
-                <Text style={{ color: active ? "#FFFFFF" : (isDark ? "#F8FAFC" : "#0F172A"), fontWeight: "700" }}>{tab.label}</Text>
+                <tab.icon size={15} color={active ? "#FFFFFF" : muted} />
+                <Text numberOfLines={1} style={{ flexShrink: 1, color: active ? "#FFFFFF" : (isDark ? "#F8FAFC" : "#0F172A"), fontWeight: "700", fontSize: 12 }}>{tab.label}</Text>
               </Pressable>
             );
           })}
@@ -119,7 +120,7 @@ export default function ToursAdminScreen() {
               <Plus size={18} color="#FFFFFF" />
               <Text style={{ color: "#FFFFFF", fontWeight: "700", marginLeft: 6 }}>Nouveau modèle</Text>
             </Button>
-            {templatesQuery.isLoading ? <ActivityIndicator color="#3B82F6" /> : (templatesQuery.data ?? []).map((template) => {
+            {templatesQuery.isLoading ? <ActivityIndicator color="#3B82F6" /> : [...(templatesQuery.data ?? [])].sort((a, b) => a.zone === b.zone ? 0 : a.zone === "hainaut" ? -1 : 1).map((template) => {
               const stops = template.sections.reduce((sum, section) => sum + section.stops.length, 0);
               const services = template.sections.reduce((sum, section) => sum + section.stops.reduce((inner, stop) => inner + stop.services.length, 0), 0);
               return (
@@ -151,44 +152,44 @@ export default function ToursAdminScreen() {
         )}
 
         {view === "preparation" && (
-          <View style={{ gap: 12 }}>
-            <Text style={{ color: muted }}>Les huit prochaines semaines sont générées automatiquement.</Text>
+          <View style={{ gap: 8 }}>
             {draftsQuery.isLoading ? <ActivityIndicator color="#3B82F6" /> : (draftsQuery.data ?? []).length === 0 ? (
               <Card><CardContent style={{ padding: 20 }}><Text style={{ color: muted }}>Aucun brouillon : activez d'abord un modèle dans "Modèles".</Text></CardContent></Card>
-            ) : (draftsQuery.data ?? []).map((run) => {
+            ) : [...(draftsQuery.data ?? [])].sort((a, b) => {
+              const zoneA = templatesQuery.data?.find((item) => item.id === a.template_id)?.zone;
+              const zoneB = templatesQuery.data?.find((item) => item.id === b.template_id)?.zone;
+              return zoneA === zoneB ? 0 : zoneA === "hainaut" ? -1 : 1;
+            }).map((run) => {
               const selected = run.stops.filter((stop) => stop.selected).length;
               const templateZone = templatesQuery.data?.find((item) => item.id === run.template_id)?.zone;
               const eligible = templateZone ? ordinaryEmployees.filter((employee) => employee.zone === templateZone) : [];
               const selectedEmployees = assignees[run.id] ?? [];
+              const employeeItems = eligible.map((employee) => ({ id: employee.id, label: employee.full_name ?? employee.email, color: employee.color }));
               return (
                 <Card key={run.id}>
-                  <CardContent style={{ padding: 16, gap: 12 }}>
-                    <View style={{ flexDirection: wide ? "row" : "column", gap: 10, alignItems: wide ? "center" : "stretch" }}>
+                  <CardContent style={{ padding: 12, gap: 8 }}>
+                    <View style={{ flexDirection: wide ? "row" : "column", gap: 8, alignItems: wide ? "center" : "stretch" }}>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#F8FAFC" : "#0F172A" }}>{run.intervention.title}</Text>
-                        <Text style={{ color: muted, marginTop: 3 }}>{new Date(`${run.scheduled_date}T12:00:00`).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })} · {selected} commerce(s) coché(s)</Text>
+                        <Text style={{ fontSize: 15, fontWeight: "700", color: isDark ? "#F8FAFC" : "#0F172A" }}>{run.intervention.title}</Text>
+                        <Text style={{ color: muted, fontSize: 12, marginTop: 1 }}>{new Date(`${run.scheduled_date}T12:00:00`).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })} · {selected} coché(s)</Text>
                       </View>
-                      <Pressable onPress={() => router.push(`/(app)/parametres/tournees/prepare/${run.id}` as any)} style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: soft }}>
-                        <Text style={{ color: isDark ? "#F8FAFC" : "#0F172A", fontWeight: "700" }}>Vérifier le contenu</Text>
+                      <Pressable onPress={() => router.push(`/(app)/parametres/tournees/prepare/${run.id}` as any)} style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: "#3B82F6" }}>
+                        <Eye size={14} color="#FFFFFF" />
+                        <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 13 }}>Vérifier</Text>
                       </Pressable>
                     </View>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
-                      {eligible.map((employee) => {
-                        const checked = selectedEmployees.includes(employee.id);
-                        return (
-                          <Pressable
-                            key={employee.id}
-                            onPress={() => setAssignees((old) => ({ ...old, [run.id]: checked ? selectedEmployees.filter((id) => id !== employee.id) : [...selectedEmployees, employee.id] }))}
-                            style={{ paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: checked ? (employee.color ?? "#3B82F6") : (isDark ? "#334155" : "#E2E8F0"), backgroundColor: checked ? `${employee.color ?? "#3B82F6"}22` : "transparent" }}
-                          >
-                            <Text style={{ color: isDark ? "#F8FAFC" : "#0F172A", fontWeight: checked ? "700" : "500" }}>{employee.full_name ?? employee.email}</Text>
-                          </Pressable>
-                        );
-                      })}
+                    <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                      <View style={{ flex: 1 }}>
+                        <MultiSelect
+                          items={employeeItems}
+                          selectedIds={selectedEmployees}
+                          onChange={(ids) => setAssignees((old) => ({ ...old, [run.id]: ids }))}
+                        />
+                      </View>
+                      <Pressable disabled={!selected || !selectedEmployees.length || publishMutation.isPending} onPress={() => publishMutation.mutate({ runId: run.id, employeeIds: selectedEmployees })} style={{ opacity: !selected || !selectedEmployees.length ? 0.4 : 1, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 10, backgroundColor: "#16A34A" }}>
+                        <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 13 }}>Publier</Text>
+                      </Pressable>
                     </View>
-                    <Pressable disabled={!selected || !selectedEmployees.length || publishMutation.isPending} onPress={() => publishMutation.mutate({ runId: run.id, employeeIds: selectedEmployees })} style={{ alignSelf: "flex-start", opacity: !selected || !selectedEmployees.length ? 0.4 : 1, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12, backgroundColor: "#16A34A" }}>
-                      <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Publier pour {selectedEmployees.length || 0} employé(s)</Text>
-                    </Pressable>
                   </CardContent>
                 </Card>
               );

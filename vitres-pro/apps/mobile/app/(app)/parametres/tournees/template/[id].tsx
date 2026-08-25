@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Switch, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -7,11 +7,20 @@ import { ArrowDown, ArrowUp, ChevronLeft, Plus, Save, Trash2 } from "lucide-reac
 
 import { useAuth } from "../../../../../src/hooks/useAuth";
 import { api } from "../../../../../src/lib/api";
-import { TourSection, TourStop, TourTemplate, WEEKDAY_LABELS, emptyTourTemplate } from "../../../../../src/lib/tours";
+import { TourSection, TourStop, TourTemplate, emptyTourTemplate } from "../../../../../src/lib/tours";
 import { useTheme } from "../../../../../src/ui/components/ThemeToggle";
 import { Card, CardContent } from "../../../../../src/ui/components/Card";
 import { Button } from "../../../../../src/ui/components/Button";
+import { Input } from "../../../../../src/ui/components/Input";
+import { DateTimePicker } from "../../../../../src/ui/components/DateTimePicker";
+import { SlidingPillSelector } from "../../../../../src/ui/components/SlidingPillSelector";
 import { toast } from "../../../../../src/ui/toast";
+
+const DAY_LETTERS = ["L", "M", "M", "J", "V"];
+// L'heure seule n'a pas de date propre : on l'accroche a une date bidon pour
+// reutiliser DateTimePicker tel quel (seule la partie heure est lue/ecrite).
+const toTimeValue = (time: string) => `2000-01-01T${time.slice(0, 5)}`;
+const fromTimeValue = (value: string) => `${value.split("T")[1] ?? "08:00"}:00`;
 
 type Colors = { text: string; muted: string; border: string; soft: string; input: string; header: string };
 type Cols = { name: number; face: number; price: number; minutes: number; payment: number; frequency: number; note: number; actions: number };
@@ -109,13 +118,6 @@ function HeaderCell({ width, label, colors }: { width: number; label: string; co
   return <Cell width={width}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>{label}</Text></Cell>;
 }
 
-function Choice({ selected, label, onPress, colors }: { selected: boolean; label: string; onPress: () => void; colors: Colors }) {
-  return (
-    <Pressable onPress={onPress} style={{ paddingHorizontal: 11, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: selected ? "#3B82F6" : colors.border, backgroundColor: selected ? "rgba(59,130,246,0.15)" : "transparent" }}>
-      <Text style={{ color: selected ? "#3B82F6" : colors.text, fontWeight: selected ? "700" : "500", fontSize: 12 }}>{label}</Text>
-    </Pressable>
-  );
-}
 
 export default function TourTemplateEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -216,34 +218,67 @@ export default function TourTemplateEditor() {
         <Card style={{ marginBottom: 18, maxWidth: 1300, width: "100%", alignSelf: "center" }}>
           <CardContent style={{ padding: 18, gap: 14 }}>
             <Text style={{ color: colors.text, fontSize: 17, fontWeight: "700" }}>Paramètres généraux</Text>
+            <Input label="Nom de la tournée" value={draft.name} onChangeText={(value) => mutate((next) => { next.name = value; })} />
             <View style={{ flexDirection: wide ? "row" : "column", gap: 10 }}>
-              <View style={{ flex: 1, gap: 5 }}>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>Nom de la tournée</Text>
-                <TextInput value={draft.name} onChangeText={(value) => mutate((next) => { next.name = value; })} style={{ color: colors.text, backgroundColor: colors.input, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 }} />
+              <View style={{ flex: 1 }}>
+                <DateTimePicker
+                  label="Début"
+                  timeOnly
+                  value={toTimeValue(draft.default_start_time)}
+                  onChange={(value) => mutate((next) => { next.default_start_time = fromTimeValue(value); })}
+                />
               </View>
-              <View style={{ gap: 5 }}>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>Début</Text>
-                <TextInput value={draft.default_start_time.slice(0, 5)} onChangeText={(value) => mutate((next) => { next.default_start_time = `${value}:00`; })} style={{ color: colors.text, backgroundColor: colors.input, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, minWidth: 90 }} />
-              </View>
-              <View style={{ gap: 5 }}>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>Fin</Text>
-                <TextInput value={draft.default_end_time.slice(0, 5)} onChangeText={(value) => mutate((next) => { next.default_end_time = `${value}:00`; })} style={{ color: colors.text, backgroundColor: colors.input, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, minWidth: 90 }} />
+              <View style={{ flex: 1 }}>
+                <DateTimePicker
+                  label="Fin"
+                  timeOnly
+                  value={toTimeValue(draft.default_end_time)}
+                  onChange={(value) => mutate((next) => { next.default_end_time = fromTimeValue(value); })}
+                />
               </View>
             </View>
             <View style={{ gap: 7 }}>
               <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>Zone</Text>
-              <View style={{ flexDirection: "row", gap: 7 }}>
-                <Choice selected={draft.zone === "hainaut"} label="Hainaut" onPress={() => mutate((next) => { next.zone = "hainaut"; })} colors={colors} />
-                <Choice selected={draft.zone === "ardennes"} label="Ardennes" onPress={() => mutate((next) => { next.zone = "ardennes"; })} colors={colors} />
-              </View>
+              <SlidingPillSelector
+                options={[{ id: "hainaut", label: "Hainaut" }, { id: "ardennes", label: "Ardennes" }]}
+                selected={draft.zone}
+                onSelect={(id) => mutate((next) => { next.zone = id as "hainaut" | "ardennes"; })}
+                pillColor="#3B82F6"
+                bgColor={colors.soft}
+                activeTextColor="#FFFFFF"
+                inactiveTextColor={colors.muted}
+                itemPy={11}
+                fontSize={14}
+              />
             </View>
             <View style={{ gap: 7 }}>
               <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>Jour fixe</Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
-                {Object.entries(WEEKDAY_LABELS).slice(0, 5).map(([day, label]) => <Choice key={day} selected={draft.weekday === Number(day)} label={label} onPress={() => mutate((next) => { next.weekday = Number(day); })} colors={colors} />)}
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                {DAY_LETTERS.map((letter, index) => {
+                  const day = index + 1;
+                  const active = draft.weekday === day;
+                  return (
+                    <Pressable
+                      key={day}
+                      onPress={() => mutate((next) => { next.weekday = day; })}
+                      style={{ width: 44, height: 44, borderRadius: 999, borderWidth: 1.5, borderColor: active ? "#3B82F6" : colors.border, backgroundColor: active ? "#3B82F6" : "transparent", alignItems: "center", justifyContent: "center" }}
+                    >
+                      <Text style={{ fontWeight: "700", fontSize: 13, color: active ? "#FFFFFF" : colors.muted }}>{letter}</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
-            <Choice selected={draft.active} label={draft.active ? "Modèle actif" : "Modèle inactif"} onPress={() => mutate((next) => { next.active = !next.active; })} colors={colors} />
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}>
+              <Text style={{ color: colors.text, fontWeight: "600" }}>{draft.active ? "Modèle actif" : "Modèle inactif"}</Text>
+              <Switch
+                value={draft.active}
+                onValueChange={(value) => mutate((next) => { next.active = value; })}
+                trackColor={{ false: isDark ? "#475569" : "#94A3B8", true: "#22C55E" }}
+                ios_backgroundColor={isDark ? "#475569" : "#94A3B8"}
+                thumbColor="#FFFFFF"
+              />
+            </View>
           </CardContent>
         </Card>
 

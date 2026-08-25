@@ -119,7 +119,7 @@ class InitialSeedTests(unittest.TestCase):
         self.assertEqual(self.seed["stats"]["hainaut"], 11)
         self.assertEqual(self.seed["stats"]["ardennes"], 10)
         self.assertEqual(self.seed["stats"]["stops"], 517)
-        self.assertEqual(self.seed["stats"]["services"], 875)
+        self.assertEqual(self.seed["stats"]["services"], 866)
         # Sans parsing de fréquence/paiement, une ligne de continuation qui ne
         # porte plus qu'un code paiement isolé (ex: "F") et rien d'autre n'a
         # plus rien à rattacher au commerce précédent. Cas negligeable (1/517).

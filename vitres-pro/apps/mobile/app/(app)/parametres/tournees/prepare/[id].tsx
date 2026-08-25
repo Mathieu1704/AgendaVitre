@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import React, { useMemo } from "react";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Clock, Save } from "lucide-react-native";
+import { ChevronLeft, Clock } from "lucide-react-native";
 
 import { useAuth } from "../../../../../src/hooks/useAuth";
 import { api } from "../../../../../src/lib/api";
@@ -11,7 +11,13 @@ import { formatEuro, TourRun, TourRunStop } from "../../../../../src/lib/tours";
 import { useTheme } from "../../../../../src/ui/components/ThemeToggle";
 import { Card, CardContent } from "../../../../../src/ui/components/Card";
 import { Button } from "../../../../../src/ui/components/Button";
+import { DateTimePicker } from "../../../../../src/ui/components/DateTimePicker";
 import { toast } from "../../../../../src/ui/toast";
+
+// L'heure seule n'a pas de date propre : on l'accroche a une date bidon pour
+// reutiliser DateTimePicker tel quel (seule la partie heure est lue/ecrite).
+const toTimeValue = (time: string) => `2000-01-01T${time.slice(0, 5)}`;
+const fromTimeValue = (value: string) => value.split("T")[1] ?? "08:00";
 
 type Colors = { text: string; muted: string; border: string; header: string };
 type Cols = { name: number; face: number; minutes: number; payment: number; frequency: number };
@@ -63,8 +69,6 @@ export default function TourPreparationScreen() {
   const insets = useSafeAreaInsets();
   const { isAdmin, loading } = useAuth();
   const { isDark } = useTheme();
-  const [startTime, setStartTime] = useState("08:00");
-  const [endTime, setEndTime] = useState("16:00");
   const colors: Colors = {
     text: isDark ? "#F8FAFC" : "#0F172A",
     muted: isDark ? "#94A3B8" : "#64748B",
@@ -77,12 +81,6 @@ export default function TourPreparationScreen() {
     queryFn: async () => (await api.get(`/api/tours/runs/${id}`)).data,
     enabled: isAdmin && Boolean(id),
   });
-  useEffect(() => {
-    if (runQuery.data) {
-      setStartTime(brusselsTime(runQuery.data.intervention.start_time));
-      setEndTime(brusselsTime(runQuery.data.intervention.end_time));
-    }
-  }, [runQuery.data?.intervention.start_time, runQuery.data?.intervention.end_time]);
 
   const selectionMutation = useMutation({
     mutationFn: async ({ stopId, selected, serviceId }: { stopId: string; selected: boolean; serviceId?: string | null }) => api.patch(`/api/tours/runs/${id}/stops/${stopId}/selection`, { selected, service_id: serviceId }),
@@ -97,17 +95,16 @@ export default function TourPreparationScreen() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tour-drafts"] }),
   });
   const scheduleMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ start, end }: { start: string; end: string }) => {
       const run = runQuery.data!;
       return api.patch(`/api/tours/runs/${id}/schedule`, {
-        start_time: replaceBrusselsTime(run.intervention.start_time, startTime),
-        end_time: replaceBrusselsTime(run.intervention.end_time, endTime),
+        start_time: replaceBrusselsTime(run.intervention.start_time, start),
+        end_time: replaceBrusselsTime(run.intervention.end_time, end),
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tour-run", id] });
       queryClient.invalidateQueries({ queryKey: ["tour-drafts"] });
-      toast.success("Horaires enregistrés", "");
     },
     onError: (error: any) => toast.error("Horaires invalides", error?.response?.data?.detail ?? "Vérifiez les heures."),
   });
@@ -148,25 +145,33 @@ export default function TourPreparationScreen() {
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 16, paddingBottom: 60 }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, maxWidth: 1200, width: "100%", alignSelf: "center" }}>
-          <Text style={{ color: colors.muted }}>{new Date(`${run.scheduled_date}T12:00:00`).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</Text>
+          <Text style={{ color: colors.text, fontSize: 18, fontWeight: "700", textTransform: "capitalize" }}>{new Date(`${run.scheduled_date}T12:00:00`).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</Text>
           <View style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: isDark ? "rgba(249,115,22,0.15)" : "#FFF7ED" }}><Text style={{ color: "#F97316", fontWeight: "700" }}>BROUILLON</Text></View>
         </View>
 
         <Card style={{ marginBottom: 16, maxWidth: 1200, width: "100%", alignSelf: "center" }}>
           <CardContent style={{ padding: 16, gap: 10 }}>
             <Text style={{ color: colors.text, fontWeight: "700" }}>Touchez la variante à faire cette semaine par commerce</Text>
-            <Text style={{ color: colors.muted, fontSize: 12 }}>Rien n'est présélectionné — comme le point sur le papier. Toucher à nouveau désélectionne.</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}><Clock size={19} color="#3B82F6" /><Text style={{ color: colors.text, fontWeight: "700" }}>Horaires de l'occurrence</Text></View>
-            <View style={{ flexDirection: "row", gap: 9, alignItems: "center", flexWrap: "wrap" }}>
-              {[{ label: "Début", value: startTime, setter: setStartTime }, { label: "Fin", value: endTime, setter: setEndTime }].map((field) => (
-                <View key={field.label} style={{ gap: 4 }}>
-                  <Text style={{ color: colors.muted, fontSize: 11 }}>{field.label}</Text>
-                  <TextInput value={field.value} onChangeText={field.setter} style={{ color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, minWidth: 90 }} />
-                </View>
-              ))}
-              <Pressable onPress={() => scheduleMutation.mutate()} style={{ marginTop: 15, padding: 10, borderRadius: 12, backgroundColor: "#3B82F6" }}><Save size={18} color="#FFFFFF" /></Pressable>
-              <Text style={{ marginLeft: "auto", color: colors.text, fontSize: 17, fontWeight: "700" }}>{selectedCount} commerce(s) · {formatEuro(selectedTotal)} HT</Text>
+            <View style={{ flexDirection: "row", gap: 9, alignItems: "flex-start", flexWrap: "wrap" }}>
+              <View style={{ flex: 1, minWidth: 130 }}>
+                <DateTimePicker
+                  label="Début"
+                  timeOnly
+                  value={toTimeValue(brusselsTime(run.intervention.start_time))}
+                  onChange={(value) => scheduleMutation.mutate({ start: fromTimeValue(value), end: brusselsTime(run.intervention.end_time) })}
+                />
+              </View>
+              <View style={{ flex: 1, minWidth: 130 }}>
+                <DateTimePicker
+                  label="Fin"
+                  timeOnly
+                  value={toTimeValue(brusselsTime(run.intervention.end_time))}
+                  onChange={(value) => scheduleMutation.mutate({ start: brusselsTime(run.intervention.start_time), end: fromTimeValue(value) })}
+                />
+              </View>
             </View>
+            <Text style={{ color: colors.text, fontSize: 17, fontWeight: "700" }}>{selectedCount} commerce(s) · {formatEuro(selectedTotal)} HT</Text>
           </CardContent>
         </Card>
 

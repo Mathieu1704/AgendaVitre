@@ -124,17 +124,78 @@ def section_name(raw: str) -> str:
     return value or "Sans section"
 
 
-def row_columns(zone: str, row: list[str]) -> dict:
-    target = 9 if zone == "hainaut" else 12
-    values = (row + [""] * target)[:target]
+def _ascii_upper(value: str) -> str:
+    import unicodedata
+    return unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").upper()
+
+
+def locate_hainaut_header(header_row: list[str]) -> dict | None:
+    """Retrouve la position reelle de chaque colonne a partir des libelles
+    d'en-tete plutot que de supposer un nombre fixe de colonnes : chaque
+    Word Hainaut fusionne les sous-colonnes "NOMBRE DE FACE"/"PRIX
+    PRESTATION" differemment (2, 3 sous-colonnes, espaceurs vides...).
+    Retourne None si l'en-tete n'est pas reconnaissable (secours legacy).
+    """
+    labels = [_ascii_upper(clean(cell)) for cell in header_row]
+
+    def find(*keywords: str) -> int | None:
+        for index, label in enumerate(labels):
+            if any(keyword in label for keyword in keywords):
+                return index
+        return None
+
+    client_idx = find("CLIENT")
+    face_idx = find("NOMBRE DE FACE")
+    price_idx = find("PRIX")
+    temps_idx = find("TEMPS")
+    paiement_idx = find("PAIEMENT")
+    frequence_idx = find("FREQUENCE")
+    positions = [client_idx, face_idx, price_idx, temps_idx, paiement_idx, frequence_idx]
+    if any(index is None for index in positions) or positions != sorted(positions):
+        return None
+    return {
+        "client": client_idx,
+        "face_slots": list(range(face_idx, price_idx)),
+        "price_slots": list(range(price_idx, temps_idx)),
+        "temps_slots": list(range(temps_idx, paiement_idx)),
+        "paiement_slots": list(range(paiement_idx, frequence_idx)),
+        "frequence": frequence_idx,
+    }
+
+
+def row_columns(zone: str, row: list[str], header_map: dict | None = None) -> dict:
     if zone == "hainaut":
-        first_cell = clean(values[0])
+        first_cell = clean(row[0] if row else "")
         is_time_window = bool(re.search(r"\b\d{1,2}\s*(?:h|:)\s*\d{0,2}\b|\b(?:avant|après|apres|entre)\b", first_cell, re.IGNORECASE))
+        marker, appointment = ("", first_cell) if is_time_window else (first_cell, "")
+        cell = lambda index: row[index] if index < len(row) else ""
+        if header_map:
+            n = max(len(header_map["face_slots"]), len(header_map["price_slots"]))
+            raw_faces = [cell(header_map["face_slots"][i]) if i < len(header_map["face_slots"]) else "" for i in range(n)]
+            raw_prices = [cell(header_map["price_slots"][i]) if i < len(header_map["price_slots"]) else "" for i in range(n)]
+            # Ne garder que les couples reellement remplis (les sous-colonnes
+            # fusionnees laissent des slots vides selon le document), puis
+            # se limiter aux deux premiers : le modele ne gere que deux
+            # variantes alternees par commerce.
+            pairs = [(f, p) for f, p in zip(raw_faces, raw_prices) if clean(f) or clean(p)][:2]
+            faces = [pair[0] for pair in pairs] or [""]
+            prices = [pair[1] for pair in pairs] or [""]
+            temps = next((cell(i) for i in header_map["temps_slots"] if clean(cell(i))), "")
+            paiement = next((cell(i) for i in header_map["paiement_slots"] if clean(cell(i))), "")
+            return {
+                "marker": marker, "appointment": appointment, "client": cell(header_map["client"]),
+                "faces": faces[:2] + [""] * max(0, 2 - len(faces)), "prices": prices[:2] + [""] * max(0, 2 - len(prices)),
+                "duration": temps, "payment": paiement, "frequency": cell(header_map["frequence"]),
+            }
+        # Secours : ancien decoupage fixe si l'en-tete n'a pas ete reconnu.
+        values = (row + [""] * 9)[:9]
         return {
-            "marker": "" if is_time_window else values[0], "appointment": values[0] if is_time_window else "", "client": values[1],
+            "marker": marker, "appointment": appointment, "client": values[1],
             "faces": [values[2], values[3]], "prices": [values[4], values[5]],
             "duration": values[6], "payment": values[7], "frequency": values[8],
         }
+    target = 12
+    values = (row + [""] * target)[:target]
     # Un des Word Ardennes change de grille au milieu du tableau : sa petite
     # premiere colonne est fusionnee sur deux cases, ce qui decale client,
     # prestations et paiement d'une colonne. Dans ces lignes la colonne client
@@ -192,8 +253,10 @@ def parse_document(path: Path, zone: str, weekday: int, name: str) -> dict:
     current_section: dict | None = None
     previous_stop: dict | None = None
     ignored_rows = []
-    for row_index, raw_row in enumerate(document_rows(path)):
-        columns = row_columns(zone, raw_row)
+    all_rows = document_rows(path)
+    header_map = locate_hainaut_header(all_rows[0]) if zone == "hainaut" and all_rows else None
+    for row_index, raw_row in enumerate(all_rows):
+        columns = row_columns(zone, raw_row, header_map)
         joined = " ".join(raw_row).upper()
         if not joined.strip() or "NOMBRE" in joined and "PRIX" in joined:
             continue

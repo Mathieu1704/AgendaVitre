@@ -1,15 +1,16 @@
-import React, { useState } from "react";
-import { Platform, Pressable, Text, TextInput, View } from "react-native";
+import React, { useMemo, useState } from "react";
+import { Platform, Pressable, Text, View } from "react-native";
 import { useMutation } from "@tanstack/react-query";
-import { FileSpreadsheet } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, FileSpreadsheet } from "lucide-react-native";
 
 import { API_URL, api } from "../../lib/api";
 import { supabase } from "../../lib/supabase";
+import { addMonths } from "../../lib/date";
+import { SlidingPillSelector } from "../components/SlidingPillSelector";
 import { toast } from "../toast";
 
-function currentMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+function monthStartString(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
 async function downloadExport(zone: "hainaut" | "ardennes", periodStart: string) {
@@ -44,19 +45,19 @@ async function downloadExport(zone: "hainaut" | "ardennes", periodStart: string)
 
 export function TourBillingView({ isDark }: { isDark: boolean }) {
   const [zone, setZone] = useState<"hainaut" | "ardennes">("hainaut");
-  const [monthText, setMonthText] = useState(currentMonth().slice(0, 7));
+  const [cursorDate, setCursorDate] = useState<Date>(new Date());
   const colors = {
     card: isDark ? "#0F172A" : "#FFFFFF",
     text: isDark ? "#F8FAFC" : "#0F172A",
     muted: isDark ? "#94A3B8" : "#64748B",
     border: isDark ? "#334155" : "#E2E8F0",
-    input: isDark ? "#1E293B" : "#F8FAFC",
+    soft: isDark ? "#1E293B" : "#F1F5F9",
   };
+  const monthTitle = useMemo(() => cursorDate.toLocaleDateString("fr-BE", { month: "long", year: "numeric" }), [cursorDate]);
 
   const exportMutation = useMutation({
     mutationFn: async () => {
-      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(monthText)) throw new Error("Mois invalide (format AAAA-MM).");
-      await downloadExport(zone, `${monthText}-01`);
+      await downloadExport(zone, monthStartString(cursorDate));
     },
     onSuccess: () => toast.success("Export téléchargé", "Recopiez les montants dans votre classeur habituel."),
     onError: (error: any) => toast.error("Export impossible", error?.response?.data?.detail ?? error?.message),
@@ -64,19 +65,26 @@ export function TourBillingView({ isDark }: { isDark: boolean }) {
 
   return (
     <View style={{ gap: 16 }}>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        {(["hainaut", "ardennes"] as const).map((value) => (
-          <Pressable key={value} onPress={() => setZone(value)} style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999, backgroundColor: zone === value ? "#3B82F6" : colors.input }}>
-            <Text style={{ color: zone === value ? "#FFFFFF" : colors.text, fontWeight: "700", textTransform: "capitalize" }}>{value}</Text>
-          </Pressable>
-        ))}
-        <TextInput
-          value={monthText}
-          onChangeText={(value) => /^\d{0,4}-?\d{0,2}$/.test(value) && setMonthText(value)}
-          placeholder="AAAA-MM"
-          placeholderTextColor={colors.muted}
-          style={{ minWidth: 130, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, color: colors.text, backgroundColor: colors.input }}
-        />
+      <SlidingPillSelector
+        options={[{ id: "hainaut", label: "Hainaut" }, { id: "ardennes", label: "Ardennes" }]}
+        selected={zone}
+        onSelect={(id) => setZone(id as "hainaut" | "ardennes")}
+        pillColor="#3B82F6"
+        bgColor={colors.soft}
+        activeTextColor="#FFFFFF"
+        inactiveTextColor={colors.muted}
+        itemPy={11}
+        fontSize={14}
+      />
+
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 20, padding: 6 }}>
+        <Pressable onPress={() => setCursorDate((d) => addMonths(d, -1))} style={{ padding: 10, borderRadius: 999 }}>
+          <ChevronLeft size={22} color={colors.text} />
+        </Pressable>
+        <Text style={{ color: colors.text, fontSize: 16, fontWeight: "700", textTransform: "capitalize" }}>{monthTitle}</Text>
+        <Pressable onPress={() => setCursorDate((d) => addMonths(d, 1))} style={{ padding: 10, borderRadius: 999 }}>
+          <ChevronRight size={22} color={colors.text} />
+        </Pressable>
       </View>
 
       <View style={{ padding: 16, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, gap: 8 }}>
