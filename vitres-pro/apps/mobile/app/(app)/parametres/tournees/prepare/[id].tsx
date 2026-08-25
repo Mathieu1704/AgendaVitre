@@ -182,11 +182,19 @@ export default function TourPreparationScreen() {
             <Text style={{ color: colors.text, fontSize: 18, fontWeight: "700", marginBottom: 8, maxWidth: 1200, width: "100%", alignSelf: "center" }}>{section}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator style={{ maxWidth: "100%" }}>
               <View style={{ width: tableWidth }}>
+                <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingTop: 6 }}>
+                  <View style={{ width: cols.name }} />
+                  <View style={{ width: cols.face * 2, paddingHorizontal: 6, borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 3 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 11 }}>NOMBRE DE FACE</Text></View>
+                  <View style={{ width: cols.price * 2, paddingHorizontal: 6, borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 3 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 11 }}>PRIX PRESTATION</Text></View>
+                  <View style={{ width: cols.minutes }} />
+                  <View style={{ width: cols.payment }} />
+                  <View style={{ width: cols.frequency }} />
+                </View>
                 <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingVertical: 8, borderRadius: 10, marginBottom: 4 }}>
                   <View style={{ width: cols.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Commerce</Text></View>
                   <View style={{ width: cols.face, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Face 1</Text></View>
-                  <View style={{ width: cols.price, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Prix 1</Text></View>
                   <View style={{ width: cols.face, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Face 2</Text></View>
+                  <View style={{ width: cols.price, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Prix 1</Text></View>
                   <View style={{ width: cols.price, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Prix 2</Text></View>
                   <View style={{ width: cols.minutes, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Temps</Text></View>
                   <View style={{ width: cols.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Paiement</Text></View>
@@ -198,8 +206,10 @@ export default function TourPreparationScreen() {
                   return (
                     <View key={stop.id} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 5, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: stop.selected ? (isDark ? "rgba(59,130,246,0.08)" : "rgba(59,130,246,0.05)") : "transparent" }}>
                       <View style={{ width: cols.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{stop.name}</Text></View>
-                      <VariantCell service={face1} faceWidth={cols.face} priceWidth={cols.price} selected={stop.selected && stop.selected_service_id === face1?.id} onPress={() => face1 && toggleFace(stop, face1.id)} colors={colors} />
-                      <VariantCell service={face2} faceWidth={cols.face} priceWidth={cols.price} selected={stop.selected && stop.selected_service_id === face2?.id} onPress={() => face2 && toggleFace(stop, face2.id)} colors={colors} />
+                      <FaceCell service={face1} width={cols.face} selected={stop.selected && stop.selected_service_id === face1?.id} onPress={() => face1 && toggleFace(stop, face1.id)} colors={colors} />
+                      <FaceCell service={face2} width={cols.face} selected={stop.selected && stop.selected_service_id === face2?.id} onPress={() => face2 && toggleFace(stop, face2.id)} colors={colors} />
+                      <PriceCell service={face1} width={cols.price} selected={stop.selected && stop.selected_service_id === face1?.id} onPress={() => face1 && toggleFace(stop, face1.id)} colors={colors} />
+                      <PriceCell service={face2} width={cols.price} selected={stop.selected && stop.selected_service_id === face2?.id} onPress={() => face2 && toggleFace(stop, face2.id)} colors={colors} />
                       <View style={{ width: cols.minutes, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.estimated_minutes ?? ""}</Text></View>
                       <View style={{ width: cols.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.payment_text ?? ""}</Text></View>
                       <View style={{ width: cols.frequency, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.frequency_text ?? ""}</Text></View>
@@ -215,16 +225,20 @@ export default function TourPreparationScreen() {
   );
 }
 
-function VariantCell({ service, selected, onPress, colors, faceWidth, priceWidth }: { service: { id: string; label: string; price_ht: number } | undefined; selected: boolean; onPress: () => void; colors: Colors; faceWidth: number; priceWidth: number }) {
-  if (!service) return <><View style={{ width: faceWidth }} /><View style={{ width: priceWidth }} /></>;
+function FaceCell({ service, selected, onPress, colors, width }: { service: { id: string; label: string; price_ht: number } | undefined; selected: boolean; onPress: () => void; colors: Colors; width: number }) {
+  if (!service) return <View style={{ width }} />;
   return (
-    <Pressable onPress={onPress} style={{ flexDirection: "row", borderRadius: 9, borderWidth: 1, borderColor: selected ? "#3B82F6" : colors.border, backgroundColor: selected ? "rgba(59,130,246,0.15)" : "transparent", marginRight: 2 }}>
-      <View style={{ width: faceWidth - 2, paddingHorizontal: 8, paddingVertical: 7 }}>
-        <Text style={{ color: selected ? "#3B82F6" : colors.text, fontWeight: selected ? "700" : "500", fontSize: 12 }} numberOfLines={1}>{service.label || "—"}</Text>
-      </View>
-      <View style={{ width: priceWidth, paddingHorizontal: 8, paddingVertical: 7, borderLeftWidth: 1, borderLeftColor: selected ? "#3B82F6" : colors.border }}>
-        <Text style={{ color: selected ? "#3B82F6" : colors.muted, fontSize: 12, fontWeight: "600" }} numberOfLines={1}>{formatEuro(service.price_ht)}</Text>
-      </View>
+    <Pressable onPress={onPress} style={{ width: width - 2, marginRight: 2, borderRadius: 9, borderWidth: 1, borderColor: selected ? "#3B82F6" : colors.border, backgroundColor: selected ? "rgba(59,130,246,0.15)" : "transparent", paddingHorizontal: 8, paddingVertical: 7 }}>
+      <Text style={{ color: selected ? "#3B82F6" : colors.text, fontWeight: selected ? "700" : "500", fontSize: 12 }} numberOfLines={1}>{service.label || "—"}</Text>
+    </Pressable>
+  );
+}
+
+function PriceCell({ service, selected, onPress, colors, width }: { service: { id: string; label: string; price_ht: number } | undefined; selected: boolean; onPress: () => void; colors: Colors; width: number }) {
+  if (!service) return <View style={{ width }} />;
+  return (
+    <Pressable onPress={onPress} style={{ width: width - 2, marginRight: 2, borderRadius: 9, borderWidth: 1, borderColor: selected ? "#3B82F6" : colors.border, backgroundColor: selected ? "rgba(59,130,246,0.15)" : "transparent", paddingHorizontal: 8, paddingVertical: 7 }}>
+      <Text style={{ color: selected ? "#3B82F6" : colors.muted, fontSize: 12, fontWeight: "600" }} numberOfLines={1}>{formatEuro(service.price_ht)}</Text>
     </Pressable>
   );
 }

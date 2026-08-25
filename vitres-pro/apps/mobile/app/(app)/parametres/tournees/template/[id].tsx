@@ -299,11 +299,21 @@ export default function TourTemplateEditor() {
 
             <ScrollView horizontal showsHorizontalScrollIndicator style={{ maxWidth: "100%" }}>
               <View style={{ width: tableWidth }}>
+                <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingTop: 6 }}>
+                  <View style={{ width: cols.name }} />
+                  <View style={{ width: cols.face * 2, paddingHorizontal: 6, borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 3 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 11 }}>NOMBRE DE FACE</Text></View>
+                  <View style={{ width: cols.price * 2, paddingHorizontal: 6, borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 3 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 11 }}>PRIX PRESTATION</Text></View>
+                  <View style={{ width: cols.minutes }} />
+                  <View style={{ width: cols.payment }} />
+                  <View style={{ width: cols.frequency }} />
+                  <View style={{ width: cols.note }} />
+                  <View style={{ width: cols.actions }} />
+                </View>
                 <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingVertical: 8, borderRadius: 10, marginBottom: 4 }}>
                   <HeaderCell width={cols.name} label="Commerce" colors={colors} />
                   <HeaderCell width={cols.face} label="Face 1" colors={colors} />
-                  <HeaderCell width={cols.price} label="Prix 1" colors={colors} />
                   <HeaderCell width={cols.face} label="Face 2" colors={colors} />
+                  <HeaderCell width={cols.price} label="Prix 1" colors={colors} />
                   <HeaderCell width={cols.price} label="Prix 2" colors={colors} />
                   <HeaderCell width={cols.minutes} label="Temps" colors={colors} />
                   <HeaderCell width={cols.payment} label="Paiement" colors={colors} />
@@ -354,8 +364,8 @@ function StopRow({ stop, sectionIndex, stopIndex, stopCount, mutate, colors, col
     <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 3, borderBottomWidth: 1, borderColor: colors.border }}>
       <CellInput width={cols.name} value={stop.name} onChangeText={(value) => setStop((next) => { next.name = value; })} colors={colors} bold />
       <CellInput width={cols.face} value={face1?.label ?? ""} onChangeText={setFace1Label} colors={colors} />
-      <NumberCellInput width={cols.price} value={face1 ? face1.price_ht : null} onCommit={setFace1Price} colors={colors} keyboardType="decimal-pad" />
       <CellInput width={cols.face} value={face2?.label ?? ""} onChangeText={setFace2Label} colors={colors} />
+      <NumberCellInput width={cols.price} value={face1 ? face1.price_ht : null} onCommit={setFace1Price} colors={colors} keyboardType="decimal-pad" />
       <NumberCellInput width={cols.price} value={face2 ? face2.price_ht : null} onCommit={setFace2Price} colors={colors} keyboardType="decimal-pad" />
       <NumberCellInput width={cols.minutes} value={stop.estimated_minutes ?? null} onCommit={(value) => setStop((next) => { next.estimated_minutes = value; })} colors={colors} keyboardType="number-pad" />
       <CellInput width={cols.payment} value={stop.payment_text ?? ""} onChangeText={(value) => setStop((next) => { next.payment_text = value || null; })} colors={colors} />
