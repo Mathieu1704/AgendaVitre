@@ -1479,6 +1479,21 @@ export default function AddInterventionScreen() {
       // Calcul des occurrences (reprise multi-dates, reprise/employé simple,
       // ou création admin avec récurrence)
       let occurrences: { start: Date; end: Date }[];
+      // La source existe déjà à sa propre date : elle ne doit être rattachée
+      // rétroactivement à la série (et sa 1ère date générée sautée) que si
+      // l'utilisateur a laissé le champ sur cette même date (valeur par
+      // défaut en duplication, cf. pré-remplissage plus haut). S'il l'a
+      // changée (ex. un autre jour pour la récurrence), cette nouvelle date
+      // doit donner lieu à une occurrence créée à part entière, indépendante
+      // de la source.
+      const sourceDatePart =
+        isDuplicateMode && repriseSource
+          ? toBrusselsDateTimeString(new Date(repriseSource.start_time)).split("T")[0]
+          : null;
+      const skipFirst =
+        isDuplicateMode &&
+        recurrence.freq !== "none" &&
+        sourceDatePart === startDateStr.split("T")[0];
       if (isRepriseMode) {
         // Dates ad hoc sélectionnées dans le calendrier, pas une récurrence :
         // une occurrence indépendante par date, même heure/durée pour toutes.
@@ -1500,12 +1515,7 @@ export default function AddInterventionScreen() {
         const endUtc = new Date(startUtc.getTime() + dur * 3600000);
         occurrences = [{ start: startUtc, end: endUtc }];
       } else {
-        occurrences = generateDates(
-          startDateStr,
-          dur,
-          recurrence,
-          isDuplicateMode && recurrence.freq !== "none",
-        );
+        occurrences = generateDates(startDateStr, dur, recurrence, skipFirst);
       }
       if (occurrences.length === 0)
         return toast.error("Date", isRepriseMode ? "Sélectionne au moins une date." : "Vérifie la date.");
@@ -1528,12 +1538,12 @@ export default function AddInterventionScreen() {
           interval: recurrence.freq === "custom" ? recurrence.interval : 1,
           endType: "never",
         };
-        const sourceGroupId = isDuplicateMode
+        const sourceGroupId = skipFirst
           ? (repriseSource?.recurrence_group_id ?? undefined)
           : undefined;
         const groupId = sourceGroupId ?? newUuidV4();
         try {
-          if (isDuplicateMode && repriseSourceId && !sourceGroupId) {
+          if (skipFirst && repriseSourceId && !sourceGroupId) {
             // La source existe déjà et représente la 1ère occurrence : on la
             // rattache rétroactivement à la série tout juste créée.
             applyEditIntervention(queryClient, String(repriseSourceId), {
@@ -1588,7 +1598,7 @@ export default function AddInterventionScreen() {
       // (même recurrence_group_id), pas seulement les copies nouvellement
       // créées. Si la source appartenait déjà à une série, on la rejoint au
       // lieu d'en ouvrir une nouvelle.
-      const sourceGroupId = isDuplicateMode
+      const sourceGroupId = skipFirst
         ? (repriseSource?.recurrence_group_id ?? undefined)
         : undefined;
       // Les dates de reprise multi-sélectionnées sont des RDV indépendants,
@@ -1596,7 +1606,7 @@ export default function AddInterventionScreen() {
       const groupId =
         !isRepriseMode && occurrences.length > 1 ? sourceGroupId ?? newUuidV4() : undefined;
 
-      if (isDuplicateMode && repriseSourceId && groupId && !sourceGroupId) {
+      if (skipFirst && repriseSourceId && groupId && !sourceGroupId) {
         const sourceRecurrenceRule = {
           freq:
             recurrence.freq === "custom" ? recurrence.unit : recurrence.freq,
