@@ -184,6 +184,27 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
 
 # --- ROUTES ---
 
+@router.get("/zero-hours-on-date")
+def read_zero_hours_employee_ids(
+    date_str: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Ids des employés dont les heures prévues (hors congé) sont à 0 ce jour-là
+    (ex: jour non travaillé dans hours_per_weekday, ou hors plage hours_valid_from/until).
+    Sert à masquer ces employés des listes d'assignation/filtre planning."""
+    target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    all_employees = db.query(Employee).all()
+    progressive = db.query(ProgressiveHours).filter(
+        ProgressiveHours.start_date <= target_date,
+        ProgressiveHours.end_date >= target_date
+    ).all()
+    return [
+        str(emp.id) for emp in all_employees
+        if _get_employee_hours_for_day(emp, target_date, progressive) <= 0
+    ]
+
+
 @router.get("/daily-stats")
 def get_daily_stats_endpoint(
     date_str: str,
