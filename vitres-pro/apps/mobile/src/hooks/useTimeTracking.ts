@@ -92,6 +92,19 @@ export const useWeeklySummary = (weekStart?: string, includeCurrentWeek?: boolea
       ).data as WeeklySummary,
   });
 
+export interface MyOvertimeBalance {
+  balance_hours: number;
+  period_start: string;
+  period_end: string;
+}
+
+export const useMyOvertimeBalance = () =>
+  useQuery({
+    queryKey: ["timetracking", "my-overtime-balance"],
+    queryFn: async () =>
+      (await api.get("/api/timetracking/my-overtime-balance")).data as MyOvertimeBalance,
+  });
+
 export const useConfirmCashSettlement = () => {
   const queryClient = useQueryClient();
   return useMutation({

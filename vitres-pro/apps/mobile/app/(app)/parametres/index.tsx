@@ -33,6 +33,7 @@ import { Stack, useRouter, useFocusEffect } from "expo-router";
 import Constants from "expo-constants";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCompanySettings } from "../../../src/hooks/useCompanySettingsSync";
+import { useMyOvertimeBalance } from "../../../src/hooks/useTimeTracking";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
@@ -68,6 +69,14 @@ const getImagePicker = async () => {
   }
   return imagePickerModule;
 };
+
+function formatOvertimeHours(h: number): string {
+  const sign = h < 0 ? "-" : "+";
+  const abs = Math.abs(h);
+  const hours = Math.floor(abs);
+  const minutes = Math.round((abs - hours) * 60);
+  return `${sign}${hours}h${minutes.toString().padStart(2, "0")}`;
+}
 
 export default function ParametresScreen() {
   const router = useRouter();
@@ -320,6 +329,8 @@ export default function ParametresScreen() {
 
   const isAdmin = profile?.role === "admin";
 
+  const { data: overtimeBalance } = useMyOvertimeBalance();
+
   return (
     <View
       className="flex-1 bg-background dark:bg-slate-950"
@@ -441,6 +452,38 @@ export default function ParametresScreen() {
                 </CardContent>
               </Card>
             </Pressable>
+
+            {/* === Solde Heures Sup / En moins (Visible pour employés & sous-traitants) === */}
+            {!isAdmin && overtimeBalance && (
+              <Card className="mb-8 rounded-[32px] overflow-hidden">
+                <CardContent className="p-5 flex-row items-center justify-between">
+                  <View className="flex-row items-center gap-4 flex-1">
+                    <View
+                      className="rounded-full w-12 h-12 items-center justify-center"
+                      style={{
+                        backgroundColor:
+                          overtimeBalance.balance_hours >= 0 ? "#22C55E" : "#EF4444",
+                      }}
+                    >
+                      <Clock size={22} color="white" />
+                    </View>
+                    <View className="flex-1 justify-center">
+                      <Text className="text-sm font-bold uppercase text-muted-foreground dark:text-slate-400">
+                        Heures sup / en moins
+                      </Text>
+                      <Text
+                        className="text-2xl font-extrabold leading-tight"
+                        style={{
+                          color: overtimeBalance.balance_hours >= 0 ? "#16A34A" : "#DC2626",
+                        }}
+                      >
+                        {formatOvertimeHours(overtimeBalance.balance_hours)}
+                      </Text>
+                    </View>
+                  </View>
+                </CardContent>
+              </Card>
+            )}
 
             {/* === SECTION ADMIN (Visible seulement si Admin) === */}
             {isAdmin && (

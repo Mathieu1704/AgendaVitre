@@ -22,6 +22,7 @@ from app.schemas.schemas import (
     DailyEntryOut,
     WeeklySummaryEmployeeOut,
     WeeklySummaryOut,
+    MyOvertimeBalanceOut,
     CashSettlementIn,
     CashSettlementOut,
     OvertimeSettlementIn,
@@ -404,6 +405,22 @@ def clock_out(
     return TimeEntryOut(
         work_date=today, clock_in_at=entry.clock_in_at, clock_out_at=entry.clock_out_at,
         status=_entry_status(entry), worked_hours=_worked_hours(entry),
+    )
+
+
+@router.get("/my-overtime-balance", response_model=MyOvertimeBalanceOut)
+def get_my_overtime_balance(
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Solde heures sup/en moins de l'employé connecté, pour affichage dans
+    son propre onglet Réglages. On inclut la semaine en cours (à date) pour
+    donner un chiffre à jour plutôt que d'attendre dimanche."""
+    balance, period_start, period_end = _overtime_balance(
+        db, current_user, include_current_week=True
+    )
+    return MyOvertimeBalanceOut(
+        balance_hours=balance, period_start=period_start, period_end=period_end
     )
 
 

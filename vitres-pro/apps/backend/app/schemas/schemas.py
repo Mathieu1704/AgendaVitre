@@ -492,6 +492,12 @@ class WeeklySummaryOut(BaseModel):
     employees: List[WeeklySummaryEmployeeOut]
 
 
+class MyOvertimeBalanceOut(BaseModel):
+    balance_hours: float
+    period_start: date
+    period_end: date
+
+
 class CashSettlementIn(BaseModel):
     employee_id: UUID
     week_start: date
