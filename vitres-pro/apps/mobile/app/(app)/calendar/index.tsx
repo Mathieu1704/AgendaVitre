@@ -58,7 +58,7 @@ import { Avatar } from "../../../src/ui/components/Avatar";
 import { useAuth } from "../../../src/hooks/useAuth";
 import { useCompanySettings } from "../../../src/hooks/useCompanySettingsSync";
 import { useCities } from "../../../src/hooks/useCities";
-import { useAbsentEmployeeIds } from "../../../src/hooks/useAbsences";
+import { useAbsentEmployeeIds, useZeroHoursEmployeeIds } from "../../../src/hooks/useAbsences";
 import {
   useAssignEmployees,
   useBulkAssignEmployees,
@@ -299,9 +299,10 @@ export default function CalendarScreen() {
   const { employees: allEmployees } = useEmployees();
   const assignEmployees = useAssignEmployees();
   const bulkAssign = useBulkAssignEmployees();
-  const assignModalAbsentIds = useAbsentEmployeeIds(
-    assignModal?.mode === "single" ? assignModal.date : assignModal?.mode === "city" ? assignModal.date : null,
-  );
+  const assignModalDate =
+    assignModal?.mode === "single" ? assignModal.date : assignModal?.mode === "city" ? assignModal.date : null;
+  const assignModalAbsentIds = useAbsentEmployeeIds(assignModalDate);
+  const assignModalZeroHoursIds = useZeroHoursEmployeeIds(assignModalDate);
 
   const { cities } = useCities();
   const cityMap = useMemo(() => {
@@ -975,6 +976,7 @@ export default function CalendarScreen() {
           <ScrollView style={{ maxHeight: 320 }}>
             {(allEmployees ?? [])
               .filter((e: any) => e.role !== "admin" || true)
+              .filter((e: any) => !assignModalZeroHoursIds.includes(e.id) || selectedAssignIds.includes(e.id))
               .map((emp: any) => {
                 const isSelected = selectedAssignIds.includes(emp.id);
                 return (

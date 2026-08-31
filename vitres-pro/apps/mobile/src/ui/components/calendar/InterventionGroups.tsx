@@ -316,17 +316,18 @@ export function buildFlatRows(
   for (const [sgIdx, sg] of statusGroups.entries()) {
     rows.push({ kind: "status-header", status: sg.status, count: sg.items.length, key: `sh-${sg.status}-${sgIdx}` });
 
-    const typeGroups = groupByType(sg.items);
+    // Heure définie (statut planifié/en cours/etc., pas "à planifier") : l'ordre
+    // chronologique par fil d'employé (orderByEmployeeChains) prime sur le type —
+    // une tournée intercalée entre deux interventions d'un même employé reste à
+    // sa place chronologique, pas reléguée dans un bloc "Tournée" séparé.
+    const timeDefined = sg.status !== "unscheduled";
+    const typeGroups = timeDefined ? [{ type: "__mixed__", items: sg.items }] : groupByType(sg.items);
     const multipleTypes = typeGroups.length > 1;
 
     for (const [tgIdx, tg] of typeGroups.entries()) {
-      if (sg.status !== "note" && (multipleTypes || tg.type !== "intervention")) {
+      if (!timeDefined && sg.status !== "note" && (multipleTypes || tg.type !== "intervention")) {
         rows.push({ kind: "type-header", type: tg.type, key: `th-${sg.status}-${sgIdx}-${tg.type}-${tgIdx}` });
       }
-
-      // Heure définie (statut planifié/en cours/etc., pas "à planifier") : on
-      // trie déjà par heure, l'affichage par zone n'apporte plus rien.
-      const timeDefined = sg.status !== "unscheduled";
 
       const cityGroups = groupByPlanningArea(tg.items, timeDefined, cityMap);
       const hasMultipleCities = !timeDefined && (cityGroups.length > 1 || (cityGroups.length === 1 && cityGroups[0].code !== null));
@@ -372,7 +373,12 @@ export function renderInterventionGroups(
   // Les blocs planifiés restent chronologiques. Le groupe « À planifier » est
   // au contraire regroupé par type selon la priorité métier.
   return groups.map((group, groupIdx) => {
-    const typeGroups = groupByType(group.items);
+    // Heure définie (statut planifié/en cours/etc., pas "à planifier") : l'ordre
+    // chronologique par fil d'employé (orderByEmployeeChains) prime sur le type —
+    // une tournée intercalée entre deux interventions d'un même employé reste à
+    // sa place chronologique, pas reléguée dans un bloc "Tournée" séparé.
+    const timeDefined = group.status !== "unscheduled";
+    const typeGroups = timeDefined ? [{ type: "__mixed__", items: group.items }] : groupByType(group.items);
     const multipleTypes = typeGroups.length > 1;
 
     return (
@@ -387,16 +393,12 @@ export function renderInterventionGroups(
           </View>
         )}
         {typeGroups.map((tg, tgIdx) => {
-          // Heure définie (statut planifié/en cours/etc., pas "à planifier") : on
-          // trie déjà par heure, l'affichage par zone n'apporte plus rien.
-          const timeDefined = group.status !== "unscheduled";
-
           const cityGroups = groupByPlanningArea(tg.items, timeDefined, cityMap);
           const hasMultipleCities = !timeDefined && (cityGroups.length > 1 || (cityGroups.length === 1 && cityGroups[0].code !== null));
 
           return (
             <View key={`${tg.type}-${tgIdx}`}>
-              {!compact && group.status !== "note" && (multipleTypes || tg.type !== "intervention") && (
+              {!compact && !timeDefined && group.status !== "note" && (multipleTypes || tg.type !== "intervention") && (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 5, marginTop: 2, marginLeft: 8 }}>
                   <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: TYPE_COLORS[tg.type] ?? "#94A3B8" }} />
                   <Text style={{ fontSize: 10, fontWeight: "700", color: TYPE_COLORS[tg.type] ?? "#94A3B8", textTransform: "uppercase", letterSpacing: 0.4 }}>
@@ -493,6 +495,8 @@ interface FilterChipsBarProps {
   isSubcontractor?: boolean;
   // Ids des employés en congé/absence ce jour-là (badge visuel).
   absentEmployeeIds?: Set<string>;
+  // Ids des employés sans heures prévues ce jour-là (masqués du filtre, sauf si actif).
+  zeroHoursEmployeeIds?: Set<string>;
 }
 
 export const FilterChipsBar = React.memo(function FilterChipsBar({
@@ -508,10 +512,16 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
   employees,
   isSubcontractor,
   absentEmployeeIds,
+  zeroHoursEmployeeIds,
 }: FilterChipsBarProps) {
   const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
   const hasFilters = activeTypes.size > 0 || activeStatuses.size > 0 || activeEmployeeId !== null;
   const activeEmp = employees.find(e => e.id === activeEmployeeId);
+  // Un employé sans heures prévues ce jour-là (jour non travaillé) n'a rien à faire
+  // dans le filtre, sauf s'il est déjà le filtre actif (pour pouvoir le retirer).
+  const dropdownEmployees = employees.filter(
+    e => !zeroHoursEmployeeIds?.has(e.id) || e.id === activeEmployeeId,
+  );
   const activeEmpName = activeEmp?.full_name?.split(" ")[0] ?? activeEmp?.full_name ?? null;
   const visibleTypes = isSubcontractor
     ? FILTER_TYPES.filter(f => f.id === "intervention" || f.id === "note")
@@ -558,7 +568,7 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
             </Pressable>
           );
         })}
-        {employees.length > 0 && (
+        {dropdownEmployees.length > 0 && (
           <>
             <View style={{ width: 1, backgroundColor: isDark ? "#334155" : "#E2E8F0", marginHorizontal: 4 }} />
             <Pressable
@@ -595,7 +605,7 @@ export const FilterChipsBar = React.memo(function FilterChipsBar({
                 <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#CBD5E1" : "#64748B" }}>✕ Retirer le filtre</Text>
               </Pressable>
             )}
-            {employees.map(emp => {
+            {dropdownEmployees.map(emp => {
               const active = activeEmployeeId === emp.id;
               const firstName = emp.full_name?.split(" ")[0] ?? emp.full_name ?? "?";
               const chipColor = emp.color || "#3B82F6";
