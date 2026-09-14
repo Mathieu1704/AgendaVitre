@@ -151,6 +151,16 @@ STATUS_LABELS = {
     "cancelled": "Annulée",
 }
 
+
+def _assert_reopen_allowed(old_status: str, new_status: Optional[str], role: str) -> None:
+    """Réserve aux admins la correction d'une clôture accidentelle."""
+    if old_status == "done" and new_status == "planned" and role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Seul un admin peut repasser une intervention terminée en planifiée.",
+        )
+
+
 FIELD_LABELS = {
     "title": "titre",
     "start_time": "date/heure de début",
@@ -807,6 +817,12 @@ def update_intervention(
         raise HTTPException(status_code=404, detail="Introuvable")
     if db_intervention.tour_run:
         raise HTTPException(status_code=409, detail="Utilisez le module Tournees pour modifier cette occurrence figee.")
+
+    _assert_reopen_allowed(
+        db_intervention.status,
+        intervention_update.get("status"),
+        current_user.role,
+    )
 
     # Backfill paresseux : une intervention sans client créée avant ce champ
     # n'a pas de reprise_chain_id. On lui en attribue un dès la première

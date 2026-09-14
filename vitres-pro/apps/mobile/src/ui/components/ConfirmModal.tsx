@@ -44,22 +44,30 @@ export const ConfirmModal = ({
           <View className="flex-row gap-3">
             <Pressable
               onPress={onCancel}
-              style={{ borderRadius: 16 }}
-              className="flex-1 py-3.5 bg-muted dark:bg-slate-800 items-center active:opacity-80"
+              style={{ borderRadius: 16, minHeight: 56, paddingHorizontal: 12 }}
+              className="flex-1 py-3.5 bg-muted dark:bg-slate-800 items-center justify-center active:opacity-80"
             >
-              <Text className="font-semibold text-foreground dark:text-white">
+              <Text
+                className="font-semibold text-foreground dark:text-white"
+                style={{ width: "100%", flexShrink: 1, textAlign: "center" }}
+              >
                 {cancelText}
               </Text>
             </Pressable>
 
             <Pressable
               onPress={onConfirm}
-              style={{ borderRadius: 16 }}
-              className={`flex-1 py-3.5 items-center active:opacity-80 ${
+              style={{ borderRadius: 16, minHeight: 56, paddingHorizontal: 12 }}
+              className={`flex-1 py-3.5 items-center justify-center active:opacity-80 ${
                 isDestructive ? "bg-red-500" : "bg-primary"
               }`}
             >
-              <Text className="font-bold text-white">{confirmText}</Text>
+              <Text
+                className="font-bold text-white"
+                style={{ width: "100%", flexShrink: 1, textAlign: "center" }}
+              >
+                {confirmText}
+              </Text>
             </Pressable>
           </View>
         </View>

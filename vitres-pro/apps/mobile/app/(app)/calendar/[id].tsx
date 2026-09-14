@@ -126,6 +126,7 @@ export default function InterventionDetailScreen() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDeleteScopeDialog, setShowDeleteScopeDialog] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showReopenConfirm, setShowReopenConfirm] = useState(false);
   const [showReinforcementDialog, setShowReinforcementDialog] = useState(false);
   const [reinforcementEmployeeId, setReinforcementEmployeeId] = useState<string | null>(null);
   const [reinforcementTimeMode, setReinforcementTimeMode] = useState<"asap" | "precise">("asap");
@@ -171,6 +172,7 @@ export default function InterventionDetailScreen() {
     target: "client" | "intervention";
   }>(null);
   const editingFieldInputRef = useRef<TextInput>(null);
+  const reopenRequestInFlight = useRef(false);
   const [editingLocation, setEditingLocation] = useState<null | {
     address: string;
     city: string;
@@ -372,6 +374,39 @@ export default function InterventionDetailScreen() {
     onError: () => {
       queryClient.invalidateQueries({ queryKey: ["interventions"] });
       toast.error("Erreur", "Impossible de mettre à jour le statut.");
+    },
+  });
+
+  // Filet de sécurité admin : une clôture accidentelle peut être réouverte
+  // sans annuler ses autres effets (prestations, paiement, notes ou reprise).
+  // L'écriture suit la même file hors ligne que les autres changements de
+  // statut, avec un retour visuel immédiat dans la fiche et le planning.
+  const reopenMutation = useMutation({
+    mutationFn: async () => {
+      applyEditIntervention(queryClient, String(id), { status: "planned" });
+      await enqueue({
+        kind: "edit-intervention",
+        method: "PATCH",
+        url: `/api/interventions/${id}`,
+        body: { status: "planned" },
+        label: "Réouverture de l'intervention",
+      });
+    },
+    onSuccess: () => {
+      toast.success(
+        "Intervention replanifiée",
+        isOnlineNow()
+          ? "Intervention repassée en planifiée."
+          : "Sera synchronisée au retour du réseau.",
+      );
+    },
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: ["intervention", id] });
+      queryClient.invalidateQueries({ queryKey: ["interventions"] });
+      toast.error("Erreur", "Impossible de replanifier l'intervention.");
+    },
+    onSettled: () => {
+      reopenRequestInFlight.current = false;
     },
   });
 
@@ -1904,12 +1939,17 @@ export default function InterventionDetailScreen() {
         )}
 
         {intervention.status === "done" && (
-          <View className="w-full h-14 bg-green-500 rounded-full items-center justify-center flex-row shadow-lg shadow-green-500/20">
+          <Pressable
+            disabled={!isAdmin || reopenMutation.isPending}
+            onLongPress={isAdmin ? () => setShowReopenConfirm(true) : undefined}
+            delayLongPress={600}
+            className="w-full h-14 bg-green-500 rounded-full items-center justify-center flex-row shadow-lg shadow-green-500/20"
+          >
             <CheckCircle2 size={24} color="white" strokeWidth={3} />
             <Text className="ml-2 text-white text-lg font-extrabold tracking-wide">
               INTERVENTION CLÔTURÉE
             </Text>
-          </View>
+          </Pressable>
         )}
       </View>
 
@@ -1982,6 +2022,21 @@ export default function InterventionDetailScreen() {
         onConfirm={() => {
           setShowDeleteConfirm(false);
           deleteMutation.mutate("this");
+        }}
+      />
+
+      <ConfirmModal
+        visible={showReopenConfirm}
+        title="Repasser cette intervention en planifiée ?"
+        message="Seul le statut sera modifié. Les prestations, paiements, notes et reprises resteront inchangés."
+        confirmText="Repasser en planifiée"
+        cancelText="Annuler"
+        onCancel={() => setShowReopenConfirm(false)}
+        onConfirm={() => {
+          if (reopenRequestInFlight.current || reopenMutation.isPending) return;
+          reopenRequestInFlight.current = true;
+          setShowReopenConfirm(false);
+          reopenMutation.mutate();
         }}
       />
 
