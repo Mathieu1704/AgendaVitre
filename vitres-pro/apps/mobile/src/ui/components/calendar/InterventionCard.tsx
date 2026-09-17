@@ -328,9 +328,7 @@ export const InterventionCard = React.memo(function InterventionCard({
             className={`font-extrabold text-foreground dark:text-white ${compact ? "text-sm" : "text-base"}`}
             numberOfLines={compact ? 1 : 2}
           >
-            {hasClient && item.client?.address
-              ? item.client.address
-              : item.title}
+            {item.title}
           </Text>
           {item.tour_run?.progress && (
             <View style={{ marginTop: 5 }}>
@@ -348,7 +346,7 @@ export const InterventionCard = React.memo(function InterventionCard({
                 className={`text-muted-foreground dark:text-slate-400 font-medium ${compact ? "text-[10px]" : "text-xs"} mt-0.5`}
                 numberOfLines={1}
               >
-                {item.title}
+                {item.client.address}
               </Text>
               {item.client?.name && (
                 <Text
