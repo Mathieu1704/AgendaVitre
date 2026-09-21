@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import case
 from sqlalchemy.orm import Session, selectinload
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
@@ -11,6 +12,7 @@ from app.models.models import (
     OvertimeSettlement,
     CashSettlement,
     Absence,
+    CompanyClosure,
     ProgressiveHours,
     Intervention,
     InAppNotification,
@@ -84,20 +86,36 @@ def _notify_admins(db: Session, notif_type: str, title: str, message: str, metad
         ))
 
 
+def _is_neutral_day(emp_id: UUID, d: date, absences: list, closures: list) -> bool:
+    """Jour de congé (absence individuelle) ou de fermeture d'entreprise : ne
+    doit ni créditer d'heures travaillées, ni compter dans le plancher
+    hebdomadaire de sup — l'employé n'est ni pénalisé ni avantagé pour un
+    congé/fermeture légitime."""
+    if any(c.start_date <= d <= c.end_date for c in closures):
+        return True
+    day_start, day_end = _utc_bounds(d)
+    return any(
+        ab.employee_id == emp_id and ab.start_date < day_end and ab.end_date >= day_start
+        for ab in absences
+    )
+
+
 def _employee_actual_hours_for_day(
-    emp: Employee, d: date, entries_by_day: dict, absences: list, progressive: list
+    emp: Employee, d: date, entries_by_day: dict, absences: list, progressive: list, closures: list
 ) -> float:
     entry = entries_by_day.get(d)
     if entry and entry.clock_in_at and entry.clock_out_at:
         return (entry.clock_out_at - entry.clock_in_at).total_seconds() / 3600
-    day_start, day_end = _utc_bounds(d)
-    for ab in absences:
-        if ab.employee_id == emp.id and ab.start_date < day_end and ab.end_date >= day_start:
-            return _get_employee_hours_for_day(emp, d, progressive)
     return 0.0
 
 
-def _weekly_actual_hours(db: Session, emp: Employee, week_start: date, week_end: date) -> float:
+def _weekly_actual_hours(
+    db: Session, emp: Employee, week_start: date, week_end: date
+) -> tuple[float, float]:
+    """Retourne (heures réelles travaillées, réduction du plancher hebdo) sur
+    la semaine. La réduction correspond aux heures théoriques des jours de
+    congé/fermeture, à soustraire du plancher de WEEKLY_FLOOR_HOURS pour que
+    ces jours restent neutres dans le solde de sup."""
     entries = (
         db.query(EmployeeTimeEntry)
         .filter(
@@ -116,17 +134,24 @@ def _weekly_actual_hours(db: Session, emp: Employee, week_start: date, week_end:
         Absence.end_date >= day_start_utc,
         Absence.employee_id == emp.id,
     ).all()
+    closures = db.query(CompanyClosure).filter(
+        CompanyClosure.start_date <= week_end,
+        CompanyClosure.end_date >= week_start,
+    ).all()
     progressive = db.query(ProgressiveHours).filter(
         ProgressiveHours.start_date <= week_end,
         ProgressiveHours.end_date >= week_start,
     ).all()
 
     total = 0.0
+    floor_reduction = 0.0
     d = week_start
     while d <= week_end:
-        total += _employee_actual_hours_for_day(emp, d, entries_by_day, absences, progressive)
+        total += _employee_actual_hours_for_day(emp, d, entries_by_day, absences, progressive, closures)
+        if _is_neutral_day(emp.id, d, absences, closures):
+            floor_reduction += _get_employee_hours_for_day(emp, d, progressive)
         d += timedelta(days=1)
-    return total
+    return total, floor_reduction
 
 
 def _overtime_balance(
@@ -182,8 +207,13 @@ def _overtime_balance(
     while week_cursor <= last_counted_week_end:
         w_start, w_end = _week_bounds(week_cursor)
         w_end = min(w_end, last_counted_week_end)
-        actual = _weekly_actual_hours(db, emp, w_start, w_end)
-        total_delta += weekly_delta_hours(actual)
+        actual, floor_reduction = _weekly_actual_hours(db, emp, w_start, w_end)
+        # Le plancher ne peut jamais devenir négatif : sinon un employé dont
+        # les heures théoriques hebdo dépassent déjà 37h (ex. 39h) se
+        # retrouverait avec un solde artificiellement positif après une
+        # semaine complète de congé (37 - 39 = -2 → delta = 0 - (-2) = +2h).
+        reduced_floor = max(0.0, WEEKLY_FLOOR_HOURS - floor_reduction)
+        total_delta += weekly_delta_hours(actual, floor=reduced_floor)
         week_cursor = w_end + timedelta(days=1)
 
     return round(total_delta, 2), period_start, last_counted_week_end
@@ -254,6 +284,10 @@ def _daily_entries(
         Absence.end_date >= day_start_utc,
         Absence.employee_id == emp.id,
     ).all()
+    closures = db.query(CompanyClosure).filter(
+        CompanyClosure.start_date <= week_end,
+        CompanyClosure.end_date >= week_start,
+    ).all()
     progressive = db.query(ProgressiveHours).filter(
         ProgressiveHours.start_date <= week_end,
         ProgressiveHours.end_date >= week_start,
@@ -263,12 +297,8 @@ def _daily_entries(
     d = week_start
     while d <= week_end:
         entry = entries_by_day.get(d)
-        day_start, day_end = _utc_bounds(d)
-        is_absence = any(
-            ab.employee_id == emp.id and ab.start_date < day_end and ab.end_date >= day_start
-            for ab in absences
-        )
-        actual = _employee_actual_hours_for_day(emp, d, entries_by_day, absences, progressive)
+        is_absence = _is_neutral_day(emp.id, d, absences, closures)
+        actual = _employee_actual_hours_for_day(emp, d, entries_by_day, absences, progressive, closures)
         result.append(DailyEntryOut(
             date=d,
             clock_in_at=entry.clock_in_at if entry else None,
@@ -487,7 +517,12 @@ def weekly_summary(
         ref_date = _today_brussels()
     w_start, w_end = _week_bounds(ref_date)
 
-    employees = db.query(Employee).filter(Employee.role.in_(["employee", "subcontractor"])).all()
+    employees = (
+        db.query(Employee)
+        .filter(Employee.role.in_(["employee", "subcontractor"]))
+        .order_by(case((Employee.zone == "hainaut", 0), else_=1), Employee.full_name)
+        .all()
+    )
 
     result_employees = []
     for emp in employees:
@@ -503,9 +538,15 @@ def weekly_summary(
             cash_amount = _weekly_cash_amount(db, emp, w_start, w_end)
             cash_settled = False
 
-        overtime_balance, period_start, period_end = _overtime_balance(
-            db, emp, include_current_week=include_current_week
-        )
+        # Solde d'heures sup non pertinent pour les sous-traitants : payés au
+        # service ponctuel, pas à l'heure — le plancher 37h/semaine ne
+        # s'applique pas à eux (seul cash_amount compte pour leur rémunération).
+        if emp.role == "subcontractor":
+            overtime_balance, period_start, period_end = 0.0, w_start, w_end
+        else:
+            overtime_balance, period_start, period_end = _overtime_balance(
+                db, emp, include_current_week=include_current_week
+            )
 
         result_employees.append(WeeklySummaryEmployeeOut(
             employee_id=emp.id,
@@ -568,6 +609,8 @@ def confirm_overtime_settlement(
     emp = db.query(Employee).filter(Employee.id == payload.employee_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employé introuvable")
+    if emp.role == "subcontractor":
+        raise HTTPException(status_code=400, detail="Pas de solde d'heures sup pour un sous-traitant")
 
     balance, period_start, period_end = _overtime_balance(
         db, emp, include_current_week=payload.include_current_week

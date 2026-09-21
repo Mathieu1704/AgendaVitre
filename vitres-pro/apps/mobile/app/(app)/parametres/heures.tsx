@@ -314,58 +314,60 @@ export default function HeuresEncaissementScreen() {
                 )}
               </View>
 
-              {/* Heures sup/moins */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  backgroundColor: isDark ? "#0B1220" : "#F8FAFC",
-                  borderRadius: 16,
-                  padding: 14,
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View
-                    style={{
-                      width: 36, height: 36, borderRadius: 18,
-                      backgroundColor: "rgba(59,130,246,0.12)",
-                      alignItems: "center", justifyContent: "center",
-                    }}
-                  >
-                    <Clock size={18} color="#3B82F6" />
-                  </View>
-                  <View>
-                    <Text style={{ fontSize: 11, color: "#94A3B8", fontWeight: "600" }}>
-                      Heures sup / en moins
-                    </Text>
-                    <Text
+              {/* Heures sup/moins — non pertinent pour un sous-traitant, payé au service ponctuel */}
+              {emp.role !== "subcontractor" && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    backgroundColor: isDark ? "#0B1220" : "#F8FAFC",
+                    borderRadius: 16,
+                    padding: 14,
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View
                       style={{
-                        fontSize: 16, fontWeight: "700",
-                        color: emp.overtime_balance_hours >= 0 ? "#10B981" : "#EF4444",
+                        width: 36, height: 36, borderRadius: 18,
+                        backgroundColor: "rgba(59,130,246,0.12)",
+                        alignItems: "center", justifyContent: "center",
                       }}
                     >
-                      {formatHours(emp.overtime_balance_hours)}
-                    </Text>
+                      <Clock size={18} color="#3B82F6" />
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 11, color: "#94A3B8", fontWeight: "600" }}>
+                        Heures sup / en moins
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 16, fontWeight: "700",
+                          color: emp.overtime_balance_hours >= 0 ? "#10B981" : "#EF4444",
+                        }}
+                      >
+                        {formatHours(emp.overtime_balance_hours)}
+                      </Text>
+                    </View>
                   </View>
+                  {Math.abs(emp.overtime_balance_hours) < 0.01 ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <CheckCircle2 size={16} color="#3B82F6" />
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#3B82F6" }}>Soldé</Text>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={() => setOvertimeConfirm(emp)}
+                      style={({ pressed }) => ({
+                        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14,
+                        backgroundColor: pressed ? "#2563EB" : "#3B82F6",
+                      })}
+                    >
+                      <Text style={{ color: "white", fontWeight: "700", fontSize: 12 }}>Solder</Text>
+                    </Pressable>
+                  )}
                 </View>
-                {Math.abs(emp.overtime_balance_hours) < 0.01 ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <CheckCircle2 size={16} color="#3B82F6" />
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#3B82F6" }}>Soldé</Text>
-                  </View>
-                ) : (
-                  <Pressable
-                    onPress={() => setOvertimeConfirm(emp)}
-                    style={({ pressed }) => ({
-                      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14,
-                      backgroundColor: pressed ? "#2563EB" : "#3B82F6",
-                    })}
-                  >
-                    <Text style={{ color: "white", fontWeight: "700", fontSize: 12 }}>Solder</Text>
-                  </Pressable>
-                )}
-              </View>
+              )}
 
               {/* Grille des jours ouvrés (lun-ven) */}
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
