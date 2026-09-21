@@ -520,7 +520,11 @@ def weekly_summary(
     employees = (
         db.query(Employee)
         .filter(Employee.role.in_(["employee", "subcontractor"]))
-        .order_by(case((Employee.zone == "hainaut", 0), else_=1), Employee.full_name)
+        .order_by(
+            case((Employee.zone == "hainaut", 0), else_=1),
+            case((Employee.role == "subcontractor", 1), else_=0),
+            Employee.full_name,
+        )
         .all()
     )
 
