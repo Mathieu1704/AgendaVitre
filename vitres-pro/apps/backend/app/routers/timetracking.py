@@ -230,6 +230,11 @@ def _weekly_cash_amount(db: Session, emp: Employee, week_start: date, week_end: 
             Intervention.start_time < day_end_utc,
             Intervention.status == "done",
             Intervention.payment_mode.in_(["cash", "invoice_cash"]),
+            # Seule une vraie prestation ("intervention") génère du cash à
+            # remettre : une note/congé/devis/etc. peut hériter d'un
+            # payment_mode et d'un prix par erreur d'import sans jamais
+            # correspondre à un service réellement encaissé.
+            Intervention.type == "intervention",
             ~Intervention.tour_run.has(),
         )
         .all()
