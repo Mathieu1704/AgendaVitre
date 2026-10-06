@@ -1102,6 +1102,8 @@ export default function AddInterventionScreen() {
         (repriseSource.payment_mode as any) ??
           (repriseSource.is_invoice ? "invoice" : "cash"),
       );
+      setAmountCash(repriseSource.amount_cash != null ? String(repriseSource.amount_cash) : "");
+      setAmountInvoice(repriseSource.amount_invoice != null ? String(repriseSource.amount_invoice) : "");
       if (isConvertingDevis) setIntervType("intervention");
       else if (repriseSource.type) setIntervType(repriseSource.type as IntervType);
       if (repriseSource.zone)
@@ -3152,8 +3154,10 @@ export default function AddInterventionScreen() {
                 />
               </View>
 
-              {/* PAIEMENT */}
-              {isAdmin && typeNeedsPayment && (
+              {/* PAIEMENT — aussi visible par l'employé en reprise : un client
+                  qui payait en cash peut vouloir une facture la fois suivante
+                  (le mode du RDV précédent reste présélectionné). */}
+              {(isAdmin || isRepriseMode) && typeNeedsPayment && (
                 <View className="pt-4 mt-4 border-t border-border dark:border-slate-800">
                   <Text className="text-sm font-semibold text-foreground dark:text-white mb-2">
                     Paiement
