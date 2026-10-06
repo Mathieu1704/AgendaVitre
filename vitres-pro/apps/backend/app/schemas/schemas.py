@@ -584,13 +584,6 @@ class TourStopInput(BaseModel):
         return value
 
 
-class TourSectionInput(BaseModel):
-    id: Optional[UUID] = None
-    label: str
-    position: float = 0
-    stops: List[TourStopInput] = []
-
-
 class TourTemplateInput(BaseModel):
     name: str
     zone: Literal["hainaut", "ardennes"]
@@ -600,7 +593,7 @@ class TourTemplateInput(BaseModel):
     active: bool = False
     archived: bool = False
     source_document: Optional[str] = None
-    sections: List[TourSectionInput] = []
+    stops: List[TourStopInput] = []
 
     @field_validator("weekday")
     @classmethod
@@ -623,18 +616,11 @@ class TourStopOut(TourStopInput):
         from_attributes = True
 
 
-class TourSectionOut(TourSectionInput):
-    id: UUID
-    stops: List[TourStopOut] = []
-    class Config:
-        from_attributes = True
-
-
 class TourTemplateOut(TourTemplateInput):
     id: UUID
     created_at: datetime
     updated_at: datetime
-    sections: List[TourSectionOut] = []
+    stops: List[TourStopOut] = []
     class Config:
         from_attributes = True
 
@@ -652,7 +638,6 @@ class TourRunServiceOut(BaseModel):
 class TourRunStopOut(BaseModel):
     id: UUID
     source_stop_id: Optional[UUID] = None
-    section_label: Optional[str] = None
     name: str
     note: Optional[str] = None
     payment_text: Optional[str] = None

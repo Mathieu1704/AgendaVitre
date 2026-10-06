@@ -22,6 +22,7 @@ import os
 import re
 import sys
 from datetime import time
+from itertools import zip_longest
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import urlparse
@@ -119,11 +120,6 @@ def is_section_label(client: str, service_cells: Iterable[str], price_cells: Ite
     return bool(re.match(r"^CLIENTS?\b", upper) or upper == client and len(client) < 80)
 
 
-def section_name(raw: str) -> str:
-    value = re.sub(r"^CLIENTS?\s*", "", raw, flags=re.IGNORECASE).strip(" :-")
-    return value or "Sans section"
-
-
 def _ascii_upper(value: str) -> str:
     import unicodedata
     return unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").upper()
@@ -170,21 +166,18 @@ def row_columns(zone: str, row: list[str], header_map: dict | None = None) -> di
         marker, appointment = ("", first_cell) if is_time_window else (first_cell, "")
         cell = lambda index: row[index] if index < len(row) else ""
         if header_map:
-            n = max(len(header_map["face_slots"]), len(header_map["price_slots"]))
-            raw_faces = [cell(header_map["face_slots"][i]) if i < len(header_map["face_slots"]) else "" for i in range(n)]
-            raw_prices = [cell(header_map["price_slots"][i]) if i < len(header_map["price_slots"]) else "" for i in range(n)]
-            # Ne garder que les couples reellement remplis (les sous-colonnes
-            # fusionnees laissent des slots vides selon le document), puis
-            # se limiter aux deux premiers : le modele ne gere que deux
-            # variantes alternees par commerce.
-            pairs = [(f, p) for f, p in zip(raw_faces, raw_prices) if clean(f) or clean(p)][:2]
-            faces = [pair[0] for pair in pairs] or [""]
-            prices = [pair[1] for pair in pairs] or [""]
+            # Chaque sous-colonne "NOMBRE DE FACE"/"PRIX PRESTATION" du
+            # document (1 a 3 selon les documents) devient une prestation
+            # candidate a part entiere - aucune fusion/decalage ici. C'est
+            # build_services() qui filtre les paires vides et attribue une
+            # position sequentielle sur ce qui reste.
+            face_raw = [cell(i) for i in header_map["face_slots"]]
+            price_raw = [cell(i) for i in header_map["price_slots"]]
             temps = next((cell(i) for i in header_map["temps_slots"] if clean(cell(i))), "")
             paiement = next((cell(i) for i in header_map["paiement_slots"] if clean(cell(i))), "")
             return {
                 "marker": marker, "appointment": appointment, "client": cell(header_map["client"]),
-                "faces": faces[:2] + [""] * max(0, 2 - len(faces)), "prices": prices[:2] + [""] * max(0, 2 - len(prices)),
+                "faces": face_raw, "prices": price_raw,
                 "duration": temps, "payment": paiement, "frequency": cell(header_map["frequence"]),
             }
         # Secours : ancien decoupage fixe si l'en-tete n'a pas ete reconnu.
@@ -229,28 +222,33 @@ def row_columns(zone: str, row: list[str], header_map: dict | None = None) -> di
 
 
 def build_services(columns: dict) -> list[dict]:
-    """Une prestation par colonne face/prix, fidele au tableau papier.
+    """Liste ouverte de prestations (libelle + prix) par commerce.
 
-    Paiement et frequence restent du texte libre au niveau du commerce
-    (jamais interpretes) : voir columns["payment"]/columns["frequency"].
+    Une prestation par paire face/prix non vide, sans position figee : le
+    commerce peut avoir 1, 2, 3... prestations, librement editables ensuite
+    dans l'app (ajout/suppression). Paiement et frequence restent du texte
+    libre au niveau du commerce (jamais interpretes) : voir
+    columns["payment"]/columns["frequency"].
     """
-    pairs = [(clean(face), clean(price)) for face, price in zip(columns["faces"], columns["prices"]) if clean(face) or clean(price)]
     services = []
-    for index, (label, price_text) in enumerate(pairs):
+    for face, price in zip_longest(columns["faces"], columns["prices"], fillvalue=""):
+        label = clean(face)
+        price_text = clean(price)
+        if not label and not price_text:
+            continue
         amounts = money_values(price_text)
-        price = round(sum(amounts), 2) if amounts else 0
+        price_value = round(sum(amounts), 2) if amounts else 0
         services.append({
             "label": label or "Prestation à confirmer",
-            "price_ht": price,
-            "position": index,
+            "price_ht": price_value,
+            "position": len(services),
             "active": True,
         })
     return services
 
 
 def parse_document(path: Path, zone: str, weekday: int, name: str) -> dict:
-    sections: list[dict] = []
-    current_section: dict | None = None
+    stops: list[dict] = []
     previous_stop: dict | None = None
     ignored_rows = []
     all_rows = document_rows(path)
@@ -262,8 +260,6 @@ def parse_document(path: Path, zone: str, weekday: int, name: str) -> dict:
             continue
         client = clean(columns["client"])
         if is_section_label(client, columns["faces"], columns["prices"]):
-            current_section = {"label": section_name(client), "position": len(sections), "stops": []}
-            sections.append(current_section)
             previous_stop = None
             continue
         services = build_services(columns)
@@ -276,23 +272,18 @@ def parse_document(path: Path, zone: str, weekday: int, name: str) -> dict:
             elif any(clean(value) for value in raw_row):
                 ignored_rows.append({"row": row_index, "cells": raw_row})
             continue
-        if current_section is None:
-            current_section = {"label": "Sans section", "position": 0, "stops": []}
-            sections.append(current_section)
         stop = {
             "name": client,
             "note": clean(" / ".join(extra_notes)) or None,
             "payment_text": clean(columns["payment"]) or None,
             "frequency_text": clean(columns["frequency"]) or None,
             "estimated_minutes": duration_minutes(columns["duration"]),
-            "position": sum(len(section["stops"]) for section in sections),
+            "position": len(stops),
             "active": True,
             "services": services,
         }
-        current_section["stops"].append(stop)
+        stops.append(stop)
         previous_stop = stop
-    if not sections:
-        sections = [{"label": "Sans section", "position": 0, "stops": []}]
     return {
         "name": name,
         "zone": zone,
@@ -302,7 +293,7 @@ def parse_document(path: Path, zone: str, weekday: int, name: str) -> dict:
         "active": False,
         "archived": False,
         "source_document": path.name,
-        "sections": sections,
+        "stops": stops,
         "import_report": {"ignored_rows": ignored_rows},
     }
 
@@ -323,8 +314,8 @@ def build_seed(hainaut_dir: Path, ardennes_dir: Path) -> dict:
         "templates": len(templates),
         "hainaut": sum(item["zone"] == "hainaut" for item in templates),
         "ardennes": sum(item["zone"] == "ardennes" for item in templates),
-        "stops": sum(len(section["stops"]) for item in templates for section in item["sections"]),
-        "services": sum(len(stop["services"]) for item in templates for section in item["sections"] for stop in section["stops"]),
+        "stops": sum(len(item["stops"]) for item in templates),
+        "services": sum(len(stop["services"]) for item in templates for stop in item["stops"]),
     }
     return {"format": "lvm-tour-seed-v1", "stats": stats, "templates": templates}
 
@@ -334,7 +325,7 @@ def apply_local(seed: dict) -> int:
         raise RuntimeError("Definissez ALLOW_LOCAL_TOUR_IMPORT=1 pour confirmer l'ecriture locale.")
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from app.core.config import settings
-    from app.models.models import SessionLocal, TourSection, TourService, TourStop, TourTemplate
+    from app.models.models import SessionLocal, TourService, TourStop, TourTemplate
 
     host = (urlparse(settings.DATABASE_URL).hostname or "").lower()
     if host not in {"localhost", "127.0.0.1", "::1", "db"}:
@@ -352,16 +343,12 @@ def apply_local(seed: dict) -> int:
             template = TourTemplate(**template_values)
             db.add(template)
             db.flush()
-            for section_data in payload["sections"]:
-                section = TourSection(template_id=template.id, label=section_data["label"], position=section_data["position"])
-                db.add(section)
+            for stop_data in payload["stops"]:
+                stop = TourStop(template_id=template.id, **{key: stop_data.get(key) for key in ("name", "note", "payment_text", "frequency_text", "estimated_minutes", "position", "active")})
+                db.add(stop)
                 db.flush()
-                for stop_data in section_data["stops"]:
-                    stop = TourStop(template_id=template.id, section_id=section.id, **{key: stop_data.get(key) for key in ("name", "note", "payment_text", "frequency_text", "estimated_minutes", "position", "active")})
-                    db.add(stop)
-                    db.flush()
-                    for service_data in stop_data["services"]:
-                        db.add(TourService(stop_id=stop.id, **{key: service_data.get(key) for key in ("label", "price_ht", "position", "active")}))
+                for service_data in stop_data["services"]:
+                    db.add(TourService(stop_id=stop.id, **{key: service_data.get(key) for key in ("label", "price_ht", "position", "active")}))
             created += 1
         db.commit()
         return created

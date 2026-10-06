@@ -3,11 +3,11 @@ import { ActivityIndicator, Pressable, ScrollView, Switch, Text, TextInput, View
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, ChevronLeft, Plus, Save, Trash2 } from "lucide-react-native";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Plus, PlusCircle, Save, Trash2, X } from "lucide-react-native";
 
 import { useAuth } from "../../../../../src/hooks/useAuth";
 import { api } from "../../../../../src/lib/api";
-import { TourSection, TourStop, TourTemplate, emptyTourTemplate } from "../../../../../src/lib/tours";
+import { TourStop, TourTemplate, emptyTourTemplate } from "../../../../../src/lib/tours";
 import { useTheme } from "../../../../../src/ui/components/ThemeToggle";
 import { Card, CardContent } from "../../../../../src/ui/components/Card";
 import { Button } from "../../../../../src/ui/components/Button";
@@ -23,80 +23,67 @@ const toTimeValue = (time: string) => `2000-01-01T${time.slice(0, 5)}`;
 const fromTimeValue = (value: string) => `${value.split("T")[1] ?? "08:00"}:00`;
 
 type Colors = { text: string; muted: string; border: string; soft: string; input: string; header: string };
-type Cols = { name: number; face: number; price: number; minutes: number; payment: number; frequency: number; note: number; actions: number };
-
-const CHAR_WIDTH = 7.3;
-const CELL_PADDING = 28;
-const measure = (text: string) => Math.round(text.length * CHAR_WIDTH) + CELL_PADDING;
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-
-// Auto-fit façon Excel : chaque colonne prend la largeur du texte le plus
-// long qu'elle contient (en-tête compris), bornée pour rester utilisable.
-function computeColumnWidths(sections: TourSection[]): Cols {
-  const widths = {
-    name: measure("Commerce"),
-    face: measure("Face 1"),
-    price: measure("Prix 1"),
-    minutes: measure("Temps"),
-    payment: measure("Paiement"),
-    frequency: measure("Fréquence"),
-    note: measure("Note"),
-  };
-  for (const section of sections) {
-    for (const stop of section.stops) {
-      widths.name = Math.max(widths.name, measure(stop.name || ""));
-      widths.minutes = Math.max(widths.minutes, measure(stop.estimated_minutes != null ? String(stop.estimated_minutes) : ""));
-      widths.payment = Math.max(widths.payment, measure(stop.payment_text ?? ""));
-      widths.frequency = Math.max(widths.frequency, measure(stop.frequency_text ?? ""));
-      widths.note = Math.max(widths.note, measure(stop.note ?? ""));
-      for (const service of stop.services.slice(0, 2)) {
-        widths.face = Math.max(widths.face, measure(service.label || ""));
-        widths.price = Math.max(widths.price, measure(String(service.price_ht ?? "")));
-      }
-    }
-  }
-  return {
-    name: clamp(widths.name, 120, 280),
-    face: clamp(widths.face, 70, 180),
-    price: clamp(widths.price, 60, 110),
-    minutes: clamp(widths.minutes, 55, 90),
-    payment: clamp(widths.payment, 90, 240),
-    frequency: clamp(widths.frequency, 90, 240),
-    note: clamp(widths.note, 90, 240),
-    actions: 76,
-  };
-}
 
 function cloneTemplate(value: TourTemplate): TourTemplate {
   return JSON.parse(JSON.stringify(value));
 }
 
-function Cell({ width, children }: { width: number; children: React.ReactNode }) {
-  return <View style={{ width, paddingHorizontal: 4, justifyContent: "center" }}>{children}</View>;
-}
-
-function CellInput({ width, value, onChangeText, colors, keyboardType, bold }: { width: number; value: string; onChangeText: (v: string) => void; colors: Colors; keyboardType?: any; bold?: boolean }) {
+// Ligne compacte unique (Temps/Paiement/Fréquence/Note) : le libellé devient
+// le placeholder plutôt qu'un texte au-dessus, pour tenir sur une seule
+// ligne même avec beaucoup de commerces listés.
+function CompactMetaRow({ stop, setStop, colors }: { stop: TourStop; setStop: (fn: (value: TourStop) => void) => void; colors: Colors }) {
+  const [minutesText, setMinutesText] = useState(stop.estimated_minutes == null ? "" : String(stop.estimated_minutes));
+  useEffect(() => { setMinutesText(stop.estimated_minutes == null ? "" : String(stop.estimated_minutes)); }, [stop.estimated_minutes]);
+  const fieldStyle = { minWidth: 0, color: colors.text, fontSize: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 7, backgroundColor: colors.input };
   return (
-    <Cell width={width}>
+    <View style={{ flexDirection: "row", gap: 6, marginBottom: 12 }}>
       <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        keyboardType={keyboardType}
+        value={minutesText}
+        onChangeText={setMinutesText}
+        onBlur={() => {
+          const trimmed = minutesText.trim();
+          const parsed = Number(trimmed.replace(",", "."));
+          setStop((next) => { next.estimated_minutes = trimmed && Number.isFinite(parsed) ? parsed : null; });
+        }}
+        keyboardType="number-pad"
+        placeholder="Min"
         placeholderTextColor={colors.muted}
-        style={{ color: colors.text, fontWeight: bold ? "700" : "400", fontSize: 13, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 7, backgroundColor: colors.input }}
+        style={[fieldStyle, { flex: 0.6 }]}
       />
-    </Cell>
+      <TextInput
+        value={stop.payment_text ?? ""}
+        onChangeText={(value) => setStop((next) => { next.payment_text = value || null; })}
+        placeholder="Paiement"
+        placeholderTextColor={colors.muted}
+        style={[fieldStyle, { flex: 1 }]}
+      />
+      <TextInput
+        value={stop.frequency_text ?? ""}
+        onChangeText={(value) => setStop((next) => { next.frequency_text = value || null; })}
+        placeholder="Fréquence"
+        placeholderTextColor={colors.muted}
+        style={[fieldStyle, { flex: 1 }]}
+      />
+      <TextInput
+        value={stop.note ?? ""}
+        onChangeText={(value) => setStop((next) => { next.note = value || null; })}
+        placeholder="Note"
+        placeholderTextColor={colors.muted}
+        style={[fieldStyle, { flex: 1.4 }]}
+      />
+    </View>
   );
 }
 
-// Champ numérique : garde le texte brut tant que l'utilisateur tape (une
+// Variante numérique : garde le texte brut tant que l'utilisateur tape (une
 // chaîne vide reste vide) pour ne pas retomber sur "0" à chaque frappe —
 // la valeur n'est reconvertie en nombre qu'à la perte du focus.
-function NumberCellInput({ width, value, onCommit, colors, keyboardType }: { width: number; value: number | null; onCommit: (v: number | null) => void; colors: Colors; keyboardType?: any }) {
+function MetaNumberField({ label, value, onCommit, colors, minWidth = 90 }: { label: string; value: number | null; onCommit: (v: number | null) => void; colors: Colors; minWidth?: number }) {
   const [text, setText] = useState(value == null ? "" : String(value));
   useEffect(() => { setText(value == null ? "" : String(value)); }, [value]);
   return (
-    <Cell width={width}>
+    <View style={{ flexGrow: 1, minWidth }}>
+      <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "600", marginBottom: 4 }}>{label}</Text>
       <TextInput
         value={text}
         onChangeText={setText}
@@ -106,16 +93,44 @@ function NumberCellInput({ width, value, onCommit, colors, keyboardType }: { wid
           const parsed = Number(trimmed.replace(",", "."));
           onCommit(Number.isFinite(parsed) ? parsed : null);
         }}
-        keyboardType={keyboardType}
+        keyboardType="number-pad"
         placeholderTextColor={colors.muted}
-        style={{ color: colors.text, fontSize: 13, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 7, backgroundColor: colors.input }}
+        style={{ color: colors.text, fontSize: 13, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 8, backgroundColor: colors.input }}
       />
-    </Cell>
+    </View>
   );
 }
 
-function HeaderCell({ width, label, colors }: { width: number; label: string; colors: Colors }) {
-  return <Cell width={width}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>{label}</Text></Cell>;
+// Une ligne de prestation : libellé + prix librement éditables, comme le
+// pattern "Prestations" déjà utilisé sur l'écran d'ajout d'intervention.
+function ServiceRow({ label, price, onChangeLabel, onCommitPrice, onRemove, colors }: { label: string; price: number; onChangeLabel: (v: string) => void; onCommitPrice: (v: number | null) => void; onRemove: () => void; colors: Colors }) {
+  const [priceText, setPriceText] = useState(String(price ?? ""));
+  useEffect(() => { setPriceText(String(price ?? "")); }, [price]);
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
+      <TextInput
+        value={label}
+        onChangeText={onChangeLabel}
+        placeholder="Libellé (ex: 2 F)"
+        placeholderTextColor={colors.muted}
+        style={{ flex: 2, minWidth: 0, color: colors.text, fontSize: 13, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 8, backgroundColor: colors.input }}
+      />
+      <TextInput
+        value={priceText}
+        onChangeText={setPriceText}
+        onBlur={() => {
+          const trimmed = priceText.trim();
+          const parsed = Number(trimmed.replace(",", "."));
+          onCommitPrice(trimmed && Number.isFinite(parsed) ? parsed : 0);
+        }}
+        keyboardType="decimal-pad"
+        placeholder="Prix"
+        placeholderTextColor={colors.muted}
+        style={{ flex: 1, minWidth: 0, color: colors.text, fontSize: 13, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 8, backgroundColor: colors.input }}
+      />
+      <Pressable onPress={onRemove} hitSlop={8}><X size={16} color="#EF4444" /></Pressable>
+    </View>
+  );
 }
 
 
@@ -131,6 +146,7 @@ export default function TourTemplateEditor() {
   const wide = screenWidth >= 900;
   const [draft, setDraft] = useState<TourTemplate>(() => emptyTourTemplate());
   const [hydratedId, setHydratedId] = useState<string | null>(null);
+  const [generalOpen, setGeneralOpen] = useState(isNew);
   const colors: Colors = {
     text: isDark ? "#F8FAFC" : "#0F172A",
     muted: isDark ? "#94A3B8" : "#64748B",
@@ -175,23 +191,12 @@ export default function TourTemplateEditor() {
     fn(next);
     return next;
   });
-  const move = <T,>(items: T[], index: number, direction: -1 | 1) => {
-    const target = index + direction;
-    if (target < 0 || target >= items.length) return;
-    [items[index], items[target]] = [items[target], items[index]];
-    items.forEach((item: any, position) => { item.position = position; });
-  };
 
-  const addSection = () => mutate((next) => {
-    next.sections.push({ label: "Nouvelle section", position: next.sections.length, stops: [] });
-  });
-  const addStop = (sectionIndex: number) => mutate((next) => {
-    next.sections[sectionIndex].stops.push({ name: "Nouveau commerce", position: next.sections[sectionIndex].stops.length, active: true, services: [{ label: "", price_ht: 0, position: 0, active: true }] });
+  const addStop = () => mutate((next) => {
+    next.stops.push({ name: "Nouveau commerce", position: next.stops.length, active: true, services: [{ label: "", price_ht: 0, position: 0, active: true }] });
   });
 
-  const totalStops = useMemo(() => draft.sections.reduce((sum, section) => sum + section.stops.length, 0), [draft]);
-  const cols = useMemo(() => computeColumnWidths(draft.sections), [draft.sections]);
-  const tableWidth = cols.name + cols.face * 2 + cols.price * 2 + cols.minutes + cols.payment + cols.frequency + cols.note + cols.actions;
+  const totalStops = useMemo(() => draft.stops.length, [draft]);
 
   if (loading || (!isNew && templateQuery.isLoading)) return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: isDark ? "#020817" : "#FFFFFF" }}><ActivityIndicator color="#3B82F6" /></View>;
   if (!isAdmin) return <Redirect href="/(app)/calendar" />;
@@ -216,8 +221,19 @@ export default function TourTemplateEditor() {
         </View>
 
         <Card style={{ marginBottom: 18, maxWidth: 1300, width: "100%", alignSelf: "center" }}>
-          <CardContent style={{ padding: 18, gap: 14 }}>
-            <Text style={{ color: colors.text, fontSize: 17, fontWeight: "700" }}>Paramètres généraux</Text>
+          <Pressable onPress={() => setGeneralOpen((value) => !value)} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 18, paddingBottom: generalOpen ? 0 : 18 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.text, fontSize: 17, fontWeight: "700" }}>Paramètres généraux</Text>
+              {!generalOpen && (
+                <Text style={{ color: colors.muted, fontSize: 13, marginTop: 4 }}>
+                  {draft.name} · {draft.zone === "hainaut" ? "Hainaut" : "Ardennes"} · {DAY_LETTERS[draft.weekday - 1]} · {draft.active ? "actif" : "inactif"}
+                </Text>
+              )}
+            </View>
+            {generalOpen ? <ChevronDown size={20} color={colors.muted} /> : <ChevronRight size={20} color={colors.muted} />}
+          </Pressable>
+          {generalOpen && (
+          <CardContent style={{ padding: 18, paddingTop: 14, gap: 14 }}>
             <Input label="Nom de la tournée" value={draft.name} onChangeText={(value) => mutate((next) => { next.name = value; })} />
             <View style={{ flexDirection: wide ? "row" : "column", gap: 10 }}>
               <View style={{ flex: 1 }}>
@@ -240,9 +256,9 @@ export default function TourTemplateEditor() {
             <View style={{ gap: 7 }}>
               <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>Zone</Text>
               <SlidingPillSelector
-                options={[{ id: "hainaut", label: "Hainaut" }, { id: "ardennes", label: "Ardennes" }]}
-                selected={draft.zone}
-                onSelect={(id) => mutate((next) => { next.zone = id as "hainaut" | "ardennes"; })}
+                options={[{ id: "hainaut", label: "Hainaut" }]}
+                selected="hainaut"
+                onSelect={() => mutate((next) => { next.zone = "hainaut"; })}
                 pillColor="#3B82F6"
                 bgColor={colors.soft}
                 activeTextColor="#FFFFFF"
@@ -280,104 +296,98 @@ export default function TourTemplateEditor() {
               />
             </View>
           </CardContent>
+          )}
         </Card>
 
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10, maxWidth: 1300, width: "100%", alignSelf: "center" }}>
-          <Text style={{ color: colors.text, fontSize: 19, fontWeight: "700" }}>Sections et commerces</Text>
-          <Pressable onPress={addSection} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#16A34A", paddingHorizontal: 13, paddingVertical: 9, borderRadius: 12 }}><Plus size={17} color="#FFFFFF" /><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Section</Text></Pressable>
+          <Text style={{ color: colors.text, fontSize: 19, fontWeight: "700" }}>Commerces</Text>
         </View>
 
-        {draft.sections.map((section, sectionIndex) => (
-          <View key={`${section.id ?? "section"}-${sectionIndex}`} style={{ marginBottom: 22 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 8, maxWidth: 1300, width: "100%", alignSelf: "center" }}>
-              <TextInput value={section.label} onChangeText={(value) => mutate((next) => { next.sections[sectionIndex].label = value; })} style={{ flex: 1, fontSize: 16, fontWeight: "700", color: colors.text, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: 4 }} />
-              <Text style={{ color: colors.muted, fontSize: 12 }}>{section.stops.length} commerces</Text>
-              <Pressable disabled={sectionIndex === 0} onPress={() => mutate((next) => move(next.sections, sectionIndex, -1))}><ArrowUp size={17} color={sectionIndex === 0 ? colors.border : colors.muted} /></Pressable>
-              <Pressable disabled={sectionIndex === draft.sections.length - 1} onPress={() => mutate((next) => move(next.sections, sectionIndex, 1))}><ArrowDown size={17} color={sectionIndex === draft.sections.length - 1 ? colors.border : colors.muted} /></Pressable>
-              <Pressable onPress={() => mutate((next) => { next.sections.splice(sectionIndex, 1); })}><Trash2 size={17} color="#EF4444" /></Pressable>
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator style={{ maxWidth: "100%" }}>
-              <View style={{ width: tableWidth }}>
-                <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingTop: 6 }}>
-                  <View style={{ width: cols.name }} />
-                  <View style={{ width: cols.face * 2, paddingHorizontal: 6, borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 3 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 11 }}>NOMBRE DE FACE</Text></View>
-                  <View style={{ width: cols.price * 2, paddingHorizontal: 6, borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 3 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 11 }}>PRIX PRESTATION</Text></View>
-                  <View style={{ width: cols.minutes }} />
-                  <View style={{ width: cols.payment }} />
-                  <View style={{ width: cols.frequency }} />
-                  <View style={{ width: cols.note }} />
-                  <View style={{ width: cols.actions }} />
-                </View>
-                <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingVertical: 8, borderRadius: 10, marginBottom: 4 }}>
-                  <HeaderCell width={cols.name} label="Commerce" colors={colors} />
-                  <HeaderCell width={cols.face} label="Face 1" colors={colors} />
-                  <HeaderCell width={cols.face} label="Face 2" colors={colors} />
-                  <HeaderCell width={cols.price} label="Prix 1" colors={colors} />
-                  <HeaderCell width={cols.price} label="Prix 2" colors={colors} />
-                  <HeaderCell width={cols.minutes} label="Temps" colors={colors} />
-                  <HeaderCell width={cols.payment} label="Paiement" colors={colors} />
-                  <HeaderCell width={cols.frequency} label="Fréquence" colors={colors} />
-                  <HeaderCell width={cols.note} label="Note" colors={colors} />
-                  <HeaderCell width={cols.actions} label="" colors={colors} />
-                </View>
-                {section.stops.map((stop, stopIndex) => (
-                  <StopRow key={`${stop.id ?? "stop"}-${stopIndex}`} stop={stop} sectionIndex={sectionIndex} stopIndex={stopIndex} stopCount={section.stops.length} mutate={mutate} colors={colors} cols={cols} />
-                ))}
-              </View>
-            </ScrollView>
-            <Pressable onPress={() => addStop(sectionIndex)} style={{ alignSelf: "flex-start", flexDirection: "row", gap: 5, padding: 9, marginTop: 4 }}><Plus size={17} color="#3B82F6" /><Text style={{ color: "#3B82F6", fontWeight: "700" }}>Ajouter un commerce</Text></Pressable>
-          </View>
-        ))}
+        <View style={{ maxWidth: 1300, width: "100%", alignSelf: "center", gap: 10, marginBottom: 22 }}>
+          {draft.stops.map((stop, stopIndex) => (
+            <StopCard key={`${stop.id ?? "stop"}-${stopIndex}`} stop={stop} stopIndex={stopIndex} stopCount={draft.stops.length} mutate={mutate} colors={colors} />
+          ))}
+        </View>
+        <Pressable onPress={addStop} style={{ alignSelf: "flex-start", flexDirection: "row", gap: 5, padding: 9, marginTop: 4, maxWidth: 1300, width: "100%" }}><Plus size={17} color="#3B82F6" /><Text style={{ color: "#3B82F6", fontWeight: "700" }}>Ajouter un commerce</Text></Pressable>
       </ScrollView>
     </View>
   );
 }
 
-function StopRow({ stop, sectionIndex, stopIndex, stopCount, mutate, colors, cols }: { stop: TourStop; sectionIndex: number; stopIndex: number; stopCount: number; mutate: (fn: (next: TourTemplate) => void) => void; colors: Colors; cols: Cols }) {
-  const setStop = (fn: (value: TourStop) => void) => mutate((next: TourTemplate) => fn(next.sections[sectionIndex].stops[stopIndex]));
-  const face1 = stop.services[0];
-  const face2 = stop.services[1];
+function StopCard({ stop, stopIndex, stopCount, mutate, colors }: { stop: TourStop; stopIndex: number; stopCount: number; mutate: (fn: (next: TourTemplate) => void) => void; colors: Colors }) {
+  const setStop = (fn: (value: TourStop) => void) => mutate((next: TourTemplate) => fn(next.stops[stopIndex]));
 
-  const setFace1Label = (value: string) => setStop((next) => {
-    if (!next.services[0]) next.services[0] = { label: "", price_ht: 0, position: 0, active: true };
-    next.services[0].label = value;
+  const setServiceLabel = (serviceIndex: number, value: string) => setStop((next) => { next.services[serviceIndex].label = value; });
+  const setServicePrice = (serviceIndex: number, value: number | null) => setStop((next) => { next.services[serviceIndex].price_ht = value ?? 0; });
+  const removeService = (serviceIndex: number) => setStop((next) => {
+    next.services.splice(serviceIndex, 1);
+    next.services.forEach((service, index) => { service.position = index; });
   });
-  const setFace1Price = (value: number | null) => setStop((next) => {
-    if (!next.services[0]) next.services[0] = { label: "", price_ht: 0, position: 0, active: true };
-    next.services[0].price_ht = value ?? 0;
+  const addService = () => setStop((next) => {
+    next.services.push({ label: "", price_ht: 0, position: next.services.length, active: true });
   });
-  const setFace2Label = (value: string) => setStop((next) => {
-    if (value.trim() === "" && next.services[1] && !next.services[1].price_ht) {
-      next.services.splice(1, 1);
-      return;
-    }
-    if (!next.services[1]) next.services[1] = { label: "", price_ht: 0, position: 1, active: true };
-    next.services[1].label = value;
-  });
-  const setFace2Price = (value: number | null) => setStop((next) => {
-    if (!next.services[1]) next.services[1] = { label: "", price_ht: 0, position: 1, active: true };
-    next.services[1].price_ht = value ?? 0;
-  });
+
+  const hasSingleService = stop.services.length <= 1;
+  const singlePrice = stop.services[0]?.price_ht ?? 0;
 
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 3, borderBottomWidth: 1, borderColor: colors.border }}>
-      <CellInput width={cols.name} value={stop.name} onChangeText={(value) => setStop((next) => { next.name = value; })} colors={colors} bold />
-      <CellInput width={cols.face} value={face1?.label ?? ""} onChangeText={setFace1Label} colors={colors} />
-      <CellInput width={cols.face} value={face2?.label ?? ""} onChangeText={setFace2Label} colors={colors} />
-      <NumberCellInput width={cols.price} value={face1 ? face1.price_ht : null} onCommit={setFace1Price} colors={colors} keyboardType="decimal-pad" />
-      <NumberCellInput width={cols.price} value={face2 ? face2.price_ht : null} onCommit={setFace2Price} colors={colors} keyboardType="decimal-pad" />
-      <NumberCellInput width={cols.minutes} value={stop.estimated_minutes ?? null} onCommit={(value) => setStop((next) => { next.estimated_minutes = value; })} colors={colors} keyboardType="number-pad" />
-      <CellInput width={cols.payment} value={stop.payment_text ?? ""} onChangeText={(value) => setStop((next) => { next.payment_text = value || null; })} colors={colors} />
-      <CellInput width={cols.frequency} value={stop.frequency_text ?? ""} onChangeText={(value) => setStop((next) => { next.frequency_text = value || null; })} colors={colors} />
-      <CellInput width={cols.note} value={stop.note ?? ""} onChangeText={(value) => setStop((next) => { next.note = value || null; })} colors={colors} />
-      <Cell width={cols.actions}>
-        <View style={{ flexDirection: "row", gap: 6 }}>
-          <Pressable disabled={stopIndex === 0} onPress={() => mutate((next) => { const items = next.sections[sectionIndex].stops; const target = stopIndex - 1; if (target < 0) return; [items[stopIndex], items[target]] = [items[target], items[stopIndex]]; items.forEach((item, position) => { item.position = position; }); })}><ArrowUp size={16} color={stopIndex === 0 ? colors.border : colors.muted} /></Pressable>
-          <Pressable disabled={stopIndex === stopCount - 1} onPress={() => mutate((next) => { const items = next.sections[sectionIndex].stops; const target = stopIndex + 1; if (target >= items.length) return; [items[stopIndex], items[target]] = [items[target], items[stopIndex]]; items.forEach((item, position) => { item.position = position; }); })}><ArrowDown size={16} color={stopIndex === stopCount - 1 ? colors.border : colors.muted} /></Pressable>
-          <Pressable onPress={() => mutate((next) => { next.sections[sectionIndex].stops.splice(stopIndex, 1); })}><Trash2 size={16} color="#EF4444" /></Pressable>
+    <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, backgroundColor: colors.soft }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <TextInput
+          value={stop.name}
+          onChangeText={(value) => setStop((next) => { next.name = value; })}
+          placeholder="Nom du commerce"
+          placeholderTextColor={colors.muted}
+          style={{ flex: 1, minWidth: 0, color: colors.text, fontWeight: "700", fontSize: 15, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 9, backgroundColor: colors.input }}
+        />
+        <Pressable disabled={stopIndex === 0} onPress={() => mutate((next) => { const items = next.stops; const target = stopIndex - 1; if (target < 0) return; [items[stopIndex], items[target]] = [items[target], items[stopIndex]]; items.forEach((item, position) => { item.position = position; }); })}><ArrowUp size={17} color={stopIndex === 0 ? colors.border : colors.muted} /></Pressable>
+        <Pressable disabled={stopIndex === stopCount - 1} onPress={() => mutate((next) => { const items = next.stops; const target = stopIndex + 1; if (target >= items.length) return; [items[stopIndex], items[target]] = [items[target], items[stopIndex]]; items.forEach((item, position) => { item.position = position; }); })}><ArrowDown size={17} color={stopIndex === stopCount - 1 ? colors.border : colors.muted} /></Pressable>
+        <Pressable onPress={() => mutate((next) => { next.stops.splice(stopIndex, 1); })}><Trash2 size={17} color="#EF4444" /></Pressable>
+      </View>
+
+      <CompactMetaRow stop={stop} setStop={setStop} colors={colors} />
+
+      {hasSingleService ? (
+        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <MetaNumberField
+              label="Prix"
+              value={singlePrice}
+              onCommit={(value) => setStop((next) => {
+                if (next.services.length === 0) next.services.push({ label: "", price_ht: 0, position: 0, active: true });
+                next.services[0].price_ht = value ?? 0;
+              })}
+              colors={colors}
+              minWidth={110}
+            />
+          </View>
+          <Pressable onPress={addService} style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(59,130,246,0.1)", paddingHorizontal: 10, paddingVertical: 9, borderRadius: 999 }}>
+            <PlusCircle size={14} color="#3B82F6" />
+            <Text style={{ color: "#3B82F6", fontWeight: "700", fontSize: 12 }}>Variante</Text>
+          </Pressable>
         </View>
-      </Cell>
+      ) : (
+        <>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>Prestations</Text>
+            <Pressable onPress={addService} style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(59,130,246,0.1)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 }}>
+              <PlusCircle size={14} color="#3B82F6" />
+              <Text style={{ color: "#3B82F6", fontWeight: "700", fontSize: 12 }}>Ajouter</Text>
+            </Pressable>
+          </View>
+          {stop.services.map((service, serviceIndex) => (
+            <ServiceRow
+              key={serviceIndex}
+              label={service.label}
+              price={service.price_ht}
+              onChangeLabel={(value) => setServiceLabel(serviceIndex, value)}
+              onCommitPrice={(value) => setServicePrice(serviceIndex, value)}
+              onRemove={() => removeService(serviceIndex)}
+              colors={colors}
+            />
+          ))}
+        </>
+      )}
     </View>
   );
 }

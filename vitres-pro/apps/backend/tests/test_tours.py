@@ -70,14 +70,13 @@ class TemplateValidationTests(unittest.TestCase):
 
     def test_active_template_requires_a_service(self):
         with self.assertRaises(HTTPException) as context:
-            _validate_template_activation(self._payload(active=True, sections=[]))
+            _validate_template_activation(self._payload(active=True, stops=[]))
         self.assertEqual(context.exception.status_code, 422)
 
     def test_active_template_with_a_service_is_valid(self):
-        payload = self._payload(active=True, sections=[{
-            "label": "Section",
-            "stops": [{"name": "Commerce", "services": [{"label": "2 F", "price_ht": 30}]}],
-        }])
+        payload = self._payload(active=True, stops=[
+            {"name": "Commerce", "services": [{"label": "2 F", "price_ht": 30}]},
+        ])
         _validate_template_activation(payload)  # ne doit pas lever
 
 
@@ -119,7 +118,7 @@ class InitialSeedTests(unittest.TestCase):
         self.assertEqual(self.seed["stats"]["hainaut"], 11)
         self.assertEqual(self.seed["stats"]["ardennes"], 10)
         self.assertEqual(self.seed["stats"]["stops"], 517)
-        self.assertEqual(self.seed["stats"]["services"], 866)
+        self.assertEqual(self.seed["stats"]["services"], 871)
         # Sans parsing de fréquence/paiement, une ligne de continuation qui ne
         # porte plus qu'un code paiement isolé (ex: "F") et rien d'autre n'a
         # plus rien à rattacher au commerce précédent. Cas negligeable (1/517).
@@ -142,8 +141,7 @@ class InitialSeedTests(unittest.TestCase):
         services = [
             service
             for template in self.seed["templates"]
-            for section in template["sections"]
-            for stop in section["stops"]
+            for stop in template["stops"]
             for service in stop["services"]
         ]
         self.assertTrue(services)

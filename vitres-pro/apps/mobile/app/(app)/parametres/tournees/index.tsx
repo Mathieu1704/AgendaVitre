@@ -120,9 +120,9 @@ export default function ToursAdminScreen() {
               <Plus size={18} color="#FFFFFF" />
               <Text style={{ color: "#FFFFFF", fontWeight: "700", marginLeft: 6 }}>Nouveau modèle</Text>
             </Button>
-            {templatesQuery.isLoading ? <ActivityIndicator color="#3B82F6" /> : [...(templatesQuery.data ?? [])].sort((a, b) => a.zone === b.zone ? 0 : a.zone === "hainaut" ? -1 : 1).map((template) => {
-              const stops = template.sections.reduce((sum, section) => sum + section.stops.length, 0);
-              const services = template.sections.reduce((sum, section) => sum + section.stops.reduce((inner, stop) => inner + stop.services.length, 0), 0);
+            {templatesQuery.isLoading ? <ActivityIndicator color="#3B82F6" /> : (templatesQuery.data ?? []).filter((template) => template.zone === "hainaut").map((template) => {
+              const stops = template.stops.length;
+              const services = template.stops.reduce((sum, stop) => sum + stop.services.length, 0);
               return (
                 <Card key={template.id}>
                   <CardContent style={{ padding: 16, flexDirection: wide ? "row" : "column", gap: 12, alignItems: wide ? "center" : "stretch" }}>
@@ -155,11 +155,7 @@ export default function ToursAdminScreen() {
           <View style={{ gap: 8 }}>
             {draftsQuery.isLoading ? <ActivityIndicator color="#3B82F6" /> : (draftsQuery.data ?? []).length === 0 ? (
               <Card><CardContent style={{ padding: 20 }}><Text style={{ color: muted }}>Aucun brouillon : activez d'abord un modèle dans "Modèles".</Text></CardContent></Card>
-            ) : [...(draftsQuery.data ?? [])].sort((a, b) => {
-              const zoneA = templatesQuery.data?.find((item) => item.id === a.template_id)?.zone;
-              const zoneB = templatesQuery.data?.find((item) => item.id === b.template_id)?.zone;
-              return zoneA === zoneB ? 0 : zoneA === "hainaut" ? -1 : 1;
-            }).map((run) => {
+            ) : (draftsQuery.data ?? []).filter((run) => templatesQuery.data?.find((item) => item.id === run.template_id)?.zone === "hainaut").map((run) => {
               const selected = run.stops.filter((stop) => stop.selected).length;
               const templateZone = templatesQuery.data?.find((item) => item.id === run.template_id)?.zone;
               const eligible = templateZone ? ordinaryEmployees.filter((employee) => employee.zone === templateZone) : [];

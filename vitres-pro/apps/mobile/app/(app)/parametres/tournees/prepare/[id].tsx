@@ -20,36 +20,6 @@ const toTimeValue = (time: string) => `2000-01-01T${time.slice(0, 5)}`;
 const fromTimeValue = (value: string) => value.split("T")[1] ?? "08:00";
 
 type Colors = { text: string; muted: string; border: string; header: string };
-type Cols = { name: number; face: number; price: number; minutes: number; payment: number; frequency: number };
-
-const CHAR_WIDTH = 7.3;
-const CELL_PADDING = 28;
-const measure = (text: string) => Math.round(text.length * CHAR_WIDTH) + CELL_PADDING;
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-
-// Auto-fit façon Excel : chaque colonne prend la largeur du texte le plus
-// long qu'elle contient (en-tête compris), bornée pour rester utilisable.
-function computeColumnWidths(stops: TourRunStop[]): Cols {
-  const widths = { name: measure("Commerce"), face: measure("Face 1"), price: measure("Prix 1"), minutes: measure("Temps"), payment: measure("Paiement"), frequency: measure("Fréquence") };
-  for (const stop of stops) {
-    widths.name = Math.max(widths.name, measure(stop.name || ""));
-    widths.minutes = Math.max(widths.minutes, measure(stop.estimated_minutes != null ? String(stop.estimated_minutes) : ""));
-    widths.payment = Math.max(widths.payment, measure(stop.payment_text ?? ""));
-    widths.frequency = Math.max(widths.frequency, measure(stop.frequency_text ?? ""));
-    for (const service of stop.services.slice(0, 2)) {
-      widths.face = Math.max(widths.face, measure(service.label || ""));
-      widths.price = Math.max(widths.price, measure(formatEuro(service.price_ht)));
-    }
-  }
-  return {
-    name: clamp(widths.name, 120, 280),
-    face: clamp(widths.face, 70, 160),
-    price: clamp(widths.price, 60, 110),
-    minutes: clamp(widths.minutes, 55, 90),
-    payment: clamp(widths.payment, 90, 240),
-    frequency: clamp(widths.frequency, 90, 240),
-  };
-}
 
 function brusselsTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Europe/Brussels" });
@@ -118,17 +88,6 @@ export default function TourPreparationScreen() {
 
   const selectedTotal = useMemo(() => runQuery.data?.stops.filter((stop) => stop.selected).reduce((sum, stop) => sum + Number(stop.services.find((service) => service.id === stop.selected_service_id)?.price_ht ?? 0), 0) ?? 0, [runQuery.data]);
   const selectedCount = useMemo(() => runQuery.data?.stops.filter((stop) => stop.selected).length ?? 0, [runQuery.data]);
-  const grouped = useMemo(() => {
-    const result = new Map<string, TourRunStop[]>();
-    for (const stop of runQuery.data?.stops ?? []) {
-      const section = stop.section_label || "Sans section";
-      result.set(section, [...(result.get(section) ?? []), stop]);
-    }
-    return [...result.entries()];
-  }, [runQuery.data]);
-  const cols = useMemo(() => computeColumnWidths(runQuery.data?.stops ?? []), [runQuery.data]);
-  const tableWidth = cols.name + (cols.face + cols.price) * 2 + cols.minutes + cols.payment + cols.frequency;
-
   if (loading || runQuery.isLoading) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: isDark ? "#020817" : "#FFFFFF" }}><ActivityIndicator color="#3B82F6" /></View>;
   if (!isAdmin) return <Redirect href="/(app)/calendar" />;
   if (!runQuery.data) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: isDark ? "#020817" : "#FFFFFF" }}><Text style={{ color: colors.text }}>Brouillon introuvable.</Text></View>;
@@ -177,68 +136,41 @@ export default function TourPreparationScreen() {
           </CardContent>
         </Card>
 
-        {grouped.map(([section, stops]) => (
-          <View key={section} style={{ marginBottom: 20 }}>
-            <Text style={{ color: colors.text, fontSize: 18, fontWeight: "700", marginBottom: 8, maxWidth: 1200, width: "100%", alignSelf: "center" }}>{section}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator style={{ maxWidth: "100%" }}>
-              <View style={{ width: tableWidth }}>
-                <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingTop: 6 }}>
-                  <View style={{ width: cols.name }} />
-                  <View style={{ width: cols.face * 2, paddingHorizontal: 6, borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 3 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 11 }}>NOMBRE DE FACE</Text></View>
-                  <View style={{ width: cols.price * 2, paddingHorizontal: 6, borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 3 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 11 }}>PRIX PRESTATION</Text></View>
-                  <View style={{ width: cols.minutes }} />
-                  <View style={{ width: cols.payment }} />
-                  <View style={{ width: cols.frequency }} />
-                </View>
-                <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingVertical: 8, borderRadius: 10, marginBottom: 4 }}>
-                  <View style={{ width: cols.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Commerce</Text></View>
-                  <View style={{ width: cols.face, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Face 1</Text></View>
-                  <View style={{ width: cols.face, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Face 2</Text></View>
-                  <View style={{ width: cols.price, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Prix 1</Text></View>
-                  <View style={{ width: cols.price, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Prix 2</Text></View>
-                  <View style={{ width: cols.minutes, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Temps</Text></View>
-                  <View style={{ width: cols.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Paiement</Text></View>
-                  <View style={{ width: cols.frequency, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Fréquence</Text></View>
-                </View>
-                {stops.map((stop) => {
-                  const face1 = stop.services[0];
-                  const face2 = stop.services[1];
-                  return (
-                    <View key={stop.id} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 5, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: stop.selected ? (isDark ? "rgba(59,130,246,0.08)" : "rgba(59,130,246,0.05)") : "transparent" }}>
-                      <View style={{ width: cols.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{stop.name}</Text></View>
-                      <FaceCell service={face1} width={cols.face} selected={stop.selected && stop.selected_service_id === face1?.id} onPress={() => face1 && toggleFace(stop, face1.id)} colors={colors} />
-                      <FaceCell service={face2} width={cols.face} selected={stop.selected && stop.selected_service_id === face2?.id} onPress={() => face2 && toggleFace(stop, face2.id)} colors={colors} />
-                      <PriceCell service={face1} width={cols.price} selected={stop.selected && stop.selected_service_id === face1?.id} onPress={() => face1 && toggleFace(stop, face1.id)} colors={colors} />
-                      <PriceCell service={face2} width={cols.price} selected={stop.selected && stop.selected_service_id === face2?.id} onPress={() => face2 && toggleFace(stop, face2.id)} colors={colors} />
-                      <View style={{ width: cols.minutes, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.estimated_minutes ?? ""}</Text></View>
-                      <View style={{ width: cols.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.payment_text ?? ""}</Text></View>
-                      <View style={{ width: cols.frequency, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.frequency_text ?? ""}</Text></View>
-                    </View>
-                  );
-                })}
-              </View>
-            </ScrollView>
-          </View>
-        ))}
+        <View style={{ gap: 10, maxWidth: 1200, width: "100%", alignSelf: "center" }}>
+          {run.stops.map((stop) => (
+            <PrepareStopCard key={stop.id} stop={stop} onSelect={(serviceId) => toggleFace(stop, serviceId)} colors={colors} isDark={isDark} />
+          ))}
+        </View>
       </ScrollView>
     </View>
   );
 }
 
-function FaceCell({ service, selected, onPress, colors, width }: { service: { id: string; label: string; price_ht: number } | undefined; selected: boolean; onPress: () => void; colors: Colors; width: number }) {
-  if (!service) return <View style={{ width }} />;
+// Carte commerce en lecture seule (nom/temps/paiement/fréquence), avec la
+// liste ouverte de prestations rendue comme des lignes sélectionnables : un
+// tap choisit la prestation faite cette semaine (une seule à la fois).
+function PrepareStopCard({ stop, onSelect, colors, isDark }: { stop: TourRunStop; onSelect: (serviceId: string) => void; colors: Colors; isDark: boolean }) {
+  const meta = [stop.estimated_minutes != null ? `${stop.estimated_minutes} min` : null, stop.payment_text, stop.frequency_text].filter(Boolean).join(" · ");
   return (
-    <Pressable onPress={onPress} style={{ width: width - 2, marginRight: 2, borderRadius: 9, borderWidth: 1, borderColor: selected ? "#3B82F6" : colors.border, backgroundColor: selected ? "rgba(59,130,246,0.15)" : "transparent", paddingHorizontal: 8, paddingVertical: 7 }}>
-      <Text style={{ color: selected ? "#3B82F6" : colors.text, fontWeight: selected ? "700" : "500", fontSize: 12 }} numberOfLines={1}>{service.label || "—"}</Text>
-    </Pressable>
-  );
-}
-
-function PriceCell({ service, selected, onPress, colors, width }: { service: { id: string; label: string; price_ht: number } | undefined; selected: boolean; onPress: () => void; colors: Colors; width: number }) {
-  if (!service) return <View style={{ width }} />;
-  return (
-    <Pressable onPress={onPress} style={{ width: width - 2, marginRight: 2, borderRadius: 9, borderWidth: 1, borderColor: selected ? "#3B82F6" : colors.border, backgroundColor: selected ? "rgba(59,130,246,0.15)" : "transparent", paddingHorizontal: 8, paddingVertical: 7 }}>
-      <Text style={{ color: selected ? "#3B82F6" : colors.muted, fontSize: 12, fontWeight: "600" }} numberOfLines={1}>{formatEuro(service.price_ht)}</Text>
-    </Pressable>
+    <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, backgroundColor: stop.selected ? (isDark ? "rgba(59,130,246,0.08)" : "rgba(59,130,246,0.05)") : colors.header }}>
+      <Text style={{ color: colors.text, fontWeight: "700", fontSize: 14, marginBottom: 2 }}>{stop.name}</Text>
+      {!!meta && <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 8 }}>{meta}</Text>}
+      <View style={{ gap: 6, marginTop: meta ? 0 : 8 }}>
+        {stop.services.length === 0 && <Text style={{ color: colors.muted, fontSize: 12 }}>Aucune prestation définie.</Text>}
+        {stop.services.map((service) => {
+          const selected = stop.selected && stop.selected_service_id === service.id;
+          return (
+            <Pressable
+              key={service.id}
+              onPress={() => onSelect(service.id)}
+              style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: selected ? "#3B82F6" : colors.border, borderRadius: 9, backgroundColor: selected ? "rgba(59,130,246,0.12)" : "transparent", paddingHorizontal: 10, paddingVertical: 9 }}
+            >
+              <Text style={{ color: selected ? "#3B82F6" : colors.text, fontWeight: selected ? "700" : "500", fontSize: 13, flex: 1, minWidth: 0 }} numberOfLines={1}>{service.label || "—"}</Text>
+              <Text style={{ color: selected ? "#3B82F6" : colors.muted, fontSize: 13, fontWeight: "600", marginLeft: 8 }}>{formatEuro(service.price_ht)}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }

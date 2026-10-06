@@ -28,13 +28,6 @@ export type TourStop = {
   services: TourService[];
 };
 
-export type TourSection = {
-  id?: string;
-  label: string;
-  position: number;
-  stops: TourStop[];
-};
-
 export type TourTemplate = {
   id?: string;
   name: string;
@@ -45,7 +38,7 @@ export type TourTemplate = {
   active: boolean;
   archived: boolean;
   source_document?: string | null;
-  sections: TourSection[];
+  stops: TourStop[];
 };
 
 export type TourRunService = {
@@ -58,7 +51,6 @@ export type TourRunService = {
 
 export type TourRunStop = {
   id: string;
-  section_label?: string | null;
   name: string;
   note?: string | null;
   payment_text?: string | null;
@@ -107,6 +99,6 @@ export function emptyTourTemplate(): TourTemplate {
     default_end_time: "16:00:00",
     active: false,
     archived: false,
-    sections: [],
+    stops: [],
   };
 }

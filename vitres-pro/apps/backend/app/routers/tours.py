@@ -20,7 +20,6 @@ from app.models.models import (
     TourRun,
     TourRunService,
     TourRunStop,
-    TourSection,
     TourService,
     TourStop,
     TourTemplate,
@@ -49,9 +48,7 @@ def _admin(user: Employee) -> None:
 
 def _template_query(db: Session):
     return db.query(TourTemplate).options(
-        selectinload(TourTemplate.sections)
-        .selectinload(TourSection.stops)
-        .selectinload(TourStop.services),
+        selectinload(TourTemplate.stops).selectinload(TourStop.services),
     )
 
 
@@ -126,39 +123,29 @@ def _bucket_for(day: date, month_start: date) -> date:
 
 def _replace_template_tree(db: Session, template: TourTemplate, payload: TourTemplateInput) -> None:
     db.query(TourStop).filter(TourStop.template_id == template.id).delete(synchronize_session=False)
-    db.query(TourSection).filter(TourSection.template_id == template.id).delete(synchronize_session=False)
     db.flush()
 
-    for section_index, section_data in enumerate(payload.sections):
-        section = TourSection(
+    for stop_index, stop_data in enumerate(payload.stops):
+        stop = TourStop(
             template_id=template.id,
-            label=section_data.label.strip(),
-            position=section_data.position if section_data.position is not None else section_index,
+            name=stop_data.name.strip(),
+            note=stop_data.note,
+            payment_text=stop_data.payment_text,
+            frequency_text=stop_data.frequency_text,
+            estimated_minutes=stop_data.estimated_minutes,
+            position=stop_data.position if stop_data.position is not None else stop_index,
+            active=stop_data.active,
         )
-        db.add(section)
+        db.add(stop)
         db.flush()
-        for stop_index, stop_data in enumerate(section_data.stops):
-            stop = TourStop(
-                template_id=template.id,
-                section_id=section.id,
-                name=stop_data.name.strip(),
-                note=stop_data.note,
-                payment_text=stop_data.payment_text,
-                frequency_text=stop_data.frequency_text,
-                estimated_minutes=stop_data.estimated_minutes,
-                position=stop_data.position if stop_data.position is not None else stop_index,
-                active=stop_data.active,
-            )
-            db.add(stop)
-            db.flush()
-            for service_index, service_data in enumerate(stop_data.services):
-                db.add(TourService(
-                    stop_id=stop.id,
-                    label=service_data.label.strip(),
-                    price_ht=service_data.price_ht,
-                    position=service_data.position if service_data.position is not None else service_index,
-                    active=service_data.active,
-                ))
+        for service_index, service_data in enumerate(stop_data.services):
+            db.add(TourService(
+                stop_id=stop.id,
+                label=service_data.label.strip(),
+                price_ht=service_data.price_ht,
+                position=service_data.position if service_data.position is not None else service_index,
+                active=service_data.active,
+            ))
 
 
 def _validate_template_activation(payload: TourTemplateInput) -> None:
@@ -168,7 +155,7 @@ def _validate_template_activation(payload: TourTemplateInput) -> None:
         raise HTTPException(status_code=422, detail="Un modele archive ne peut pas rester actif.")
     if not payload.active:
         return
-    services = [service for section in payload.sections for stop in section.stops if stop.active for service in stop.services if service.active]
+    services = [service for stop in payload.stops if stop.active for service in stop.services if service.active]
     if not services:
         raise HTTPException(status_code=422, detail="Le modele doit contenir au moins une prestation active avant activation.")
 
@@ -179,16 +166,11 @@ def _snapshot_template(db: Session, template: TourTemplate, run: TourRun) -> Non
     for stop in list(run.stops):
         db.delete(stop)
     db.flush()
-    ordered_stops = [
-        stop
-        for section in sorted(template.sections, key=lambda item: item.position)
-        for stop in sorted((item for item in section.stops if item.active), key=lambda item: item.position)
-    ]
+    ordered_stops = sorted((stop for stop in template.stops if stop.active), key=lambda item: item.position)
     for run_position, stop in enumerate(ordered_stops):
         run_stop = TourRunStop(
             run_id=run.id,
             source_stop_id=stop.id,
-            section_label=stop.section.label if stop.section else None,
             name=stop.name,
             note=stop.note,
             payment_text=stop.payment_text,

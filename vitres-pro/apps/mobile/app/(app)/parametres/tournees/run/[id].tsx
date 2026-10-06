@@ -159,14 +159,7 @@ export default function TourRunScreen() {
     onError: (error: any) => toast.error("Suppression impossible", error?.response?.data?.detail ?? "Erreur réseau"),
   });
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, TourRunStop[]>();
-    for (const stop of run?.stops.filter((item) => item.selected) ?? []) {
-      const key = stop.section_label || "Sans section";
-      map.set(key, [...(map.get(key) ?? []), stop]);
-    }
-    return [...map.entries()];
-  }, [run]);
+  const selectedStops = useMemo(() => run?.stops.filter((item) => item.selected) ?? [], [run]);
   const canClose = Boolean(run && run.stops.filter((stop) => stop.selected).every((stop) => stop.status !== "pending"));
   const tableWidth = cols.name + cols.variant + cols.payment + cols.status + cols.actions;
 
@@ -211,55 +204,52 @@ export default function TourRunScreen() {
           <Text style={{ color: colors.muted, textAlign: "right" }}>{run.progress.resolved}/{run.progress.total} commerces résolus</Text>
         </View>
 
-        {grouped.map(([section, stops]) => (
-          <View key={section} style={{ marginBottom: 20 }}>
-            <Text style={{ color: colors.text, fontSize: 17, fontWeight: "700", marginBottom: 8, maxWidth: 1200, width: "100%", alignSelf: "center" }}>{section}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator style={{ maxWidth: "100%" }}>
-              <View style={{ width: tableWidth }}>
-                <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingVertical: 8, borderRadius: 10, marginBottom: 4 }}>
-                  <View style={{ width: cols.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Commerce</Text></View>
-                  <View style={{ width: cols.variant, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Variante</Text></View>
-                  <View style={{ width: cols.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Paiement</Text></View>
-                  <View style={{ width: cols.status, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Statut</Text></View>
-                  <View style={{ width: cols.actions, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Actions</Text></View>
-                </View>
-                {stops.map((stop) => {
-                  const chosen = stop.services.find((service) => service.id === stop.selected_service_id) ?? stop.services[0];
-                  const statusColor = stop.status === "done" ? "#16A34A" : stop.status === "not_visited" ? "#EF4444" : colors.muted;
-                  const disabled = finished || cancelled || busyStop === stop.id;
-                  return (
-                    <View key={stop.id}>
-                      <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 7, borderBottomWidth: 1, borderColor: colors.border }}>
-                        <View style={{ width: cols.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{stop.name}</Text></View>
-                        <View style={{ width: cols.variant, paddingHorizontal: 6 }}>
-                          {chosen && <><Text style={{ color: colors.text, fontSize: 13 }}>{chosen.label}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{formatEuro(chosen.price_ht)}</Text></>}
-                        </View>
-                        <View style={{ width: cols.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.payment_text ?? ""}</Text></View>
-                        <View style={{ width: cols.status, paddingHorizontal: 6 }}><Text style={{ color: statusColor, fontWeight: "700", fontSize: 12 }}>{STATUS_LABELS[stop.status]}</Text></View>
-                        <View style={{ width: cols.actions, paddingHorizontal: 6, flexDirection: "row", gap: 6 }}>
-                          <Pressable disabled={disabled} onPress={() => resolveStop(stop, "done")} style={{ padding: 8, borderRadius: 9, backgroundColor: "#16A34A", opacity: disabled ? 0.5 : 1 }}><Check size={16} color="#FFFFFF" /></Pressable>
-                          <Pressable disabled={disabled} onPress={() => setReasonFor(reasonFor === stop.id ? null : stop.id)} style={{ padding: 8, borderRadius: 9, backgroundColor: "#EF4444", opacity: disabled ? 0.5 : 1 }}><X size={16} color="#FFFFFF" /></Pressable>
-                        </View>
-                      </View>
-                      {reasonFor === stop.id && (
-                        <View style={{ flexDirection: "row", gap: 8, alignItems: "center", paddingVertical: 8, paddingHorizontal: 6, backgroundColor: isDark ? "rgba(239,68,68,0.08)" : "#FEF2F2" }}>
-                          <TextInput
-                            value={reasonDrafts[stop.id] ?? ""}
-                            onChangeText={(value) => setReasonDrafts((old) => ({ ...old, [stop.id]: value }))}
-                            placeholder="Motif du non-visité"
-                            placeholderTextColor={colors.muted}
-                            style={{ flex: 1, color: colors.text, borderWidth: 1, borderColor: "#EF4444", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: colors.input }}
-                          />
-                          <Pressable onPress={() => resolveStop(stop, "not_visited")} style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 9, backgroundColor: "#EF4444" }}><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Confirmer</Text></Pressable>
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
+        <View style={{ marginBottom: 20 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator style={{ maxWidth: "100%" }}>
+            <View style={{ width: tableWidth }}>
+              <View style={{ flexDirection: "row", backgroundColor: colors.header, paddingVertical: 8, borderRadius: 10, marginBottom: 4 }}>
+                <View style={{ width: cols.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Commerce</Text></View>
+                <View style={{ width: cols.variant, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Variante</Text></View>
+                <View style={{ width: cols.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Paiement</Text></View>
+                <View style={{ width: cols.status, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Statut</Text></View>
+                <View style={{ width: cols.actions, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Actions</Text></View>
               </View>
-            </ScrollView>
-          </View>
-        ))}
+              {selectedStops.map((stop) => {
+                const chosen = stop.services.find((service) => service.id === stop.selected_service_id) ?? stop.services[0];
+                const statusColor = stop.status === "done" ? "#16A34A" : stop.status === "not_visited" ? "#EF4444" : colors.muted;
+                const disabled = finished || cancelled || busyStop === stop.id;
+                return (
+                  <View key={stop.id}>
+                    <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 7, borderBottomWidth: 1, borderColor: colors.border }}>
+                      <View style={{ width: cols.name, paddingHorizontal: 6 }}><Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{stop.name}</Text></View>
+                      <View style={{ width: cols.variant, paddingHorizontal: 6 }}>
+                        {chosen && <><Text style={{ color: colors.text, fontSize: 13 }}>{chosen.label}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{formatEuro(chosen.price_ht)}</Text></>}
+                      </View>
+                      <View style={{ width: cols.payment, paddingHorizontal: 6 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{stop.payment_text ?? ""}</Text></View>
+                      <View style={{ width: cols.status, paddingHorizontal: 6 }}><Text style={{ color: statusColor, fontWeight: "700", fontSize: 12 }}>{STATUS_LABELS[stop.status]}</Text></View>
+                      <View style={{ width: cols.actions, paddingHorizontal: 6, flexDirection: "row", gap: 6 }}>
+                        <Pressable disabled={disabled} onPress={() => resolveStop(stop, "done")} style={{ padding: 8, borderRadius: 9, backgroundColor: "#16A34A", opacity: disabled ? 0.5 : 1 }}><Check size={16} color="#FFFFFF" /></Pressable>
+                        <Pressable disabled={disabled} onPress={() => setReasonFor(reasonFor === stop.id ? null : stop.id)} style={{ padding: 8, borderRadius: 9, backgroundColor: "#EF4444", opacity: disabled ? 0.5 : 1 }}><X size={16} color="#FFFFFF" /></Pressable>
+                      </View>
+                    </View>
+                    {reasonFor === stop.id && (
+                      <View style={{ flexDirection: "row", gap: 8, alignItems: "center", paddingVertical: 8, paddingHorizontal: 6, backgroundColor: isDark ? "rgba(239,68,68,0.08)" : "#FEF2F2" }}>
+                        <TextInput
+                          value={reasonDrafts[stop.id] ?? ""}
+                          onChangeText={(value) => setReasonDrafts((old) => ({ ...old, [stop.id]: value }))}
+                          placeholder="Motif du non-visité"
+                          placeholderTextColor={colors.muted}
+                          style={{ flex: 1, color: colors.text, borderWidth: 1, borderColor: "#EF4444", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: colors.input }}
+                        />
+                        <Pressable onPress={() => resolveStop(stop, "not_visited")} style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 9, backgroundColor: "#EF4444" }}><Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Confirmer</Text></Pressable>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </View>
 
         {!finished && !cancelled && (
           <View style={{ maxWidth: 1200, width: "100%", alignSelf: "center", flexDirection: "row", justifyContent: "flex-end" }}>

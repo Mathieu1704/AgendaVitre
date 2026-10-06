@@ -6,7 +6,6 @@ import { ChevronLeft, ChevronRight, FileSpreadsheet } from "lucide-react-native"
 import { API_URL, api } from "../../lib/api";
 import { supabase } from "../../lib/supabase";
 import { addMonths } from "../../lib/date";
-import { SlidingPillSelector } from "../components/SlidingPillSelector";
 import { toast } from "../toast";
 
 function monthStartString(date: Date): string {
@@ -44,7 +43,7 @@ async function downloadExport(zone: "hainaut" | "ardennes", periodStart: string)
 }
 
 export function TourBillingView({ isDark }: { isDark: boolean }) {
-  const [zone, setZone] = useState<"hainaut" | "ardennes">("hainaut");
+  const zone = "hainaut" as const;
   const [cursorDate, setCursorDate] = useState<Date>(new Date());
   const colors = {
     card: isDark ? "#0F172A" : "#FFFFFF",
@@ -65,18 +64,6 @@ export function TourBillingView({ isDark }: { isDark: boolean }) {
 
   return (
     <View style={{ gap: 16 }}>
-      <SlidingPillSelector
-        options={[{ id: "hainaut", label: "Hainaut" }, { id: "ardennes", label: "Ardennes" }]}
-        selected={zone}
-        onSelect={(id) => setZone(id as "hainaut" | "ardennes")}
-        pillColor="#3B82F6"
-        bgColor={colors.soft}
-        activeTextColor="#FFFFFF"
-        inactiveTextColor={colors.muted}
-        itemPy={11}
-        fontSize={14}
-      />
-
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 20, padding: 6 }}>
         <Pressable onPress={() => setCursorDate((d) => addMonths(d, -1))} style={{ padding: 10, borderRadius: 999 }}>
           <ChevronLeft size={22} color={colors.text} />

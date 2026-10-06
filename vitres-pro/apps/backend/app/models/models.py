@@ -551,21 +551,8 @@ class TourTemplate(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    sections = relationship("TourSection", back_populates="template", cascade="all, delete-orphan", order_by="TourSection.position")
     stops = relationship("TourStop", back_populates="template", cascade="all, delete-orphan", order_by="TourStop.position")
     runs = relationship("TourRun", back_populates="template")
-
-
-class TourSection(Base):
-    __tablename__ = "tour_sections"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    template_id = Column(UUID(as_uuid=True), ForeignKey("tour_templates.id", ondelete="CASCADE"), nullable=False, index=True)
-    label = Column(String(180), nullable=False)
-    position = Column(Float, nullable=False, default=0)
-
-    template = relationship("TourTemplate", back_populates="sections")
-    stops = relationship("TourStop", back_populates="section", order_by="TourStop.position")
 
 
 class TourStop(Base):
@@ -574,7 +561,6 @@ class TourStop(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     template_id = Column(UUID(as_uuid=True), ForeignKey("tour_templates.id", ondelete="CASCADE"), nullable=False, index=True)
-    section_id = Column(UUID(as_uuid=True), ForeignKey("tour_sections.id", ondelete="SET NULL"), nullable=True)
     name = Column(String(240), nullable=False)
     note = Column(Text, nullable=True)  # 1ere colonne papier (heure, consigne...)
     payment_text = Column(String(120), nullable=True)  # texte libre, ex "F -> mens."
@@ -584,7 +570,6 @@ class TourStop(Base):
     active = Column(Boolean, default=True, nullable=False, server_default="true")
 
     template = relationship("TourTemplate", back_populates="stops")
-    section = relationship("TourSection", back_populates="stops")
     services = relationship("TourService", back_populates="stop", cascade="all, delete-orphan", order_by="TourService.position")
 
 
@@ -662,7 +647,6 @@ class TourRunStop(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     run_id = Column(UUID(as_uuid=True), ForeignKey("tour_runs.id", ondelete="CASCADE"), nullable=False, index=True)
     source_stop_id = Column(UUID(as_uuid=True), ForeignKey("tour_stops.id", ondelete="SET NULL"), nullable=True)
-    section_label = Column(String(180), nullable=True)
     name = Column(String(240), nullable=False)
     note = Column(Text, nullable=True)
     payment_text = Column(String(120), nullable=True)
