@@ -1,0 +1,84 @@
+---
+slug: lvm-agenda
+title: "LVM Agenda"
+client: "Lavage de Vitres Maxime (LVM)"
+sector: "Planification et suivi d'équipe"
+types: [apps, outils-metiers]
+summary: "Application mobile et web pour une entreprise de nettoyage de vitres : planning d'équipe, capacité par zone, suivi des interventions et des heures."
+result: "Planning, équipe et interventions réunis dans une seule application, en ligne depuis le 5 octobre 2026 sur l'App Store, Google Play et le web."
+cover: /projects/lvm-agenda/cover.webp
+gallery:
+  - src: /projects/lvm-agenda/galerie-01-planification.webp
+    alt: "Vue mensuelle du planning avec jauge de charge du jour, à côté du formulaire de création d'une intervention"
+    caption: "Planifier une intervention"
+  - src: /projects/lvm-agenda/galerie-02-suivi.webp
+    alt: "Fiche d'une intervention avec paiement, client et accès GPS, appel, e-mail, à côté du centre d'alertes"
+    caption: "Suivi sur le terrain"
+  - src: /projects/lvm-agenda/galerie-03-clients-pilotage.webp
+    alt: "Liste des clients et tableau de bord avec indicateurs d'activité ; données personnelles et montants floutés"
+    caption: "Clients et pilotage"
+  - src: /projects/lvm-agenda/galerie-04-parcours.webp
+    alt: "Trois écrans : création d'une intervention, planning du mois et fiche d'intervention"
+    caption: "Du planning à l'intervention"
+stack: [Expo, React Native, Expo Router, FastAPI, SQLAlchemy, Supabase, Railway, Sentry]
+featured: true
+isPlaceholder: false
+kind: client
+date: "2026-10-05"
+---
+
+## Contexte
+
+Lavage de Vitres Maxime (LVM) est une SRL belge basée à Soignies, spécialisée dans le nettoyage courant des bâtiments. L'entreprise opère sur deux zones (Hainaut et Ardennes), avec une équipe d'une quinzaine d'ouvriers sur le terrain. Avant ce projet, la planification reposait sur Google Calendar et des documents Excel/Word recensant horaires, congés et fermetures — sans vision centralisée de la charge de travail ni lien avec la facturation.
+
+## Problème
+
+Le planning était dispersé entre plusieurs outils, sans calcul automatique de la capacité par employé, sans suivi fiable des heures travaillées, et sans lien entre un rendez-vous et sa facturation.
+
+## Objectifs
+
+- Centraliser la planification avec une vraie notion de capacité par employé (horaires réels, congés, fermetures, montée en charge progressive des nouveaux employés).
+- Donner à chaque employé une vue mobile de ses interventions, et à l'administration une vue globale par zone.
+- Reprendre l'historique Google Calendar sans perte de données.
+- Suivre le temps de travail et les heures supplémentaires.
+- Gérer les tournées récurrentes à partir des documents existants de l'entreprise.
+
+## Approche
+
+Plutôt que de ressaisir à la main des années d'historique, un pipeline dédié extrait les événements Google Calendar existants, les fait structurer (assistance IA puis relecture humaine) en client / prestations / prix, puis les importe en base avec déduplication et gestion de la récurrence.
+
+Le calcul de charge de travail modélise les horaires réels de chaque employé plutôt qu'une capacité générique : heures différentes selon le jour de la semaine, congés individuels, fermetures d'entreprise, et montées en charge progressives pour les nouveaux employés. Une capacité fixe par employé a été écartée : elle ne correspondait pas à la réalité du terrain et aurait généré des alertes de surcharge incorrectes.
+
+Les deux zones géographiques de l'entreprise (Hainaut, Ardennes) structurent le filtrage des données à tous les niveaux, pour que chaque employé ne voie que ce qui le concerne.
+
+Les ouvriers travaillant parfois sans réseau, les écritures faites hors connexion sont journalisées côté mobile et rejouées au retour du réseau, avec un identifiant d'opération qui évite les doublons.
+
+## Solution
+
+L'application couvre : planning (jour / semaine / mois / année) avec indicateur de charge, gestion des interventions et de leur statut, reprise des événements Google Calendar, fiches clients avec historique, facturation et encaissement, tournées récurrentes avec export fidèle au document papier d'origine, pointage et calcul des heures supplémentaires, gestion d'équipe par rôle et par zone, journal d'audit et notifications internes.
+
+Voir la galerie ci-dessus (captures iPhone) : planning avec jauge de charge, création d'une intervention via le bouton flottant, fiche d'intervention, alertes, clients et tableau de bord.
+
+## Design et technique
+
+- **Mobile et web** : Expo 54, React Native 0.81, Expo Router, NativeWind, React Native Paper, React Query, Zustand — une seule base de code pour iOS, Android et le web.
+- **Backend** : FastAPI, SQLAlchemy 2.0, Pydantic, APScheduler, openpyxl pour les exports Excel.
+- **Données et auth** : Supabase (PostgreSQL managé + Auth).
+- **Hébergement** : Railway pour le backend, déploiement automatique à chaque mise à jour.
+- **Intégrations** : API Google Calendar pour la reprise d'historique, API Anthropic pour la structuration assistée des rendez-vous importés, Sentry pour le suivi des erreurs.
+- **Mises à jour** : Expo Updates permet de livrer des corrections à l'équipe sans attendre une validation des stores.
+- **Sécurité** : authentification vérifiée côté serveur, journal d'audit sur les actions sensibles, identifiants d'opération pour garantir qu'un rejeu hors-ligne ne crée jamais de doublon.
+
+Point technique notable : le pipeline de reprise de données (extraction → structuration assistée par IA → vérification → import avec déduplication) reste utilisable pour absorber de nouveaux lots d'événements, ce n'est pas une migration à usage unique.
+
+## Résultats
+
+Développée à partir de janvier 2026, l'application est en ligne depuis le 5 octobre 2026 sur l'App Store, Google Play et le web. À cette date, elle rassemble 3 054 clients et 18 686 interventions (historique Google Calendar repris compris), utilisés par une équipe de 14 employés actifs (21 comptes au total). La planification, le suivi de l'équipe sur le terrain et les rendez-vous non repris passent désormais par un seul outil, au lieu de l'agenda partagé et des fichiers Excel et Word.
+
+## Témoignage
+
+[À FAIRE VALIDER : texte proposé, à faire relire et approuver mot pour mot par Maxime Berdoux avant publication. Ne pas publier sans son accord écrit.]
+
+> « Mathieu a vite compris comment nous travaillons : nos deux zones, nos tournées, la façon dont l'équipe s'organise sur le terrain. Les premières versions sont arrivées rapidement, et chacune de nos remarques était intégrée dans la foulée. Depuis la mise en ligne, il reste disponible : quand un employé signale un souci ou qu'on a besoin d'un ajustement, c'est réglé sans devoir relancer. »
+>
+> — Maxime Berdoux, gérant de Lavage de Vitres Maxime
