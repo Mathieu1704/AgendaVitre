@@ -49,7 +49,7 @@ export default function RepriseChoiceScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
-  const { isSubcontractor } = useAuth();
+  const { isSubcontractor, isAdmin } = useAuth();
 
   const params = useLocalSearchParams<{
     reprise_of?: string;
@@ -104,6 +104,26 @@ export default function RepriseChoiceScreen() {
     enabled: !!reprise_of,
   });
 
+  // Admin qui clôture une intervention avec du cash : le cash doit aller à
+  // l'employé qui l'a encaissé, pas à l'admin (celui qui clique), qui n'a pas
+  // de semaine dans le récap des heures. Un seul assigné : c'est forcément
+  // lui. Deux ou plus : l'admin doit choisir, jamais de choix automatique.
+  const assignees: any[] = intervention?.employees || [];
+  const adminClosesCash =
+    isAdmin && ["cash", "invoice_cash"].includes(intervention?.payment_mode);
+  const needsCollector = adminClosesCash && assignees.length >= 2;
+  const [collectedBy, setCollectedBy] = React.useState<string | null>(null);
+  const collectorId =
+    adminClosesCash && assignees.length === 1 ? assignees[0].id : collectedBy;
+  const ensureCollector = () => {
+    if (needsCollector && !collectedBy) {
+      toast.error("Qui a encaissé ?", "Choisis l'employé qui a encaissé le cash.");
+      return false;
+    }
+    return true;
+  };
+  const closerBody = adminClosesCash && collectorId ? { closed_by_employee_id: collectorId } : {};
+
   const clientId = intervention?.client?.id;
   const { data: clientDetail } = useQuery({
     queryKey: ["client-detail", clientId],
@@ -130,7 +150,11 @@ export default function RepriseChoiceScreen() {
   }, [clientDetail, reprise_of]);
 
   const goToRepriseForm = () => {
-    router.push({ pathname: "/(app)/calendar/add", params } as any);
+    if (!ensureCollector()) return;
+    router.push({
+      pathname: "/(app)/calendar/add",
+      params: { ...params, ...(adminClosesCash && collectorId ? { collected_by: collectorId } : {}) },
+    } as any);
   };
 
   const handleNoReprise = async () => {
@@ -146,7 +170,7 @@ export default function RepriseChoiceScreen() {
         kind: "no-reprise",
         method: "POST",
         url: `/api/interventions/${reprise_of}/no-reprise`,
-        body: { note },
+        body: { note, ...closerBody },
         label: "Clôture sans reprise",
       });
       if (hasPendingChecklist) {
@@ -235,6 +259,50 @@ export default function RepriseChoiceScreen() {
           Faut-il repasser ?
         </Text>
 
+        {needsCollector && (
+          <View style={{ gap: 8 }}>
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: "800",
+                textAlign: "center",
+                color: isDark ? "#F8FAFC" : "#09090B",
+              }}
+            >
+              Qui a encaissé le cash ?
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 }}>
+              {assignees.map((e: any) => {
+                const selected = collectedBy === e.id;
+                return (
+                  <Pressable
+                    key={e.id}
+                    onPress={() => setCollectedBy(e.id)}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 14,
+                      borderRadius: 999,
+                      borderWidth: 1.5,
+                      borderColor: selected ? "#2563EB" : isDark ? "#334155" : "#CBD5E1",
+                      backgroundColor: selected ? "#2563EB" : isDark ? "#0F172A" : "#FFFFFF",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: "700",
+                        color: selected ? "#FFFFFF" : isDark ? "#E2E8F0" : "#0F172A",
+                      }}
+                    >
+                      {e.full_name || e.email}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
         <Pressable
           onPress={goToRepriseForm}
           style={({ pressed }) => ({
@@ -267,7 +335,9 @@ export default function RepriseChoiceScreen() {
           </Text>
         </Pressable>
         <Pressable
-          onPress={() => setConfirmNoReprise(true)}
+          onPress={() => {
+            if (ensureCollector()) setConfirmNoReprise(true);
+          }}
           style={({ pressed }) => ({
             backgroundColor: pressed ? "#B91C1C" : "#DC2626",
             borderRadius: 26,

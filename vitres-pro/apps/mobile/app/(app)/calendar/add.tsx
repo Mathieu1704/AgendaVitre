@@ -399,6 +399,7 @@ export default function AddInterventionScreen() {
     pending_not_done,
     pending_adjustments,
     pending_not_done_notes,
+    collected_by,
   } = useLocalSearchParams<{
     id?: string;
     reprise_of?: string;
@@ -417,6 +418,9 @@ export default function AddInterventionScreen() {
     pending_not_done?: string;
     pending_adjustments?: string;
     pending_not_done_notes?: string;
+    // Employé qui a encaissé, désigné par un admin qui clôture à la place
+    // d'un employé (voir reprise-choice) — appliqué à la clôture de l'originale.
+    collected_by?: string;
   }>();
   const isEditMode = !!id && !reprise_of && !duplicate_of;
   const isRepriseMode = !!reprise_of;
@@ -1688,7 +1692,11 @@ export default function AddInterventionScreen() {
           kind: "mark-done",
           method: "PATCH",
           url: `/api/interventions/${reprise_of}`,
-          body: { status: "done", reprise_taken: true },
+          body: {
+            status: "done",
+            reprise_taken: true,
+            ...(collected_by ? { closed_by_employee_id: collected_by } : {}),
+          },
           label: "Clôture de l'intervention",
         });
         // Checklist de clôture préparée sur la fiche d'origine, appliquée

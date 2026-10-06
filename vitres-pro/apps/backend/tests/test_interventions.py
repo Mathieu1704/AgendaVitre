@@ -52,6 +52,7 @@ def make_intervention(status="done"):
         reprise_taken=True,
         reprise_note="Conserver cette note",
         closed_by_employee_id=uuid4(),
+        employees=[],
     )
 
 
@@ -125,6 +126,54 @@ class ReopenPermissionTests(unittest.TestCase):
         self.assertEqual(result.status, "done")
         self.assertEqual(result.closed_by_employee_id, employee.id)
         self.assertTrue(db.committed)
+
+
+class CloserTests(unittest.TestCase):
+    def test_admin_designates_assigned_employee_as_collector(self):
+        intervention = make_intervention(status="planned")
+        axel = SimpleNamespace(id=uuid4())
+        intervention.employees = [axel, SimpleNamespace(id=uuid4())]
+        admin = SimpleNamespace(id=uuid4(), role="admin")
+
+        result = update_intervention(
+            intervention.id,
+            {"status": "done", "closed_by_employee_id": str(axel.id)},
+            db=FakeSession(intervention),
+            current_user=admin,
+        )
+
+        self.assertEqual(result.closed_by_employee_id, axel.id)
+
+    def test_admin_cannot_designate_unassigned_employee(self):
+        intervention = make_intervention(status="planned")
+        intervention.employees = [SimpleNamespace(id=uuid4())]
+        db = FakeSession(intervention)
+
+        with self.assertRaises(HTTPException) as context:
+            update_intervention(
+                intervention.id,
+                {"status": "done", "closed_by_employee_id": str(uuid4())},
+                db=db,
+                current_user=SimpleNamespace(id=uuid4(), role="admin"),
+            )
+
+        self.assertEqual(context.exception.status_code, 422)
+        self.assertFalse(db.committed)
+
+    def test_employee_cannot_designate_another_collector(self):
+        intervention = make_intervention(status="planned")
+        employee = SimpleNamespace(id=uuid4(), role="employee")
+        colleague = SimpleNamespace(id=uuid4())
+        intervention.employees = [employee, colleague]
+
+        result = update_intervention(
+            intervention.id,
+            {"status": "done", "closed_by_employee_id": str(colleague.id)},
+            db=FakeSession(intervention),
+            current_user=employee,
+        )
+
+        self.assertEqual(result.closed_by_employee_id, employee.id)
 
 
 if __name__ == "__main__":

@@ -805,6 +805,21 @@ def create_reinforcement(
     return reinforcement
 
 
+def _resolve_closer_id(intervention: Intervention, current_user: Employee, requested_id) -> UUID:
+    """Qui encaisse a la cloture : celui qui clique, sauf un admin qui cloture
+    a la place d'un employe — il designe alors explicitement l'employe assigne
+    qui a encaisse (jamais de choix automatique ni de double comptage)."""
+    if requested_id and current_user.role == "admin":
+        try:
+            requested_uuid = UUID(str(requested_id))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Employé encaisseur invalide")
+        if not any(e.id == requested_uuid for e in intervention.employees):
+            raise HTTPException(status_code=422, detail="L'employé encaisseur doit être assigné à l'intervention")
+        return requested_uuid
+    return current_user.id
+
+
 @router.patch("/{intervention_id}", response_model=InterventionOut)
 def update_intervention(
     intervention_id: UUID,
@@ -852,6 +867,10 @@ def update_intervention(
         EMPLOYEE_ALLOWED = {"status", "real_start_time", "real_end_time", "reprise_taken", "reprise_note", "title", "start_time", "end_time", "payment_mode", "is_invoice", "amount_cash", "amount_invoice", "items", "price_estimated"}
         intervention_update = {k: v for k, v in intervention_update.items() if k in EMPLOYEE_ALLOWED}
 
+    # Jamais applique tel quel par la boucle generique ci-dessous : valide
+    # et applique uniquement a la cloture (voir _resolve_closer_id).
+    requested_closer_id = intervention_update.pop("closed_by_employee_id", None)
+
     old_status = db_intervention.status
     old_type = db_intervention.type
 
@@ -896,7 +915,7 @@ def update_intervention(
     # Cloture : on retient qui a reellement termine (et donc encaisse), pas
     # seulement les employes assignes — voir _weekly_cash_amount.
     if db_intervention.status == "done" and old_status != "done":
-        db_intervention.closed_by_employee_id = current_user.id
+        db_intervention.closed_by_employee_id = _resolve_closer_id(db_intervention, current_user, requested_closer_id)
 
     # Conversion devis -> intervention (bouton "Changer en intervention") :
     # on garde une trace visible (badge cote mobile) plutot que de perdre
@@ -1214,7 +1233,7 @@ def no_reprise(
     intervention.status = "done"
     intervention.reprise_taken = False
     intervention.reprise_note = note if note else None
-    intervention.closed_by_employee_id = current_user.id
+    intervention.closed_by_employee_id = _resolve_closer_id(intervention, current_user, payload.get("closed_by_employee_id"))
 
     emp_name = current_user.full_name or current_user.email or "Un employé"
     is_subcontractor = current_user.role == "subcontractor"
