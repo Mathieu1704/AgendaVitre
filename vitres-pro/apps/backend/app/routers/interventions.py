@@ -177,6 +177,7 @@ FIELD_LABELS = {
     "reprise_taken": "reprise RDV",
     "reprise_note": "note reprise",
     "payment_mode": "mode de paiement",
+    "invoiced_at": "facturé",
     "payment_collected": "encaissement",
     "type": "type",
     "zone": "zone",

@@ -246,6 +246,9 @@ class Intervention(Base):
     # vs part facturee. NULL = pas encore renseigne (ancienne ligne ou reset par cloture).
     amount_cash = Column(Numeric(10, 2), nullable=True)
     amount_invoice = Column(Numeric(10, 2), nullable=True)
+    # Horodatage "facture traitee" dans l'outil de facturation externe (coche
+    # manuelle depuis l'ecran Facturation). NULL = pas encore facture.
+    invoiced_at = Column(DateTime(timezone=True), nullable=True)
     google_event_id = Column(String, nullable=True, unique=True, index=True)
     zone = Column(String(20), nullable=True)   # "hainaut" ou "ardennes", dérivé de `city`
     city = Column(String(100), nullable=True)  # ville précise de l'intervention

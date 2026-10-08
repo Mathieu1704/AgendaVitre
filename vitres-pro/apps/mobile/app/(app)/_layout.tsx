@@ -212,7 +212,6 @@ function AppLayoutContent() {
               <Tabs.Screen name="notifications/index" options={{ href: null }} />
               <Tabs.Screen name="clients/add" options={{ href: null }} />
               <Tabs.Screen name="clients/[id]" options={{ href: null }} />
-              <Tabs.Screen name="facturation/add" options={{ href: null }} />
               <Tabs.Screen name="parametres/logs" options={{ href: null }} />
               <Tabs.Screen name="parametres/zones" options={{ href: null }} />
               <Tabs.Screen name="parametres/team" options={{ href: null }} />

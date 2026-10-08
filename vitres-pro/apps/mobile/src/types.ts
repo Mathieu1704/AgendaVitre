@@ -34,6 +34,8 @@ export interface Intervention {
   // Split cash/facture, utilisé uniquement quand payment_mode === "invoice_cash".
   amount_cash?: number | null;
   amount_invoice?: number | null;
+  // Facture traitée dans l'outil de facturation externe (écran Facturation).
+  invoiced_at?: string | null;
   // Reprise RDV : lien vers l'intervention source, non modifiable par un
   // employé au-delà des prestations quand ce champ est renseigné.
   reprise_taken?: boolean | null;

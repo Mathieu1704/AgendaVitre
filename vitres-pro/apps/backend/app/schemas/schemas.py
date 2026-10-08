@@ -371,6 +371,7 @@ class InterventionOut(BaseModel):
     payment_mode: str = "cash"
     amount_cash: Optional[float] = None
     amount_invoice: Optional[float] = None
+    invoiced_at: Optional[datetime] = None
     zone: Optional[str] = None
     city: Optional[str] = None
     reprise_taken: Optional[bool] = None
