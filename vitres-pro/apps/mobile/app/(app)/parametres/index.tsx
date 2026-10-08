@@ -28,6 +28,7 @@ import {
   Image as ImageIcon,
   Trash2,
   Route,
+  FileText,
 } from "lucide-react-native";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
 import Constants from "expo-constants";
@@ -370,7 +371,7 @@ export default function ParametresScreen() {
               style={({ pressed }) => ({ opacity: 1 })}
               android_disableSound
             >
-              <Card className="mb-6 rounded-[32px] overflow-hidden">
+              <Card className="overflow-hidden" style={{ marginBottom: 14, borderRadius: 28 }}>
                 <CardHeader className="p-6 pb-4">
                   <SectionTitle
                     icon={User}
@@ -455,8 +456,8 @@ export default function ParametresScreen() {
 
             {/* === Solde Heures Sup / En moins (Visible pour employés & sous-traitants) === */}
             {!isAdmin && overtimeBalance && (
-              <Card className="mb-8 rounded-[32px] overflow-hidden">
-                <CardContent className="p-5 flex-row items-center justify-between">
+              <Card className="overflow-hidden" style={{ marginBottom: 14, borderRadius: 28 }}>
+                <CardContent className="p-3 flex-row items-center justify-between">
                   <View className="flex-row items-center gap-4 flex-1">
                     <View
                       className="rounded-full w-12 h-12 items-center justify-center"
@@ -498,8 +499,8 @@ export default function ParametresScreen() {
                   className="mb-3"
                 >
                   <Card
-                    className="rounded-[32px] bg-teal-500/5 border-teal-200 dark:border-teal-900 active:scale-[0.99] transition-transform overflow-hidden"
-                    style={{ backgroundColor: "rgba(20,184,166,0.05)" }}
+                    className="bg-teal-500/5 border-teal-200 dark:border-teal-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(20,184,166,0.05)", borderRadius: 28 }}
                   >
                     <CardContent className="p-4 flex-row items-center justify-between">
                       <View className="flex-row items-center gap-4 flex-1">
@@ -526,14 +527,44 @@ export default function ParametresScreen() {
                     </CardContent>
                   </Card>
                 </Pressable>
+                {/* Facturation */}
+                <Pressable
+                  onPress={() => router.push("/(app)/parametres/facturation" as any)}
+                  className="mb-3"
+                >
+                  <Card
+                    className="bg-green-500/5 border-green-200 dark:border-green-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(34,197,94,0.05)", borderRadius: 28 }}
+                  >
+                    <CardContent className="p-4 flex-row items-center justify-between">
+                      <View className="flex-row items-center gap-4 flex-1">
+                        <View className="bg-green-500 rounded-full w-12 h-12 items-center justify-center">
+                          <FileText size={24} color="white" />
+                        </View>
+                        <View className="flex-1 justify-center">
+                          <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                            Facturation
+                          </Text>
+                          <Text className="text-sm text-muted-foreground leading-tight">
+                            RDV FAC / FAC+Esp. par semaine
+                          </Text>
+                        </View>
+                      </View>
+                      <ChevronRight
+                        size={20}
+                        color={isDark ? "white" : "black"}
+                      />
+                    </CardContent>
+                  </Card>
+                </Pressable>
                 {/* Tournées récurrentes */}
                 <Pressable
                   onPress={() => router.push("/(app)/parametres/tournees" as any)}
                   className="mb-3"
                 >
                   <Card
-                    className="rounded-[32px] bg-orange-500/5 border-orange-200 dark:border-orange-900 active:scale-[0.99] transition-transform overflow-hidden"
-                    style={{ backgroundColor: "rgba(249,115,22,0.05)" }}
+                    className="bg-orange-500/5 border-orange-200 dark:border-orange-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(249,115,22,0.05)", borderRadius: 28 }}
                   >
                     <CardContent className="p-4 flex-row items-center justify-between">
                       <View className="flex-row items-center gap-4 flex-1">
@@ -563,8 +594,8 @@ export default function ParametresScreen() {
                 >
                   {/* ✅ Card arrondie */}
                   <Card
-                    className="rounded-[32px] bg-purple-500/5 border-purple-200 dark:border-purple-900 active:scale-[0.99] transition-transform overflow-hidden"
-                    style={{ backgroundColor: "rgba(168,85,247,0.05)" }}
+                    className="bg-purple-500/5 border-purple-200 dark:border-purple-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(168,85,247,0.05)", borderRadius: 28 }}
                   >
                     <CardContent className="p-4 flex-row items-center justify-between">
                       <View className="flex-row items-center gap-4 flex-1">
@@ -593,8 +624,8 @@ export default function ParametresScreen() {
                   className="mb-3"
                 >
                   <Card
-                    className="rounded-[32px] bg-blue-500/5 border-blue-200 dark:border-blue-900 active:scale-[0.99] transition-transform overflow-hidden"
-                    style={{ backgroundColor: "rgba(59,130,246,0.05)" }}
+                    className="bg-blue-500/5 border-blue-200 dark:border-blue-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(59,130,246,0.05)", borderRadius: 28 }}
                   >
                     <CardContent className="p-4 flex-row items-center justify-between">
                       <View className="flex-row items-center gap-4 flex-1">
@@ -623,8 +654,8 @@ export default function ParametresScreen() {
                   className="mb-3"
                 >
                   <Card
-                    className="rounded-[32px] bg-emerald-500/5 border-emerald-200 dark:border-emerald-900 active:scale-[0.99] transition-transform overflow-hidden"
-                    style={{ backgroundColor: "rgba(16,185,129,0.05)" }}
+                    className="bg-emerald-500/5 border-emerald-200 dark:border-emerald-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(16,185,129,0.05)", borderRadius: 28 }}
                   >
                     <CardContent className="p-4 flex-row items-center justify-between">
                       <View className="flex-row items-center gap-4 flex-1">
@@ -652,8 +683,8 @@ export default function ParametresScreen() {
                   onPress={() => router.push("/(app)/parametres/logs" as any)}
                 >
                   <Card
-                    className="rounded-[32px] bg-amber-500/5 border-amber-200 dark:border-amber-900 active:scale-[0.99] transition-transform overflow-hidden"
-                    style={{ backgroundColor: "rgba(245,158,11,0.05)" }}
+                    className="bg-amber-500/5 border-amber-200 dark:border-amber-900 active:scale-[0.99] transition-transform overflow-hidden"
+                    style={{ backgroundColor: "rgba(245,158,11,0.05)", borderRadius: 28 }}
                   >
                     <CardContent className="p-4 flex-row items-center justify-between">
                       <View className="flex-row items-center gap-4 flex-1">
@@ -680,7 +711,7 @@ export default function ParametresScreen() {
             )}
 
             {/* 3. SECURITÉ */}
-            <Card className="mb-8 rounded-[32px] overflow-hidden">
+            <Card className="overflow-hidden" style={{ marginBottom: 14, borderRadius: 28 }}>
               <CardHeader className="p-6 pb-4">
                 <SectionTitle icon={Lock} title="Sécurité" />
               </CardHeader>

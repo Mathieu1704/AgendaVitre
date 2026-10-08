@@ -27,9 +27,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
 
   // Routes cachées (href: null) qui ne vivent pas sous leur propre préfixe
   // dans la tab bar : on les rattache explicitement à l'onglet parent visible.
-  const HIDDEN_ROUTE_PARENT: Record<string, string> = {
-    facturation: "parametres",
-  };
+  const HIDDEN_ROUTE_PARENT: Record<string, string> = {};
 
   // Si la route active est cachée (href: null), trouver la tab parente par préfixe
   const activeIndex = (() => {

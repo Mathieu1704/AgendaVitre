@@ -874,6 +874,14 @@ def update_intervention(
 
     old_status = db_intervention.status
     old_type = db_intervention.type
+    # Filet de securite facturation : si ce RDV etait deja marque "facture"
+    # et qu'on touche a un champ qui affecte le montant, on le reinitialise
+    # plus bas — sauf si c'est justement l'ecran Facturation qui ecrit
+    # invoiced_at lui-meme (on respecte alors sa valeur explicite).
+    was_invoiced = db_intervention.invoiced_at is not None
+    explicit_invoiced_update = "invoiced_at" in intervention_update
+    PRICE_AFFECTING_KEYS = {"items", "price_estimated", "payment_mode", "amount_cash", "amount_invoice"}
+    price_affecting_update = any(k in intervention_update for k in PRICE_AFFECTING_KEYS)
 
     if "city" in intervention_update and intervention_update["city"]:
         city_row = _find_city(db, intervention_update["city"])
@@ -917,6 +925,23 @@ def update_intervention(
     # seulement les employes assignes — voir _weekly_cash_amount.
     if db_intervention.status == "done" and old_status != "done":
         db_intervention.closed_by_employee_id = _resolve_closer_id(db_intervention, current_user, requested_closer_id)
+
+    # Reouverture d'un RDV deja cloture (correction admin) : si Melissa
+    # l'avait deja coche "facture", on reinitialise — le montant/les
+    # prestations peuvent changer avant la prochaine cloture, l'ancien
+    # horodatage ne doit pas laisser croire qu'un montant perime est a jour.
+    if old_status == "done" and db_intervention.status != "done" and db_intervention.invoiced_at is not None:
+        db_intervention.invoiced_at = None
+
+    # Meme logique sans reouverture : montant/prestations/mode corriges par
+    # un admin alors que le RDV reste "termine" tout du long.
+    if (
+        not explicit_invoiced_update
+        and was_invoiced
+        and price_affecting_update
+        and db_intervention.invoiced_at is not None
+    ):
+        db_intervention.invoiced_at = None
 
     # Conversion devis -> intervention (bouton "Changer en intervention") :
     # on garde une trace visible (badge cote mobile) plutot que de perdre
@@ -1098,6 +1123,12 @@ def update_items_done(
         if split != round(float(db_intervention.price_estimated or 0), 2):
             db_intervention.amount_cash = None
             db_intervention.amount_invoice = None
+
+    # Meme filet de securite que sur le PATCH generique : des prestations
+    # corrigees apres coup sur un RDV deja marque "facture" invalident le
+    # montant deja communique — on redemande une verification.
+    if db_intervention.invoiced_at is not None:
+        db_intervention.invoiced_at = None
 
     _add_audit(
         db, "items_adjusted", current_user.id, intervention_id,

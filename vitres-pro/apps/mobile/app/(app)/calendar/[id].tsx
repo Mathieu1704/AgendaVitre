@@ -525,6 +525,18 @@ export default function InterventionDetailScreen() {
 
   // 4. HELPER FUNCTIONS
   const handleBack = () => {
+    // Origine hors de la stack Calendar (ex: écran Facturation, dans un autre
+    // onglet) : router.back()/canGoBack() ne ramène pas fiablement vers le bon
+    // onglet, donc on route explicitement plutôt que de deviner.
+    if (from_view === "facturation") {
+      // navigate (pas replace) : l'écran Facturation reste monté en arrière-
+      // plan pendant qu'on est sur cette fiche (Tabs ne le démonte pas), donc
+      // navigate() le ramène au premier plan tel quel au lieu de le recréer
+      // en entier (~30 lignes animées) — c'est ce remount qui causait le
+      // freeze au retour.
+      router.navigate("/(app)/parametres/facturation" as any);
+      return;
+    }
     if (router.canGoBack()) {
       router.back();
       return;

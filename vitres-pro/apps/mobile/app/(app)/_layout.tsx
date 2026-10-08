@@ -207,7 +207,6 @@ function AppLayoutContent() {
               <Tabs.Screen name="calendar" />
               <Tabs.Screen name="clients" />
               <Tabs.Screen name="recherche/index" />
-              <Tabs.Screen name="facturation" options={{ href: null }} />
               <Tabs.Screen name="parametres" />
               <Tabs.Screen name="notifications/index" options={{ href: null }} />
               <Tabs.Screen name="clients/add" options={{ href: null }} />
@@ -271,10 +270,6 @@ function AppLayoutContent() {
               ? ({ color, size }) => <Search size={size} color={color} />
               : undefined,
           }}
-        />
-        <Tabs.Screen
-          name="facturation"
-          options={{ href: null }}
         />
         <Tabs.Screen
           name="notifications/index"
