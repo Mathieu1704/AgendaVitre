@@ -4,6 +4,7 @@ import { Clock, Users } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { toISODate } from "../../../lib/date";
 import { useRawEventsByDate } from "../../../hooks/useRawEvents";
+import { useAuth } from "../../../hooks/useAuth";
 import { useAbsentEmployeeIds, useZeroHoursEmployeeIds } from "../../../hooks/useAbsences";
 import { PlanningHeader } from "../PlanningHeader";
 import { RawEventCard } from "./RawEventCard";
@@ -75,6 +76,11 @@ export const DayView = React.memo(function DayView({
   onRefresh,
 }: DayViewProps) {
   const router = useRouter();
+  const { userName } = useAuth();
+  // Demande ponctuelle de Geoffrey Labar : il veut "Terminer ma journée" au
+  // même endroit que "Commencer ma journée" (en haut), pas en bas de liste
+  // après tous les RDV. Comportement inchangé pour tout le monde d'autre.
+  const showDayEndInHeader = userName.trim().toLowerCase() === "geoffrey labar";
   const iso = toISODate(cursorDate);
   const list = (itemsByDate[iso] || []).filter(filterItem);
   const { rawEvents } = useRawEventsByDate(iso);
@@ -203,15 +209,16 @@ export const DayView = React.memo(function DayView({
           zeroHoursEmployeeIds={zeroHoursEmployeeIds}
         />
         <DayStartRow date={iso} />
+        {showDayEndInHeader && <DayEndRow date={iso} />}
       </View>
     ),
-    [iso, effectiveZone, isAdmin, isSubcontractor, unassigned, activeTypes, activeStatuses, isDark, toggleType, toggleStatus, setActiveTypes, setActiveStatuses, router, employees, activeEmployeeId, setActiveEmployeeId, absentEmployeeIds, zeroHoursEmployeeIds],
+    [iso, effectiveZone, isAdmin, isSubcontractor, unassigned, activeTypes, activeStatuses, isDark, toggleType, toggleStatus, setActiveTypes, setActiveStatuses, router, employees, activeEmployeeId, setActiveEmployeeId, absentEmployeeIds, zeroHoursEmployeeIds, showDayEndInHeader],
   );
 
   const listFooter = useMemo(
     () => (
       <View>
-        <DayEndRow date={iso} />
+        {!showDayEndInHeader && <DayEndRow date={iso} />}
         {assigned.length > 0 && (
           <View className="mb-4">
             <View className="flex-row items-center gap-2 mb-2">
@@ -233,7 +240,7 @@ export const DayView = React.memo(function DayView({
         )}
       </View>
     ),
-    [assigned, hasAnything, iso],
+    [assigned, hasAnything, iso, showDayEndInHeader],
   );
 
   return (
