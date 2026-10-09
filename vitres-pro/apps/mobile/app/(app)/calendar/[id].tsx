@@ -80,6 +80,58 @@ import { Dialog } from "../../../src/ui/components/Dialog";
 import { Input } from "../../../src/ui/components/Input";
 import { toBrusselsDateTimeString, parseBrusselsDateTimeString } from "../../../src/lib/date";
 
+// Prestations du catalogue non cochées pour ce RDV : affichées sous la liste,
+// en gris clair et SANS barré (le barré rouge est réservé aux prestations
+// prévues mais pas faites), prix à titre indicatif hors total.
+function UnplannedServices({
+  services,
+  showPrices,
+  isDark,
+}: {
+  services?: { label: string; price: number | null }[];
+  showPrices: boolean;
+  isDark: boolean;
+}) {
+  if (!services || services.length === 0) return null;
+  const color = isDark ? "#64748B" : "#A1A1AA";
+  return (
+    <View style={{ marginTop: 4, marginBottom: 16, opacity: 0.8 }}>
+      <Text style={{ fontSize: 11, fontWeight: "700", color, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
+        Non prévues ce passage
+      </Text>
+      <View style={{ gap: 6 }}>
+        {services.map((svc, idx) => (
+          <View key={idx} style={{ flexDirection: "row", alignItems: "center" }}>
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                borderWidth: 1.5,
+                borderColor: color,
+                marginRight: 10,
+              }}
+            />
+            <Text style={{ flex: 1, color, fontStyle: "italic" }}>{svc.label}</Text>
+            {showPrices && svc.price != null && (
+              <Text style={{ color, fontWeight: "600" }}>{formatPrice(svc.price, "0 €")}</Text>
+            )}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// Badge "non faite" : prestation prévue pour ce RDV mais pas réalisée.
+function NotDoneBadge() {
+  return (
+    <View style={{ marginLeft: 8, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: "rgba(239,68,68,0.1)" }}>
+      <Text style={{ fontSize: 10, fontWeight: "700", color: "#EF4444" }}>non faite</Text>
+    </View>
+  );
+}
+
 export default function InterventionDetailScreen() {
   const { id, from_view, from_date, from_zone } = useLocalSearchParams<{
     id: string;
@@ -1557,36 +1609,46 @@ export default function InterventionDetailScreen() {
                   {/* Prestations — le sous-traitant voit la liste des services à
                       faire, jamais les prix (ni total, ni détail, ni +33%). */}
                   {intervType === "intervention" && isSubcontractor && (
-                    intervention.items && intervention.items.length > 0 && (
-                      <View className="mb-2">
-                        <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
-                          Prestations à réaliser
-                        </Text>
-                        <View className="gap-3">
-                          {intervention.items.map((item: any, idx: number) => (
-                            <View
-                              key={idx}
-                              className="pb-2 border-b border-border dark:border-slate-800 last:border-0"
-                            >
-                              <Text
-                                className={`font-medium ${
-                                  item.done === false
-                                    ? "text-muted-foreground line-through"
-                                    : "text-foreground dark:text-white"
-                                }`}
+                    <>
+                      {intervention.items && intervention.items.length > 0 && (
+                        <View className="mb-2">
+                          <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
+                            Prestations à réaliser
+                          </Text>
+                          <View className="gap-3">
+                            {intervention.items.map((item: any, idx: number) => (
+                              <View
+                                key={idx}
+                                className="pb-2 border-b border-border dark:border-slate-800 last:border-0"
                               >
-                                {item.label}
-                              </Text>
-                              {item.done === false && item.note && (
-                                <Text className="text-xs text-muted-foreground mt-1">
-                                  {item.note}
-                                </Text>
-                              )}
-                            </View>
-                          ))}
+                                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                                  <Text
+                                    className={`font-medium ${
+                                      item.done === false
+                                        ? "text-red-500 line-through"
+                                        : "text-foreground dark:text-white"
+                                    }`}
+                                  >
+                                    {item.label}
+                                  </Text>
+                                  {item.done === false && <NotDoneBadge />}
+                                </View>
+                                {item.done === false && item.note && (
+                                  <Text className="text-xs text-muted-foreground mt-1">
+                                    {item.note}
+                                  </Text>
+                                )}
+                              </View>
+                            ))}
+                          </View>
                         </View>
-                      </View>
-                    )
+                      )}
+                      <UnplannedServices
+                        services={intervention.unplanned_services}
+                        showPrices={false}
+                        isDark={isDark}
+                      />
+                    </>
                   )}
 
                   {/* Prix — interventions et devis, jamais pour un sous-traitant */}
@@ -1635,12 +1697,13 @@ export default function InterventionDetailScreen() {
                                       <Text
                                         className={`font-medium ${
                                           item.done === false && !partial
-                                            ? "text-muted-foreground line-through"
+                                            ? "text-red-500 line-through"
                                             : "text-foreground dark:text-white"
                                         }`}
                                       >
                                         {item.label}
                                       </Text>
+                                      {item.done === false && !partial && !item.is_adjustment && <NotDoneBadge />}
                                       {item.on_demand && !partial && (
                                         <View className="ml-2 px-1.5 py-0.5 rounded-md bg-violet-500/10">
                                           <Text className="text-[10px] font-bold text-violet-500">
@@ -1672,7 +1735,7 @@ export default function InterventionDetailScreen() {
                                       <Text
                                         className={`font-bold ${
                                           item.done === false && !partial
-                                            ? "text-muted-foreground line-through"
+                                            ? "text-red-500 line-through"
                                             : partial
                                               ? "text-red-500"
                                               : item.on_demand
@@ -1768,6 +1831,13 @@ export default function InterventionDetailScreen() {
                             {formatPrice(intervention.price_estimated)}
                           </Text>
                         </View>
+                      )}
+                      {intervType === "intervention" && (
+                        <UnplannedServices
+                          services={intervention.unplanned_services}
+                          showPrices
+                          isDark={isDark}
+                        />
                       )}
                     </>
                   )}

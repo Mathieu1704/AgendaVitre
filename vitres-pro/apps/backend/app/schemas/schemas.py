@@ -241,6 +241,10 @@ class InterventionItemOut(InterventionItemBase):
     class Config:
         from_attributes = True
 
+class UnplannedServiceOut(BaseModel):
+    label: str
+    price: Optional[float] = None
+
 # --- HOURLY RATE ---
 class HourlyRateCreate(BaseModel):
     rate: float
@@ -401,6 +405,9 @@ class InterventionOut(BaseModel):
     client: Optional[ClientOutLite] = None
     employees: List[EmployeeOut] = []
     items: List[InterventionItemOut] = []
+    # Prestations du catalogue (client ou chaîne de reprises) non cochées pour
+    # ce RDV — calculé à la volée sur GET /{id}, seulement avant clôture.
+    unplanned_services: List[UnplannedServiceOut] = []
     tour_run: Optional[TourRunSummaryOut] = None
 
     class Config:

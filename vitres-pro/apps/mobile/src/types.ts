@@ -50,6 +50,9 @@ export interface Intervention {
   // intervention (calculé côté backend, voir GET /interventions/{id}).
   pending_deferred_amount?: number | null;
   carried_over_deferred_amount?: number | null;
+  // Prestations du catalogue non cochées pour ce RDV (prix null pour un
+  // sous-traitant) — seulement avant clôture, voir GET /interventions/{id}.
+  unplanned_services?: { label: string; price: number | null }[];
   zone: "hainaut" | "ardennes";
   city?: string | null;
   recurrence_rule?: {

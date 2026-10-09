@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from app.models.models import (
     get_db, Intervention, Client, Employee, InterventionItem,
     intervention_employees, RawCalendarEvent, AuditLog, InAppNotification,
-    InterventionService, InterventionNote, TourRun, City
+    InterventionService, InterventionNote, TourRun, City, ClientService
 )
 from app.schemas.schemas import (
     InterventionCreate, InterventionOut, InterventionRecurringCreate,
@@ -119,6 +119,36 @@ def _pending_deferred_amount(db: Session, intervention: Intervention):
     if source and source.deferred_cash_amount is not None and source.deferred_settled_by_intervention_id is None:
         return float(source.deferred_cash_amount)
     return None
+
+
+def _unplanned_services(db: Session, intervention: Intervention, hide_prices: bool) -> list:
+    """Prestations du catalogue (client, sinon chaîne de reprises) qui n'ont
+    pas été cochées pour ce RDV, pour les afficher en "non prévues".
+    Seulement avant clôture : le catalogue évolue, sur un RDV clôturé il ne
+    refléterait plus ce qui était proposé à l'époque."""
+    if intervention.type != "intervention" or intervention.status in ("done", "cancelled"):
+        return []
+    if intervention.client_id:
+        catalog = db.query(ClientService).filter(
+            ClientService.client_id == intervention.client_id,
+        ).order_by(ClientService.position).all()
+    elif intervention.reprise_chain_id:
+        catalog = db.query(InterventionService).filter(
+            InterventionService.reprise_chain_id == intervention.reprise_chain_id,
+        ).order_by(InterventionService.position).all()
+    else:
+        return []
+    planned_ids = set()
+    planned_labels = set()
+    for item in intervention.items:
+        planned_ids.add(item.client_service_id)
+        planned_ids.add(item.intervention_service_id)
+        planned_labels.add(item.label)
+    return [
+        {"label": svc.label, "price": None if hide_prices else float(svc.price or 0)}
+        for svc in catalog
+        if svc.id not in planned_ids and svc.label not in planned_labels
+    ]
 
 
 def _migrate_orphan_items_to_chain(db: Session, intervention: Intervention, chain_id) -> dict:
@@ -397,6 +427,9 @@ def read_intervention(
     if current_user.role == 'subcontractor':
         _strip_prices([intervention])
     intervention.pending_deferred_amount = _pending_deferred_amount(db, intervention)
+    intervention.unplanned_services = _unplanned_services(
+        db, intervention, hide_prices=current_user.role == "subcontractor",
+    )
     if intervention.type == "devis" and intervention.devis_converted_at:
         converted = db.query(Intervention).filter(
             Intervention.reprise_of_id == intervention.id,
