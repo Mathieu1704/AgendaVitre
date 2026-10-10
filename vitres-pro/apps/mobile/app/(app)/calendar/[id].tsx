@@ -97,7 +97,7 @@ function UnplannedServices({
   return (
     <View style={{ marginTop: 4, marginBottom: 16, opacity: 0.8 }}>
       <Text style={{ fontSize: 11, fontWeight: "700", color, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
-        Non prévues ce passage
+        Non prévu ce passage
       </Text>
       <View style={{ gap: 6 }}>
         {services.map((svc, idx) => (
