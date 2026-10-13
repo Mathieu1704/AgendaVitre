@@ -487,9 +487,13 @@ class WeeklySummaryEmployeeOut(BaseModel):
     full_name: Optional[str] = None
     role: str
     cash_amount: float
-    # Part de cash_amount encaissee sur des RDV TVAC (deja incluse dedans).
+    # Cash a remettre en temps reel (pas encore couvert par un "Paye"), et
+    # sa part encaissee sur des RDV TVAC (deja incluse dedans).
     tvac_amount: float = 0.0
+    # Plus rien a remettre (tout le cash encaisse est couvert par un "Paye").
     cash_settled: bool
+    last_cash_settlement_at: Optional[datetime] = None
+    last_cash_settlement_amount: Optional[float] = None
     overtime_balance_hours: float
     overtime_period_start: date
     overtime_period_end: date
@@ -510,7 +514,9 @@ class MyOvertimeBalanceOut(BaseModel):
 
 class CashSettlementIn(BaseModel):
     employee_id: UUID
-    week_start: date
+    # Ignore depuis le cash "en temps reel" (le reglement couvre tout le cash
+    # du a l'instant du clic) ; garde pour les anciennes versions de l'app.
+    week_start: Optional[date] = None
 
 
 class CashSettlementOut(BaseModel):

@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.deps import get_current_user
-from app.core.idempotency import already_processed, record_operation
+from app.core.idempotency import already_processed, record_operation, commit_operation
 from app.models.models import (
     Employee,
     Intervention,
@@ -554,7 +554,7 @@ def resolve_run_stop(
     stop.completed_at = now
     _touch_in_progress(run)
     record_operation(db, payload.client_operation_id, current_user.id, f"POST /api/tours/runs/{run_id}/stops/{stop_id}/resolve", stop.id)
-    db.commit()
+    commit_operation(db, payload.client_operation_id)
     return _load_run(db, run_id)
 
 

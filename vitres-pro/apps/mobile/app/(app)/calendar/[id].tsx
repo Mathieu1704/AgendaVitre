@@ -591,6 +591,10 @@ export default function InterventionDetailScreen() {
       router.navigate("/(app)/parametres/facturation" as any);
       return;
     }
+    if (from_view === "comptes") {
+      router.navigate("/(app)/parametres/comptes" as any);
+      return;
+    }
     if (router.canGoBack()) {
       router.back();
       return;

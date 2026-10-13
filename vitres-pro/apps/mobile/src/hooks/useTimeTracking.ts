@@ -64,9 +64,13 @@ export interface WeeklySummaryEmployee {
   full_name: string | null;
   role: string;
   cash_amount: number;
-  // Part de cash_amount encaissée sur des RDV TVAC (déjà incluse dedans).
+  // Cash à remettre en temps réel (pas encore couvert par un "Payé"), et sa
+  // part encaissée sur des RDV TVAC (déjà incluse dedans).
   tvac_amount: number;
+  // Rien à remettre : tout le cash encaissé est couvert par un "Payé".
   cash_settled: boolean;
+  last_cash_settlement_at: string | null;
+  last_cash_settlement_amount: number | null;
   overtime_balance_hours: number;
   overtime_period_start: string;
   overtime_period_end: string;
@@ -114,7 +118,7 @@ export const useMyOvertimeBalance = () =>
 export const useConfirmCashSettlement = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (vars: { employee_id: string; week_start: string }) =>
+    mutationFn: async (vars: { employee_id: string; week_start?: string }) =>
       (await api.post("/api/timetracking/cash-settlements", vars)).data,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["timetracking", "weekly-summary"] }),

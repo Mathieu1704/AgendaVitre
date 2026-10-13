@@ -21,7 +21,7 @@ from app.schemas.schemas import (
     normalize_city, city_identity_key,
 )
 from app.core.deps import get_current_user
-from app.core.idempotency import already_processed, record_operation
+from app.core.idempotency import already_processed, record_operation, commit_operation
 
 router = APIRouter()
 
@@ -369,7 +369,7 @@ def create_intervention_service(
         "POST /api/interventions/chain-services", service.id,
     )
 
-    db.commit()
+    commit_operation(db, payload.client_operation_id)
     db.refresh(service)
     return service
 
@@ -552,7 +552,7 @@ def create_recurring_bulk(
         "POST /api/interventions/recurring-bulk", recurrence_group_id,
     )
 
-    db.commit()
+    commit_operation(db, payload.client_operation_id)
     return {"created": len(created_ids), "recurrence_group_id": str(recurrence_group_id)}
 
 
@@ -677,7 +677,7 @@ def create_intervention(
     # cette nouvelle intervention absorbe : ajoute au prix total pour que le
     # split cash/facture et les totaux (semaine, CA) refletent le montant
     # reellement du/encaisse, sans jamais avoir compte le report deux fois
-    # (l'intervention source reste exclue en permanence, voir _weekly_cash_amount).
+    # (l'intervention source reste exclue en permanence, voir _cash_interventions).
     deferred_source = None
     if intervention.settle_deferred_intervention_id:
         deferred_source = db.query(Intervention).filter(
@@ -715,7 +715,7 @@ def create_intervention(
         "POST /api/interventions", new_intervention.id,
     )
 
-    db.commit()
+    commit_operation(db, intervention.client_operation_id)
     db.refresh(new_intervention)
     return new_intervention
 
@@ -955,7 +955,7 @@ def update_intervention(
             setattr(db_intervention, key, value)
 
     # Cloture : on retient qui a reellement termine (et donc encaisse), pas
-    # seulement les employes assignes — voir _weekly_cash_amount.
+    # seulement les employes assignes — voir _cash_interventions.
     if db_intervention.status == "done" and old_status != "done":
         db_intervention.closed_by_employee_id = _resolve_closer_id(db_intervention, current_user, requested_closer_id)
 
@@ -1341,7 +1341,7 @@ def no_reprise(
         f"POST /api/interventions/{intervention_id}/no-reprise", intervention_id,
     )
 
-    db.commit()
+    commit_operation(db, op_uuid)
     return {"message": "ok"}
 
 
@@ -1355,7 +1355,7 @@ def defer_cash(
     """Client absent au passage : le cash prevu n'est pas encaisse maintenant,
     il est reporte au prochain RDV de la chaine de reprise. Le montant ne doit
     pas entrer dans le total cash de la semaine tant qu'il n'est pas
-    effectivement encaisse (voir _weekly_cash_amount)."""
+    effectivement encaisse (voir _cash_interventions)."""
     op_id = payload.get("client_operation_id")
     op_uuid = UUID(op_id) if isinstance(op_id, str) else op_id
     if already_processed(db, op_uuid) is not None:
@@ -1414,7 +1414,7 @@ def defer_cash(
         f"POST /api/interventions/{intervention_id}/defer-cash", intervention_id,
     )
 
-    db.commit()
+    commit_operation(db, op_uuid)
     return {"message": "ok"}
 
 

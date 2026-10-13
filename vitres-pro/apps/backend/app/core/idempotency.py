@@ -16,6 +16,8 @@ On journalise cet id : s'il est deja connu, l'operation a deja abouti.
 from typing import Optional
 from uuid import UUID
 
+from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.models import ClientOperation
@@ -59,3 +61,27 @@ def record_operation(
             result_id=result_id,
         )
     )
+
+
+def commit_operation(db: Session, op_id: Optional[UUID]) -> None:
+    """
+    Commit d'une ecriture journalisee par record_operation.
+
+    Deux envois concurrents de la meme operation (ex. le mobile a abandonne
+    une requete lente apres son timeout et l'a renvoyee pendant que la
+    premiere tournait encore) passent tous les deux already_processed avant
+    que l'un ait commite : le second bute alors sur la cle primaire de
+    client_operations. On annule ce doublon et on repond 503 — transitoire
+    pour la file mobile, qui rejoue et tombe cette fois sur already_processed —
+    au lieu d'une erreur 500 non geree.
+    """
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        if op_id is not None and already_processed(db, op_id) is not None:
+            raise HTTPException(
+                status_code=503,
+                detail="Opération déjà en cours de traitement, nouvel essai automatique.",
+            )
+        raise

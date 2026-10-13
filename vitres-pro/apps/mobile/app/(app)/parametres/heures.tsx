@@ -116,11 +116,13 @@ export default function HeuresEncaissementScreen() {
   const handleConfirmCash = async () => {
     if (!cashConfirm || !summary) return;
     try {
-      await confirmCash.mutateAsync({
+      const settlement = await confirmCash.mutateAsync({
         employee_id: cashConfirm.employee_id,
         week_start: summary.week_start,
       });
-      toast.success("Cash marqué comme payé");
+      // Le montant réellement réglé est recalculé au moment du clic : il peut
+      // dépasser celui affiché si un RDV a été clôturé entre-temps.
+      toast.success("Cash marqué comme payé", `${formatPrice(settlement?.amount)} réglé — le compteur repart à 0.`);
     } catch (e: any) {
       toast.error("Erreur", e?.response?.data?.detail || "Impossible de confirmer.");
     } finally {
@@ -294,9 +296,10 @@ export default function HeuresEncaissementScreen() {
                         </Text>
                       )}
                     </View>
-                    {!hideCash && emp.tvac_amount > 0 && (
-                      <Text style={{ fontSize: 11, fontWeight: "600", color: "#8B5CF6", marginTop: 2 }}>
-                        dont {formatPrice(emp.tvac_amount)} TVAC
+                    {!!emp.last_cash_settlement_at && (
+                      <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>
+                        Dernier paiement : {new Date(emp.last_cash_settlement_at).toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" })}
+                        {!hideCash && emp.last_cash_settlement_amount != null ? ` · ${formatPrice(emp.last_cash_settlement_amount)}` : ""}
                       </Text>
                     )}
                   </View>

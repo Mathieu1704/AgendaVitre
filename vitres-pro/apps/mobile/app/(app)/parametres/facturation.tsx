@@ -21,6 +21,7 @@ import {
   Clock3,
   CheckCircle2,
   Receipt,
+  ChartColumn,
 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Redirect, useRouter } from "expo-router";
@@ -365,9 +366,17 @@ export default function FacturationScreen() {
           >
             <ChevronLeft size={24} color={isDark ? "white" : "black"} />
           </Button>
-          <Text className="text-xl font-bold text-foreground dark:text-white ml-2">
+          <Text className="text-xl font-bold text-foreground dark:text-white ml-2 flex-1">
             Facturation
           </Text>
+          <Pressable
+            onPress={() => router.push("/(app)/parametres/comptes")}
+            className="flex-row items-center px-3 py-2 active:opacity-70"
+            style={{ gap: 6, borderRadius: 999, backgroundColor: isDark ? "#1E293B" : "#EFF6FF" }}
+          >
+            <ChartColumn size={16} color="#3B82F6" />
+            <Text style={{ color: "#3B82F6", fontWeight: "700", fontSize: 13 }}>Comptes</Text>
+          </Pressable>
         </View>
 
         <View className="flex-row items-center justify-between px-6 py-3">

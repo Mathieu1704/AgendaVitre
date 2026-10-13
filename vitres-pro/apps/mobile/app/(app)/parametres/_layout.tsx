@@ -5,6 +5,7 @@ export default function ParametresLayout() {
     <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="facturation" />
+      <Stack.Screen name="comptes" />
       <Stack.Screen name="tournees" />
       <Stack.Screen name="team" />
       <Stack.Screen name="zones" />

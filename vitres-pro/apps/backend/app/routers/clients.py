@@ -5,7 +5,7 @@ from uuid import UUID
 from app.models.models import get_db, Client, Intervention, ClientService
 from app.schemas.schemas import ClientCreate, ClientOut, ClientOutLite, ClientServiceCreate, ClientServiceOut, ClientServiceUpdate
 from app.core.deps import get_current_user
-from app.core.idempotency import already_processed, record_operation
+from app.core.idempotency import already_processed, record_operation, commit_operation
 from pydantic import BaseModel
 
 class ClientUpdate(BaseModel):
@@ -150,7 +150,7 @@ def create_client_service(
         f"POST /api/clients/{client_id}/services", service.id,
     )
 
-    db.commit()
+    commit_operation(db, payload.client_operation_id)
     db.refresh(service)
     return service
 

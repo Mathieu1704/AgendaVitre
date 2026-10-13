@@ -219,34 +219,42 @@ def _overtime_balance(
     return round(total_delta, 2), period_start, last_counted_week_end
 
 
-def _weekly_cash_amount(db: Session, emp: Employee, week_start: date, week_end: date) -> float:
-    return _weekly_cash_breakdown(db, emp, week_start, week_end)[0]
+# Debut du suivi du cash a remettre en temps reel (semaine du dernier
+# reglement "Paye" avant la bascule). Tout le cash anterieur est considere
+# comme regle — valide avec Mathieu le 13/10/2026.
+CASH_TRACKING_START = date(2026, 10, 5)
 
 
-def _weekly_cash_breakdown(db: Session, emp: Employee, week_start: date, week_end: date) -> tuple[float, float]:
-    """(total cash a remettre, dont part TVAC). TVAC = paye en especes mais
-    facture en acquitte : l'employe encaisse quand meme le montant."""
-    day_start_utc, _ = _utc_bounds(week_start)
-    _, day_end_utc = _utc_bounds(week_end)
+def _cash_interventions(
+    db: Session, emp: Employee, start: date, end: Optional[date] = None, unsettled_only: bool = False,
+) -> List[Intervention]:
+    """RDV termines dont l'employe a encaisse le cash, entre start et end
+    (inclus, None = sans limite)."""
+    start_utc, _ = _utc_bounds(start)
+    filters = [
+        Intervention.start_time >= start_utc,
+        Intervention.status == "done",
+        Intervention.payment_mode.in_(["cash", "invoice_cash", "tvac"]),
+        # Seule une vraie prestation ("intervention") génère du cash à
+        # remettre : une note/congé/devis/etc. peut hériter d'un
+        # payment_mode et d'un prix par erreur d'import sans jamais
+        # correspondre à un service réellement encaissé.
+        Intervention.type == "intervention",
+        ~Intervention.tour_run.has(),
+    ]
+    if end is not None:
+        _, end_utc = _utc_bounds(end)
+        filters.append(Intervention.start_time < end_utc)
+    if unsettled_only:
+        filters.append(Intervention.cash_settlement_id.is_(None))
     interventions = (
         db.query(Intervention)
         .options(selectinload(Intervention.employees))
-        .filter(
-            Intervention.start_time >= day_start_utc,
-            Intervention.start_time < day_end_utc,
-            Intervention.status == "done",
-            Intervention.payment_mode.in_(["cash", "invoice_cash", "tvac"]),
-            # Seule une vraie prestation ("intervention") génère du cash à
-            # remettre : une note/congé/devis/etc. peut hériter d'un
-            # payment_mode et d'un prix par erreur d'import sans jamais
-            # correspondre à un service réellement encaissé.
-            Intervention.type == "intervention",
-            ~Intervention.tour_run.has(),
-        )
+        .filter(*filters)
+        .order_by(Intervention.start_time)
         .all()
     )
-    total = 0.0
-    tvac = 0.0
+    result = []
     for iv in interventions:
         if iv.closed_by_employee_id is not None:
             # Un seul employe encaisse reellement, meme si plusieurs sont
@@ -261,20 +269,31 @@ def _weekly_cash_breakdown(db: Session, emp: Employee, week_start: date, week_en
             continue
         if iv.deferred_cash_amount is not None:
             # Paiement reporte (client absent) : cette intervention ne compte
-            # jamais dans le total cash de SA semaine, meme une fois reglee —
-            # l'argent est compte plus tard, sur l'intervention qui l'encaisse
-            # reellement (son propre amount_cash/price_estimated normal).
+            # jamais dans le cash a remettre, meme une fois reglee — l'argent
+            # est compte sur l'intervention qui l'encaisse reellement (son
+            # propre amount_cash/price_estimated normal).
             continue
-        if iv.payment_mode == "invoice_cash":
-            # Part cash uniquement. NULL (ancienne ligne, ou split reinitialise
-            # par une cloture qui a change le total) : on retombe sur le prix
-            # total pour ne pas sous-declarer silencieusement le cash du.
-            total += float(iv.amount_cash) if iv.amount_cash is not None else float(iv.price_estimated or 0)
-        else:  # "cash" | "tvac"
-            total += float(iv.price_estimated or 0)
-            if iv.payment_mode == "tvac":
-                tvac += float(iv.price_estimated or 0)
-    return round(total, 2), round(tvac, 2)
+        result.append(iv)
+    return result
+
+
+def _cash_value(iv: Intervention) -> float:
+    if iv.payment_mode == "invoice_cash":
+        # Part cash uniquement. NULL (ancienne ligne, ou split reinitialise
+        # par une cloture qui a change le total) : on retombe sur le prix
+        # total pour ne pas sous-declarer silencieusement le cash du.
+        return float(iv.amount_cash) if iv.amount_cash is not None else float(iv.price_estimated or 0)
+    return float(iv.price_estimated or 0)  # "cash" | "tvac"
+
+
+def _cash_due(db: Session, emp: Employee) -> tuple[float, float, List[Intervention]]:
+    """Cash a remettre en temps reel : tout le cash encaisse pas encore couvert
+    par un "Paye" — un reglement le jeudi n'efface pas le cash du vendredi,
+    qui reste du jusqu'au reglement suivant. (total, dont TVAC, RDV)."""
+    ivs = _cash_interventions(db, emp, CASH_TRACKING_START, unsettled_only=True)
+    total = sum(_cash_value(iv) for iv in ivs)
+    tvac = sum(_cash_value(iv) for iv in ivs if iv.payment_mode == "tvac")
+    return round(total, 2), round(tvac, 2), ivs
 
 
 def _daily_entries(
@@ -544,18 +563,13 @@ def weekly_summary(
 
     result_employees = []
     for emp in employees:
-        cash_settlement = (
+        cash_amount, tvac_amount, _ = _cash_due(db, emp)
+        last_settlement = (
             db.query(CashSettlement)
-            .filter(CashSettlement.employee_id == emp.id, CashSettlement.week_start == w_start)
+            .filter(CashSettlement.employee_id == emp.id)
+            .order_by(CashSettlement.confirmed_at.desc())
             .first()
         )
-        live_cash_amount, tvac_amount = _weekly_cash_breakdown(db, emp, w_start, w_end)
-        if cash_settlement:
-            cash_amount = float(cash_settlement.amount)
-            cash_settled = True
-        else:
-            cash_amount = live_cash_amount
-            cash_settled = False
 
         # Solde d'heures sup non pertinent pour les sous-traitants : payés au
         # service ponctuel, pas à l'heure — le plancher 37h/semaine ne
@@ -573,7 +587,9 @@ def weekly_summary(
             role=emp.role,
             cash_amount=cash_amount,
             tvac_amount=tvac_amount,
-            cash_settled=cash_settled,
+            cash_settled=cash_amount <= 0,
+            last_cash_settlement_at=last_settlement.confirmed_at if last_settlement else None,
+            last_cash_settlement_amount=float(last_settlement.amount) if last_settlement else None,
             overtime_balance_hours=overtime_balance,
             overtime_period_start=period_start,
             overtime_period_end=period_end,
@@ -595,24 +611,24 @@ def confirm_cash_settlement(
     if not emp:
         raise HTTPException(status_code=404, detail="Employé introuvable")
 
-    existing = (
-        db.query(CashSettlement)
-        .filter(CashSettlement.employee_id == payload.employee_id, CashSettlement.week_start == payload.week_start)
-        .first()
-    )
-    if existing:
-        raise HTTPException(status_code=409, detail="Déjà réglé pour cette semaine")
+    # Verrou sur l'employe : deux "Paye" simultanes (double tap, deux admins)
+    # couvriraient sinon les memes RDV dans deux reglements.
+    db.query(Employee).filter(Employee.id == emp.id).with_for_update().first()
 
-    w_start, w_end = _week_bounds(payload.week_start)
-    amount = _weekly_cash_amount(db, emp, w_start, w_end)
+    amount, _, ivs = _cash_due(db, emp)
+    if not ivs:
+        raise HTTPException(status_code=409, detail="Rien à régler : tout le cash a déjà été remis.")
 
     settlement = CashSettlement(
         employee_id=payload.employee_id,
         amount=amount,
-        week_start=w_start,
+        week_start=_week_bounds(_today_brussels())[0],
         confirmed_by=current_user.id,
     )
     db.add(settlement)
+    db.flush()
+    for iv in ivs:
+        iv.cash_settlement_id = settlement.id
     db.commit()
     db.refresh(settlement)
     return settlement

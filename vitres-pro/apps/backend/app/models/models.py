@@ -246,6 +246,11 @@ class Intervention(Base):
     # vs part facturee. NULL = pas encore renseigne (ancienne ligne ou reset par cloture).
     amount_cash = Column(Numeric(10, 2), nullable=True)
     amount_invoice = Column(Numeric(10, 2), nullable=True)
+    # Reglement "Paye" qui couvre le cash de ce RDV. NULL = cash pas encore
+    # remis par l'employe (voir _cash_due cote timetracking).
+    cash_settlement_id = Column(
+        UUID(as_uuid=True), ForeignKey("cash_settlements.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     # Horodatage "facture traitee" dans l'outil de facturation externe (coche
     # manuelle depuis l'ecran Facturation). NULL = pas encore facture.
     invoiced_at = Column(DateTime(timezone=True), nullable=True)
@@ -296,7 +301,7 @@ class Intervention(Base):
     # Employé qui a effectivement clôturé (et donc encaissé) l'intervention —
     # distinct de `employees` qui liste tous les assignés. Sert à attribuer le
     # cash hebdomadaire à celui qui a réellement pris l'argent plutôt qu'à
-    # chaque employé assigné (voir _weekly_cash_amount côté timetracking).
+    # chaque employé assigné (voir _cash_interventions côté timetracking).
     closed_by_employee_id = Column(
         UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True,
     )
@@ -462,7 +467,9 @@ class OvertimeSettlement(Base):
 
 
 class CashSettlement(Base):
-    """Historique des règlements ('Payé') : cash remis par un employé pour une semaine donnée."""
+    """Historique des règlements ('Payé') : cash remis par un employé. Plusieurs
+    par semaine possibles ; les RDV couverts pointent vers leur règlement
+    (Intervention.cash_settlement_id). week_start = semaine du clic."""
     __tablename__ = "cash_settlements"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -475,9 +482,6 @@ class CashSettlement(Base):
     employee = relationship("Employee", foreign_keys=[employee_id])
     confirmed_by_employee = relationship("Employee", foreign_keys=[confirmed_by])
 
-    __table_args__ = (
-        UniqueConstraint("employee_id", "week_start", name="uq_cash_settlement_employee_week"),
-    )
 
 
 class RawCalendarEvent(Base):
