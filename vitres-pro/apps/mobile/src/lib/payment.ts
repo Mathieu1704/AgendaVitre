@@ -7,16 +7,23 @@ export interface PaymentModePillOption {
   activeTextColor: string;
 }
 
-/** Options du sélecteur de moyen de paiement. Espèces et FAC+Esp. impliquent
- * toutes les deux du cash : les deux disparaissent quand hideCash est actif. */
+/** Options du sélecteur de moyen de paiement. Cash et FAC+Cash impliquent
+ * toutes les deux du cash : les deux disparaissent quand hideCash est actif.
+ * TVAC reste visible : encaissé en espèces mais facturé en acquitté. */
 export function paymentModeOptionIds(hideCash: boolean): PaymentMode[] {
-  return (["cash", "invoice", "invoice_cash"] as PaymentMode[]).filter(
+  return (["cash", "invoice", "invoice_cash", "tvac"] as PaymentMode[]).filter(
     (id) => !(hideCash && (id === "cash" || id === "invoice_cash")),
   );
 }
 
 export function isCashRelated(mode?: string | null): boolean {
   return mode === "cash" || mode === "invoice_cash" || !mode;
+}
+
+/** L'employé encaisse de l'argent sur place (report possible si client absent,
+ * choix de l'encaisseur à la clôture, total cash de la semaine). */
+export function collectsCash(mode?: string | null): boolean {
+  return isCashRelated(mode) || mode === "tvac";
 }
 
 const ROUNDING_TOLERANCE = 0.005;

@@ -43,6 +43,7 @@ import {
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
 import { PaymentSplitInputs } from "../../../src/ui/components/PaymentSplitInputs";
 import { validatePaymentSplit } from "../../../src/lib/payment";
+import type { PaymentMode } from "../../../src/types";
 import {
   PlusCircle,
   Trash2,
@@ -58,6 +59,7 @@ import {
   Repeat,
   ChevronRight,
   CalendarClock,
+  Receipt,
 } from "lucide-react-native";
 import { Card, CardContent, CardHeader } from "../../../src/ui/components/Card";
 import { Input } from "../../../src/ui/components/Input";
@@ -639,9 +641,7 @@ export default function AddInterventionScreen() {
   const [newServiceLabel, setNewServiceLabel] = useState("");
   const [newServicePrice, setNewServicePrice] = useState("");
   const [description, setDescription] = useState("");
-  const [paymentMode, setPaymentMode] = useState<
-    "cash" | "invoice" | "invoice_cash"
-  >("cash");
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>("cash");
   const [amountCash, setAmountCash] = useState("");
   const [amountInvoice, setAmountInvoice] = useState("");
 
@@ -3166,7 +3166,7 @@ export default function AddInterventionScreen() {
                     options={[
                       !hideCash && {
                         id: "cash",
-                        label: "Espèces",
+                        label: "Cash",
                         pillColor: "#EF4444",
                         activeTextColor: "#fff",
                         icon: (c: string) => <Banknote size={14} color={c} />,
@@ -3180,16 +3180,21 @@ export default function AddInterventionScreen() {
                       },
                       !hideCash && {
                         id: "invoice_cash",
-                        label: "FAC+Esp.",
+                        label: "FAC+Cash",
                         pillColor: "#F97316",
                         activeTextColor: "#fff",
                         icon: (c: string) => <Wallet size={14} color={c} />,
                       },
+                      {
+                        id: "tvac",
+                        label: "TVAC",
+                        pillColor: "#8B5CF6",
+                        activeTextColor: "#fff",
+                        icon: (c: string) => <Receipt size={14} color={c} />,
+                      },
                     ].filter(Boolean) as any}
                     selected={paymentMode}
-                    onSelect={(id) =>
-                      setPaymentMode(id as "cash" | "invoice" | "invoice_cash")
-                    }
+                    onSelect={(id) => setPaymentMode(id as PaymentMode)}
                     pillColor="#3B82F6"
                     bgColor="#F1F5F9"
                     activeTextColor="#fff"
@@ -3209,6 +3214,13 @@ export default function AddInterventionScreen() {
                       style={{ fontSize: 11, color: "#22C55E", marginTop: 5 }}
                     >
                       Une facture sera émise au client
+                    </Text>
+                  )}
+                  {paymentMode === "tvac" && (
+                    <Text
+                      style={{ fontSize: 11, color: "#8B5CF6", marginTop: 5 }}
+                    >
+                      L'employé encaisse sur place, facture acquittée
                     </Text>
                   )}
                   {paymentMode === "invoice_cash" && (

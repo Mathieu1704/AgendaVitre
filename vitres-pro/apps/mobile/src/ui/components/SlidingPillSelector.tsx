@@ -40,6 +40,7 @@ export function SlidingPillSelector({
   const [containerWidth, setContainerWidth] = useState(0);
   const selectedIndex = options.findIndex((o) => o.id === selected);
   const itemWidth = containerWidth > 0 ? containerWidth / options.length : 0;
+  const compact = options.length >= 4;
 
   const translateX = useSharedValue(0);
 
@@ -109,15 +110,24 @@ export function SlidingPillSelector({
               alignItems: "center",
               justifyContent: "center",
               flexDirection: "row",
-              gap: 5,
+              gap: compact ? 3 : 5,
               paddingVertical: itemPy,
-              paddingHorizontal: itemPx,
+              paddingHorizontal: Math.max(itemPx, 4),
+              minWidth: 0,
               borderRadius: 100,
               zIndex: 1,
             }}
           >
             {opt.icon?.(textColor)}
-            <Animated.Text numberOfLines={1} style={{ fontSize, fontWeight: "600", color: textColor }}>
+            {/* flexShrink + adjustsFontSizeToFit : un libellé long (ex.
+                "FAC+Cash" à 4 options) rétrécit dans sa case au lieu de
+                déborder sur la voisine et de décentrer la rangée. */}
+            <Animated.Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+              style={{ fontSize, fontWeight: "600", color: textColor, flexShrink: 1 }}
+            >
               {opt.label}
             </Animated.Text>
           </Pressable>

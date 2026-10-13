@@ -271,7 +271,7 @@ class InterventionBase(BaseModel):
     status: str = "planned"
     price_estimated: Optional[float] = None
     is_invoice: bool = False
-    payment_mode: str = "cash"  # "cash" | "invoice" | "invoice_cash"
+    payment_mode: str = "cash"  # "cash" | "invoice" | "invoice_cash" | "tvac"
     amount_cash: Optional[float] = None
     amount_invoice: Optional[float] = None
     zone: str = "hainaut"  # "hainaut" ou "ardennes"
@@ -487,6 +487,8 @@ class WeeklySummaryEmployeeOut(BaseModel):
     full_name: Optional[str] = None
     role: str
     cash_amount: float
+    # Part de cash_amount encaissee sur des RDV TVAC (deja incluse dedans).
+    tvac_amount: float = 0.0
     cash_settled: bool
     overtime_balance_hours: float
     overtime_period_start: date

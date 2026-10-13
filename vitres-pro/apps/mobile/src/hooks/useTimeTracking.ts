@@ -32,8 +32,10 @@ export const useClockIn = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => (await api.post("/api/timetracking/clock-in")).data,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["time-entry", "today"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["time-entry", "today"] });
+      queryClient.invalidateQueries({ queryKey: ["timetracking", "my-overtime-balance"] });
+    },
   });
 };
 
@@ -41,8 +43,10 @@ export const useClockOut = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => (await api.post("/api/timetracking/clock-out")).data,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["time-entry", "today"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["time-entry", "today"] });
+      queryClient.invalidateQueries({ queryKey: ["timetracking", "my-overtime-balance"] });
+    },
   });
 };
 
@@ -60,6 +64,8 @@ export interface WeeklySummaryEmployee {
   full_name: string | null;
   role: string;
   cash_amount: number;
+  // Part de cash_amount encaissée sur des RDV TVAC (déjà incluse dedans).
+  tvac_amount: number;
   cash_settled: boolean;
   overtime_balance_hours: number;
   overtime_period_start: string;

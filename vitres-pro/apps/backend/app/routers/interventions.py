@@ -1366,8 +1366,8 @@ def defer_cash(
         raise HTTPException(status_code=404, detail="Introuvable")
     if intervention.tour_run:
         raise HTTPException(status_code=409, detail="Utilisez la checklist Tournees pour ce cas.")
-    if intervention.payment_mode not in ("cash", "invoice_cash"):
-        raise HTTPException(status_code=400, detail="Le report de cash ne s'applique qu'aux modes cash/FAC+ESP.")
+    if intervention.payment_mode not in ("cash", "invoice_cash", "tvac"):
+        raise HTTPException(status_code=400, detail="Le report de cash ne s'applique qu'aux modes cash/FAC+ESP/TVAC.")
 
     try:
         amount = float(payload.get("amount"))

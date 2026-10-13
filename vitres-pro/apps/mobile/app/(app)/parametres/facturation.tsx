@@ -20,6 +20,7 @@ import {
   FilePlus,
   Clock3,
   CheckCircle2,
+  Receipt,
 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Redirect, useRouter } from "expo-router";
@@ -43,12 +44,15 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 
 const PAYMENT_BADGES: Record<string, { label: string; color: string }> = {
   invoice: { label: "FAC", color: "#22C55E" },
-  invoice_cash: { label: "FAC+Esp.", color: "#F97316" },
+  invoice_cash: { label: "FAC+Cash", color: "#F97316" },
+  tvac: { label: "TVAC", color: "#8B5CF6" },
 };
 
 const SECTIONS = {
   toInvoice: { color: "#F97316", icon: Clock3, title: "À facturer" },
   invoiced: { color: "#22C55E", icon: CheckCircle2, title: "Facturées" },
+  tvacToInvoice: { color: "#8B5CF6", icon: Receipt, title: "TVAC à facturer" },
+  tvacInvoiced: { color: "#22C55E", icon: CheckCircle2, title: "TVAC facturées" },
 } as const;
 
 function invoiceAmount(item: Intervention): number {
@@ -292,6 +296,20 @@ export default function FacturationScreen() {
   const totalToInvoice = toInvoice.reduce((acc, i) => acc + invoiceAmount(i), 0);
   const totalInvoiced = invoiced.reduce((acc, i) => acc + invoiceAmount(i), 0);
 
+  // TVAC : encaissé en espèces par l'employé, mais une facture acquittée doit
+  // quand même être créée — même suivi à facturer/facturé, hors listing FAC.
+  const tvacItems = useMemo(() => {
+    const list = (interventions || []).filter(
+      (i: Intervention) => i.status === "done" && i.payment_mode === "tvac",
+    );
+    list.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    return list;
+  }, [interventions]);
+  const tvacToInvoice = tvacItems.filter((i) => !i.invoiced_at);
+  const tvacInvoiced = tvacItems.filter((i) => !!i.invoiced_at);
+  const totalTvacToInvoice = tvacToInvoice.reduce((acc, i) => acc + invoiceAmount(i), 0);
+  const totalTvacInvoiced = tvacInvoiced.reduce((acc, i) => acc + invoiceAmount(i), 0);
+
   const renderSection = (
     key: keyof typeof SECTIONS,
     items: Intervention[],
@@ -383,6 +401,8 @@ export default function FacturationScreen() {
             <>
               {renderSection("toInvoice", toInvoice, totalToInvoice)}
               {renderSection("invoiced", invoiced, totalInvoiced)}
+              {renderSection("tvacToInvoice", tvacToInvoice, totalTvacToInvoice)}
+              {renderSection("tvacInvoiced", tvacInvoiced, totalTvacInvoiced)}
             </>
           )}
         </ScrollView>

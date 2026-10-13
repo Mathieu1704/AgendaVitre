@@ -241,7 +241,7 @@ class Intervention(Base):
     status = Column(String, default="planned")
     price_estimated = Column(Numeric(10, 2), nullable=True)
     is_invoice = Column(Boolean, default=False)
-    payment_mode = Column(String(20), default="cash", nullable=False)  # "cash" | "invoice" | "invoice_cash"
+    payment_mode = Column(String(20), default="cash", nullable=False)  # "cash" | "invoice" | "invoice_cash" | "tvac"
     # Split du montant quand payment_mode == "invoice_cash" : part payée en especes
     # vs part facturee. NULL = pas encore renseigne (ancienne ligne ou reset par cloture).
     amount_cash = Column(Numeric(10, 2), nullable=True)

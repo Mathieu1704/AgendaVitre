@@ -42,6 +42,7 @@ import {
   Repeat,
   Trash2,
   ArrowUp,
+  Receipt,
 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -74,7 +75,8 @@ import { OptionsModal } from "../../../src/ui/components/OptionsModal";
 import { ConfirmModal } from "../../../src/ui/components/ConfirmModal";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
 import { PaymentSplitInputs } from "../../../src/ui/components/PaymentSplitInputs";
-import { isCashRelated, validatePaymentSplit, isDeferredCashPending } from "../../../src/lib/payment";
+import { isCashRelated, collectsCash, validatePaymentSplit, isDeferredCashPending } from "../../../src/lib/payment";
+import type { PaymentMode } from "../../../src/types";
 import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
 import { Dialog } from "../../../src/ui/components/Dialog";
 import { Input } from "../../../src/ui/components/Input";
@@ -186,7 +188,7 @@ export default function InterventionDetailScreen() {
   const [editingPayment, setEditingPayment] = useState(false);
   const [showDeferCash, setShowDeferCash] = useState(false);
   const [deferAmount, setDeferAmount] = useState("");
-  const [pendingPaymentMode, setPendingPaymentMode] = useState<"cash" | "invoice" | "invoice_cash">("cash");
+  const [pendingPaymentMode, setPendingPaymentMode] = useState<PaymentMode>("cash");
   const [pendingAmountCash, setPendingAmountCash] = useState("");
   const [pendingAmountInvoice, setPendingAmountInvoice] = useState("");
   const [showAllDoneConfirm, setShowAllDoneConfirm] = useState(false);
@@ -654,7 +656,7 @@ export default function InterventionDetailScreen() {
   // visuel vient de la mise à jour optimiste, plus de la réponse du serveur.
   const paymentMutation = useMutation({
     mutationFn: async (payload: {
-      mode: "cash" | "invoice" | "invoice_cash";
+      mode: PaymentMode;
       amountCash: number | null;
       amountInvoice: number | null;
     }) => {
@@ -1075,6 +1077,7 @@ export default function InterventionDetailScreen() {
               const cfg = {
                 cash:         { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FCA5A5" : "#DC2626" },
                 invoice_cash: { bg: isDark ? "rgba(154,52,18,0.2)" : "#FFEDD5", border: isDark ? "rgba(154,52,18,0.5)" : "#FED7AA", iconBg: "#F97316", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#FB923C" : "#C2410C", sub: intervention.amount_cash != null ? `Le client doit payer ${formatPrice(intervention.amount_cash)} en espèces (+ facture ${formatPrice(intervention.amount_invoice ?? 0)}).` : `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FDBA74" : "#EA580C" },
+                tvac:         { bg: isDark ? "rgba(91,33,182,0.2)" : "#EDE9FE", border: isDark ? "rgba(91,33,182,0.5)" : "#DDD6FE", iconBg: "#8B5CF6", title: "À ENCAISSER SUR PLACE (TVAC)", titleColor: isDark ? "#A78BFA" : "#6D28D9", sub: `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant (facture acquittée).`, subColor: isDark ? "#C4B5FD" : "#7C3AED" },
                 invoice:      { bg: isDark ? "rgba(21,128,61,0.15)" : "#F0FDF4", border: isDark ? "rgba(21,128,61,0.4)" : "#BBF7D0", iconBg: "#22C55E", title: "PAIEMENT PAR FACTURE", titleColor: isDark ? "#4ADE80" : "#15803D", sub: "Le client sera facturé.", subColor: isDark ? "#86EFAC" : "#16A34A" },
               }[mode as string] ?? { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FCA5A5" : "#DC2626" };
 
@@ -1132,9 +1135,10 @@ export default function InterventionDetailScreen() {
                     }}>
                       <SlidingPillSelector
                         options={[
-                          !hideCash && { id: "cash",         label: "Espèces",  pillColor: "#EF4444", activeTextColor: "#fff", icon: (c: string) => <Banknote size={13} color={c} /> },
+                          !hideCash && { id: "cash",         label: "Cash",     pillColor: "#EF4444", activeTextColor: "#fff", icon: (c: string) => <Banknote size={13} color={c} /> },
                           { id: "invoice",      label: "Facture",  pillColor: "#22C55E", activeTextColor: "#fff", icon: (c: string) => <FileText size={13} color={c} /> },
-                          !hideCash && { id: "invoice_cash", label: "FAC+Esp.", pillColor: "#F97316", activeTextColor: "#fff", icon: (c: string) => <Wallet  size={13} color={c} /> },
+                          !hideCash && { id: "invoice_cash", label: "FAC+Cash", pillColor: "#F97316", activeTextColor: "#fff", icon: (c: string) => <Wallet  size={13} color={c} /> },
+                          { id: "tvac",         label: "TVAC",     pillColor: "#8B5CF6", activeTextColor: "#fff", icon: (c: string) => <Receipt size={13} color={c} /> },
                         ].filter(Boolean) as any}
                         selected={pendingPaymentMode}
                         onSelect={(id) => setPendingPaymentMode(id as any)}
@@ -1226,7 +1230,7 @@ export default function InterventionDetailScreen() {
                   </View>
                 )}
 
-                {isCashRelated(intervention.payment_mode) &&
+                {collectsCash(intervention.payment_mode) &&
                   !["done", "cancelled"].includes(intervention.status) &&
                   !isDeferredCashPending(intervention) && (
                     <>

@@ -110,7 +110,7 @@ export default function RepriseChoiceScreen() {
   // lui. Deux ou plus : l'admin doit choisir, jamais de choix automatique.
   const assignees: any[] = intervention?.employees || [];
   const adminClosesCash =
-    isAdmin && ["cash", "invoice_cash"].includes(intervention?.payment_mode);
+    isAdmin && ["cash", "invoice_cash", "tvac"].includes(intervention?.payment_mode);
   const needsCollector = adminClosesCash && assignees.length >= 2;
   const [collectedBy, setCollectedBy] = React.useState<string | null>(null);
   const collectorId =

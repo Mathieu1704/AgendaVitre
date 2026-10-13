@@ -19,7 +19,9 @@ export interface Client {
   address: string;
 }
 
-export type PaymentMode = "cash" | "invoice" | "invoice_cash";
+// "tvac" : payé en espèces à l'employé mais facturé en acquitté (hors
+// listing FAC, section dédiée dans l'écran Facturation).
+export type PaymentMode = "cash" | "invoice" | "invoice_cash" | "tvac";
 
 export interface Intervention {
   id: string;

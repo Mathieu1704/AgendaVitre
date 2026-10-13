@@ -220,6 +220,12 @@ def _overtime_balance(
 
 
 def _weekly_cash_amount(db: Session, emp: Employee, week_start: date, week_end: date) -> float:
+    return _weekly_cash_breakdown(db, emp, week_start, week_end)[0]
+
+
+def _weekly_cash_breakdown(db: Session, emp: Employee, week_start: date, week_end: date) -> tuple[float, float]:
+    """(total cash a remettre, dont part TVAC). TVAC = paye en especes mais
+    facture en acquitte : l'employe encaisse quand meme le montant."""
     day_start_utc, _ = _utc_bounds(week_start)
     _, day_end_utc = _utc_bounds(week_end)
     interventions = (
@@ -229,7 +235,7 @@ def _weekly_cash_amount(db: Session, emp: Employee, week_start: date, week_end: 
             Intervention.start_time >= day_start_utc,
             Intervention.start_time < day_end_utc,
             Intervention.status == "done",
-            Intervention.payment_mode.in_(["cash", "invoice_cash"]),
+            Intervention.payment_mode.in_(["cash", "invoice_cash", "tvac"]),
             # Seule une vraie prestation ("intervention") génère du cash à
             # remettre : une note/congé/devis/etc. peut hériter d'un
             # payment_mode et d'un prix par erreur d'import sans jamais
@@ -240,6 +246,7 @@ def _weekly_cash_amount(db: Session, emp: Employee, week_start: date, week_end: 
         .all()
     )
     total = 0.0
+    tvac = 0.0
     for iv in interventions:
         if iv.closed_by_employee_id is not None:
             # Un seul employe encaisse reellement, meme si plusieurs sont
@@ -263,9 +270,11 @@ def _weekly_cash_amount(db: Session, emp: Employee, week_start: date, week_end: 
             # par une cloture qui a change le total) : on retombe sur le prix
             # total pour ne pas sous-declarer silencieusement le cash du.
             total += float(iv.amount_cash) if iv.amount_cash is not None else float(iv.price_estimated or 0)
-        else:  # "cash"
+        else:  # "cash" | "tvac"
             total += float(iv.price_estimated or 0)
-    return round(total, 2)
+            if iv.payment_mode == "tvac":
+                tvac += float(iv.price_estimated or 0)
+    return round(total, 2), round(tvac, 2)
 
 
 def _daily_entries(
@@ -540,11 +549,12 @@ def weekly_summary(
             .filter(CashSettlement.employee_id == emp.id, CashSettlement.week_start == w_start)
             .first()
         )
+        live_cash_amount, tvac_amount = _weekly_cash_breakdown(db, emp, w_start, w_end)
         if cash_settlement:
             cash_amount = float(cash_settlement.amount)
             cash_settled = True
         else:
-            cash_amount = _weekly_cash_amount(db, emp, w_start, w_end)
+            cash_amount = live_cash_amount
             cash_settled = False
 
         # Solde d'heures sup non pertinent pour les sous-traitants : payés au
@@ -562,6 +572,7 @@ def weekly_summary(
             full_name=emp.full_name,
             role=emp.role,
             cash_amount=cash_amount,
+            tvac_amount=tvac_amount,
             cash_settled=cash_settled,
             overtime_balance_hours=overtime_balance,
             overtime_period_start=period_start,

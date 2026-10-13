@@ -546,7 +546,7 @@ export default function ParametresScreen() {
                             Facturation
                           </Text>
                           <Text className="text-sm text-muted-foreground leading-tight">
-                            RDV FAC / FAC+Esp. par semaine
+                            RDV FAC / FAC+Cash par semaine
                           </Text>
                         </View>
                       </View>

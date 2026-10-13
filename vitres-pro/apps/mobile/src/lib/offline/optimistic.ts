@@ -12,6 +12,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { onDemandPrice } from "../price";
 import { newTempId } from "./idMap";
+import type { PaymentMode } from "../../types";
 
 type AnyIntervention = Record<string, any>;
 export type InterventionCacheSnapshot = [readonly unknown[], unknown];
@@ -88,7 +89,7 @@ export function restoreInterventionSnapshots(
 export function applyPaymentMode(
   qc: QueryClient,
   interventionId: string,
-  mode: "cash" | "invoice" | "invoice_cash",
+  mode: PaymentMode,
   amountCash: number | null = null,
   amountInvoice: number | null = null,
 ): void {

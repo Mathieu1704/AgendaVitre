@@ -294,6 +294,11 @@ export default function HeuresEncaissementScreen() {
                         </Text>
                       )}
                     </View>
+                    {!hideCash && emp.tvac_amount > 0 && (
+                      <Text style={{ fontSize: 11, fontWeight: "600", color: "#8B5CF6", marginTop: 2 }}>
+                        dont {formatPrice(emp.tvac_amount)} TVAC
+                      </Text>
+                    )}
                   </View>
                 </View>
                 {emp.cash_settled ? (
