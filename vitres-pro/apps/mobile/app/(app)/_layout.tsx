@@ -306,6 +306,15 @@ function AppLayoutContent() {
               <Settings size={size} color={color} />
             ),
           }}
+          // L'onglet garde sa pile (Facturation, Comptes...) pour que le retour
+          // depuis une fiche RDV y ramène tel quel ; mais un tap sur
+          // "Réglages" doit toujours ouvrir la page principale des réglages.
+          listeners={({ navigation }) => ({
+            tabPress: (e) => {
+              e.preventDefault();
+              navigation.navigate("parametres", { screen: "index" });
+            },
+          })}
         />
       </Tabs>
     </View>

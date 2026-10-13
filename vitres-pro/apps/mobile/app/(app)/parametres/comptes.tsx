@@ -12,8 +12,6 @@ import {
   FileText,
   Wallet,
   Receipt,
-  Clock3,
-  CircleCheckBig,
   Users,
   CircleX,
   Hourglass,
@@ -107,6 +105,10 @@ function computeStats(
       // l'app, leurs montants fausseraient tous les totaux.
       i.zone === "hainaut" &&
       i.type === "intervention" &&
+      // Un renfort n'est pas un RDV en plus : c'est un employé en appui sur
+      // le vrai RDV (prix 0). Le compter gonflerait le nombre de RDV et
+      // fausserait le panier moyen ; il est affiché sur la ligne du RDV.
+      !i.reinforcement_for_id &&
       !(hideCash && (i.payment_mode === "cash" || !i.payment_mode)) &&
       (until == null || new Date(i.start_time).getDate() <= until),
   );
@@ -335,6 +337,54 @@ export default function ComptesScreen() {
     </Pressable>
   );
 
+  /** Ligne cliquable : pastille de couleur, libellé, montant et flèche — plus
+   * lisible qu'un texte souligné pour signaler qu'on peut ouvrir la liste. */
+  const LinkRow = ({
+    drill: d,
+    dot,
+    label,
+    value,
+    sub,
+    onDark = false,
+  }: {
+    drill: Drill;
+    dot: string;
+    label: string;
+    value: string;
+    sub?: string;
+    onDark?: boolean;
+  }) => {
+    const enabled = d.items.length > 0;
+    return (
+      <Tap
+        drill={d}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          borderRadius: 14,
+          backgroundColor: onDark ? "rgba(255,255,255,0.14)" : c.soft,
+        }}
+      >
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot }} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: onDark ? "white" : c.text }} numberOfLines={1}>
+            {label}
+          </Text>
+          {!!sub && (
+            <Text style={{ fontSize: 11, fontWeight: "600", color: onDark ? "rgba(255,255,255,0.75)" : c.muted }}>
+              {sub}
+            </Text>
+          )}
+        </View>
+        <Text style={{ fontSize: 14, fontWeight: "800", color: onDark ? "white" : c.text }}>{value}</Text>
+        {enabled && <ChevronRight size={16} color={onDark ? "rgba(255,255,255,0.8)" : c.muted} />}
+      </Tap>
+    );
+  };
+
   const InvoiceRow = ({
     label,
     color,
@@ -352,25 +402,21 @@ export default function ComptesScreen() {
           <Text style={{ fontSize: 14, fontWeight: "800", color }}>{fmt(total)}</Text>
         </View>
         <Bar ratio={total > 0 ? buckets.done.amount / total : 0} color={color} />
-        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          <Tap
+        <View style={{ gap: 6 }}>
+          <LinkRow
             drill={{ title: `${label} — à facturer`, color: "#F97316", items: buckets.toDo.items, amountOf: invoiceOf }}
-            style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4 }}
-          >
-            <Clock3 size={12} color="#F97316" />
-            <Text style={{ fontSize: 12, color: c.muted, fontWeight: "600", textDecorationLine: buckets.toDo.count ? "underline" : "none" }}>
-              À facturer : {fmt(buckets.toDo.amount)} ({buckets.toDo.count})
-            </Text>
-          </Tap>
-          <Tap
+            dot="#F97316"
+            label="À facturer"
+            sub={`${buckets.toDo.count} RDV`}
+            value={fmt(buckets.toDo.amount)}
+          />
+          <LinkRow
             drill={{ title: `${label} — facturé`, color: "#22C55E", items: buckets.done.items, amountOf: invoiceOf }}
-            style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4 }}
-          >
-            <CircleCheckBig size={12} color="#22C55E" />
-            <Text style={{ fontSize: 12, color: c.muted, fontWeight: "600", textDecorationLine: buckets.done.count ? "underline" : "none" }}>
-              Facturé : {fmt(buckets.done.amount)} ({buckets.done.count})
-            </Text>
-          </Tap>
+            dot="#22C55E"
+            label="Facturé"
+            sub={`${buckets.done.count} RDV`}
+            value={fmt(buckets.done.amount)}
+          />
         </View>
       </View>
     );
@@ -388,6 +434,7 @@ export default function ComptesScreen() {
     const date = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
     const mode = MODE_META[(item.payment_mode || "cash") as ModeKey] ?? MODE_META.cash;
     const assignees = (item.employees || []).map((e: any) => e.full_name).filter(Boolean).join(", ");
+    const reinforcements = reinforcementsByParent[item.id];
     const amount = drill?.amountOf ? drill.amountOf(item) : revenueOf(item);
     const closer = personLabel(item.closed_by_employee_id);
     const closerAssigned = (item.employees || []).some((e: any) => e.id === item.closed_by_employee_id);
@@ -427,6 +474,7 @@ export default function ComptesScreen() {
               : assignees
                 ? `Assigné : ${assignees}`
                 : "Aucun employé assigné"}
+            {reinforcements?.length ? ` · Renfort : ${[...new Set(reinforcements)].join(", ")}` : ""}
           </Text>
         </View>
       </Pressable>
@@ -453,6 +501,14 @@ export default function ComptesScreen() {
     );
     return terms.every((t) => haystack.includes(t));
   };
+  // Employés venus en renfort, par RDV principal (affichés sur sa ligne).
+  const reinforcementsByParent: Record<string, string[]> = {};
+  for (const i of interventions as Intervention[]) {
+    if (!i.reinforcement_for_id || i.status === "cancelled") continue;
+    const names = (i.employees || []).map((e: any) => e.full_name).filter(Boolean);
+    (reinforcementsByParent[i.reinforcement_for_id] ||= []).push(...names);
+  }
+
   const drillItems = drill
     ? drill.items
         .filter(matches)
@@ -546,37 +602,48 @@ export default function ComptesScreen() {
                 </Text>
               </View>
             )}
-            <Tap drill={{ title: "RDV terminés", color: "#3B82F6", items: stats.done }}>
-              <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: "600" }}>
-                <Text style={{ textDecorationLine: "underline" }}>{stats.doneCount} RDV terminés</Text> · panier moyen {fmt(stats.avgTicket)}
-              </Text>
-            </Tap>
             {projected > stats.revenue && (
-              <View style={{ gap: 6 }}>
+              <View style={{ gap: 4 }}>
                 <View style={{ flexDirection: "row", height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.25)", overflow: "hidden" }}>
                   <View style={{ flex: stats.revenue, backgroundColor: "white" }} />
                   <View style={{ flex: stats.overdueAmount, backgroundColor: "#FDBA74" }} />
                   <View style={{ flex: stats.upcomingAmount }} />
                 </View>
-                {stats.upcomingCount > 0 && (
-                  <Tap drill={{ title: "RDV à venir", color: "#3B82F6", items: stats.upcoming }}>
-                    <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: "600", textDecorationLine: "underline" }}>
-                      À venir : {fmt(stats.upcomingAmount)} ({stats.upcomingCount} RDV)
-                    </Text>
-                  </Tap>
-                )}
-                {stats.overdueCount > 0 && (
-                  <Tap drill={{ title: "Passés mais pas marqués terminés", color: "#F97316", items: stats.overdue }}>
-                    <Text style={{ color: "#FED7AA", fontSize: 12, fontWeight: "700", textDecorationLine: "underline" }}>
-                      Passés mais pas marqués terminés : {fmt(stats.overdueAmount)} ({stats.overdueCount} RDV)
-                    </Text>
-                  </Tap>
-                )}
-                <Text style={{ color: "white", fontSize: 12, fontWeight: "800" }}>
+                <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: "700" }}>
                   Potentiel du mois : {fmt(projected)}
                 </Text>
               </View>
             )}
+            <View style={{ gap: 6 }}>
+              <LinkRow
+                onDark
+                drill={{ title: "RDV terminés", color: "#3B82F6", items: stats.done }}
+                dot="white"
+                label="Terminés"
+                sub={`${stats.doneCount} RDV · panier moyen ${fmt(stats.avgTicket)}`}
+                value={fmt(stats.revenue)}
+              />
+              {stats.upcomingCount > 0 && (
+                <LinkRow
+                  onDark
+                  drill={{ title: "RDV à venir", color: "#3B82F6", items: stats.upcoming }}
+                  dot="rgba(255,255,255,0.45)"
+                  label="À venir"
+                  sub={`${stats.upcomingCount} RDV`}
+                  value={fmt(stats.upcomingAmount)}
+                />
+              )}
+              {stats.overdueCount > 0 && (
+                <LinkRow
+                  onDark
+                  drill={{ title: "Passés mais pas marqués terminés", color: "#F97316", items: stats.overdue }}
+                  dot="#FDBA74"
+                  label="Pas marqués terminés"
+                  sub={`${stats.overdueCount} RDV dont la date est passée`}
+                  value={fmt(stats.overdueAmount)}
+                />
+              )}
+            </View>
           </View>
 
           {/* Répartition par mode de paiement */}
@@ -637,23 +704,21 @@ export default function ComptesScreen() {
               </Text>
             </Tap>
             {!hideCash && (
-              <View style={{ gap: 2 }}>
-                <Tap
+              <View style={{ gap: 6 }}>
+                <LinkRow
                   drill={{ title: "Cash et FAC+Cash", color: "#EF4444", items: stats.cash.items, amountOf: cashOf }}
-                  style={{ paddingVertical: 3 }}
-                >
-                  <Text style={{ fontSize: 12, color: c.muted, fontWeight: "600", textDecorationLine: stats.cash.count ? "underline" : "none" }}>
-                    Cash et FAC+Cash : {fmt(stats.cash.amount)} ({stats.cash.count})
-                  </Text>
-                </Tap>
-                <Tap
+                  dot="#EF4444"
+                  label="Cash et FAC+Cash"
+                  sub={`${stats.cash.count} RDV`}
+                  value={fmt(stats.cash.amount)}
+                />
+                <LinkRow
                   drill={{ title: "Cash TVAC", color: "#8B5CF6", items: stats.cashTvac.items, amountOf: cashOf }}
-                  style={{ paddingVertical: 3 }}
-                >
-                  <Text style={{ fontSize: 12, color: c.muted, fontWeight: "600", textDecorationLine: stats.cashTvac.count ? "underline" : "none" }}>
-                    TVAC : {fmt(stats.cashTvac.amount)} ({stats.cashTvac.count})
-                  </Text>
-                </Tap>
+                  dot="#8B5CF6"
+                  label="TVAC"
+                  sub={`${stats.cashTvac.count} RDV`}
+                  value={fmt(stats.cashTvac.amount)}
+                />
               </View>
             )}
             {stats.deferred.count > 0 && (

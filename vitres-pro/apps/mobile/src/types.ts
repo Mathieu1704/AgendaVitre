@@ -56,6 +56,8 @@ export interface Intervention {
   type?: string;
   // Employé qui a clôturé (et donc encaissé) le RDV.
   closed_by_employee_id?: string | null;
+  // Renfort : RDV léger (prix 0) rattaché au vrai RDV pour un employé en appui.
+  reinforcement_for_id?: string | null;
   // Prestations du catalogue non cochées pour ce RDV (prix null pour un
   // sous-traitant) — seulement avant clôture, voir GET /interventions/{id}.
   unplanned_services?: { label: string; price: number | null }[];
