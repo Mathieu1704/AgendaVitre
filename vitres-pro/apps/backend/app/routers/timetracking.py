@@ -53,10 +53,16 @@ def _week_bounds(d: date) -> tuple[date, date]:
     return monday, sunday
 
 
+def _weekly_floor(emp: Employee) -> float:
+    """Plancher hebdo de l'employé : 37h par défaut, ou son seuil propre
+    (temps partiel, ex. Jessy : 29,36h)."""
+    return emp.weekly_floor_hours if emp.weekly_floor_hours is not None else WEEKLY_FLOOR_HOURS
+
+
 def weekly_delta_hours(weekly_actual: float, floor: float = WEEKLY_FLOOR_HOURS) -> float:
-    """Solde hebdomadaire heures sup (+) / en moins (-). Plancher de 37h uniforme
-    pour tous les employés : personne n'est jamais compté en dessous de ce plancher,
-    et tout ce qui dépasse est intégralement compté en heures sup."""
+    """Solde hebdomadaire heures sup (+) / en moins (-). Plancher de 37h par
+    défaut (seuil propre pour un temps partiel, voir _weekly_floor) : tout ce
+    qui le dépasse est intégralement compté en heures sup."""
     return weekly_actual - floor
 
 
@@ -212,7 +218,7 @@ def _overtime_balance(
         # les heures théoriques hebdo dépassent déjà 37h (ex. 39h) se
         # retrouverait avec un solde artificiellement positif après une
         # semaine complète de congé (37 - 39 = -2 → delta = 0 - (-2) = +2h).
-        reduced_floor = max(0.0, WEEKLY_FLOOR_HOURS - floor_reduction)
+        reduced_floor = max(0.0, _weekly_floor(emp) - floor_reduction)
         total_delta += weekly_delta_hours(actual, floor=reduced_floor)
         week_cursor = w_end + timedelta(days=1)
 

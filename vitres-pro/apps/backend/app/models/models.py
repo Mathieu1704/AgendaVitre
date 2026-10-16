@@ -119,6 +119,9 @@ class Employee(Base):
     # les sous-traitants en mission temporaire). NULL = pas de restriction.
     hours_valid_from = Column(Date, nullable=True)
     hours_valid_until = Column(Date, nullable=True)
+    # Seuil hebdo d'heures sup propre a l'employe (temps partiel, ex. 29,36h
+    # pour Jessy). NULL = seuil standard WEEKLY_FLOOR_HOURS (37h).
+    weekly_floor_hours = Column(Float, nullable=True)
 
     # Relations
     interventions = relationship("Intervention", secondary=intervention_employees, back_populates="employees")
