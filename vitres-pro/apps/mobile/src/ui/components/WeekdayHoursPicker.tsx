@@ -46,7 +46,7 @@ export function WeekdayHoursPicker({ value, onChange, isDark = false, disabled }
   const total = Math.round(DAYS.reduce((sum, d) => sum + (value[d.key] || 0), 0) * 100) / 100;
 
   return (
-    <View style={{ gap: 12 }}>
+    <View style={{ gap: 8 }}>
       <View
         style={{
           flexDirection: "row",

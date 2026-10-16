@@ -9,6 +9,7 @@ import {
   Alert,
   useWindowDimensions,
   Animated,
+  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -490,22 +491,38 @@ export default function TeamManagementScreen() {
                   service) ou un admin */}
               {selectedRole?.id === "employee" && (
                 <View style={{ marginBottom: 16, gap: 8 }}>
-                  <Input
-                    label="Seuil heures sup (h/semaine)"
-                    keyboardType="decimal-pad"
-                    value={floorInput}
-                    onChangeText={setFloorInput}
-                    placeholder="37 (par défaut)"
-                  />
-                  {floorInvalid ? (
-                    <Text style={{ fontSize: 12, color: "#EF4444", marginTop: -4 }}>
-                      Seuil invalide : entre 0 et 80 h (ex. 29,36).
+                  {/* Une seule ligne, comme "Heures le Lundi" : vide = 37h,
+                      une valeur invalide passe le contour en rouge. */}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#94A3B8" : "#334155" }}>
+                      Seuil heures sup
                     </Text>
-                  ) : (
-                    <Text className="text-xs text-muted-foreground -mt-1">
-                      Au-delà : heures sup. En dessous : heures en moins. Vide = 37 h.
+                    <TextInput
+                      value={floorInput}
+                      onChangeText={setFloorInput}
+                      keyboardType="decimal-pad"
+                      placeholder="37"
+                      placeholderTextColor={isDark ? "#64748B" : "#94A3B8"}
+                      textContentType="none"
+                      autoComplete="off"
+                      autoCorrect={false}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: floorInvalid ? "#EF4444" : isDark ? "#334155" : "#CBD5E1",
+                        borderRadius: 10,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        width: 80,
+                        textAlign: "center",
+                        fontSize: 15,
+                        fontWeight: "600",
+                        color: isDark ? "#FFFFFF" : "#0F172A",
+                      }}
+                    />
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#94A3B8" : "#334155" }}>
+                      h
                     </Text>
-                  )}
+                  </View>
                   {floorChanged && !floorInvalid && (
                     <View style={{ gap: 6 }}>
                       <DateTimePicker
