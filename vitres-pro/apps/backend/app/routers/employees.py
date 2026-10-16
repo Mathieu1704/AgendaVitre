@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict
 from uuid import UUID
-from datetime import date
+from datetime import date, datetime
 from pydantic import BaseModel
 from PIL import Image, ImageOps
 
@@ -14,6 +14,7 @@ from pydantic import field_validator
 from app.models.models import get_db, Employee
 from app.schemas.schemas import EmployeeBase, EmployeeOut, EmployeeUpdate, validate_hours_per_weekday
 from app.core.deps import get_current_user
+from app.routers.planning import BRUSSELS_TZ
 from app.core.supabase import supabase_admin
 
 router = APIRouter()
@@ -262,6 +263,23 @@ def update_employee(
     # Sinon, si on change juste les heures hebdo, on recalcule la capacité journalière (hebdo / 5)
     elif "weekly_hours" in update_data:
         update_data["daily_capacity"] = round(update_data["weekly_hours"] / 5, 2)
+
+    # Changement de seuil d'heures sup : l'ancien seuil reste valable pour
+    # les semaines d'avant la nouvelle date d'effet (pas encore soldees),
+    # sauf s'il n'etait lui-meme jamais entre en vigueur (date d'effet pas
+    # encore atteinte, ou ecrasee par la nouvelle).
+    floor_changed = (
+        update_data.get("weekly_floor_hours", db_obj.weekly_floor_hours) != db_obj.weekly_floor_hours
+        or update_data.get("weekly_floor_from", db_obj.weekly_floor_from) != db_obj.weekly_floor_from
+    )
+    if floor_changed:
+        new_from = update_data.get("weekly_floor_from", db_obj.weekly_floor_from)
+        old_from = db_obj.weekly_floor_from
+        old_never_applied = old_from is not None and (
+            old_from > datetime.now(BRUSSELS_TZ).date() or (new_from is not None and old_from >= new_from)
+        )
+        if not old_never_applied:
+            update_data["weekly_floor_previous_hours"] = db_obj.weekly_floor_hours
 
     for field in update_data:
         setattr(db_obj, field, update_data[field])

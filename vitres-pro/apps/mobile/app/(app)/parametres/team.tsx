@@ -39,7 +39,7 @@ import { DateRangePicker } from "../../../src/ui/components/DateRangePicker";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { toast } from "../../../src/ui/toast";
-import { toISODate } from "../../../src/lib/date";
+import { toISODate, startOfWeek } from "../../../src/lib/date";
 
 export default function TeamManagementScreen() {
   const router = useRouter();
@@ -53,6 +53,10 @@ export default function TeamManagementScreen() {
   const [hoursPerWeekday, setHoursPerWeekday] = useState<Record<string, number>>({});
   const [hoursValidFrom, setHoursValidFrom] = useState<string | null>(null);
   const [hoursValidUntil, setHoursValidUntil] = useState<string | null>(null);
+  // Seuil d'heures sup (h/semaine) : vide = 37h standard. Saisi en texte
+  // pour accepter la virgule (29,36).
+  const [floorInput, setFloorInput] = useState("");
+  const [floorFrom, setFloorFrom] = useState(toISODate(startOfWeek(new Date(), 1)));
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedRole, setSelectedRole] = useState<any>(null);
   const [editPhone, setEditPhone] = useState("");
@@ -180,6 +184,8 @@ export default function TeamManagementScreen() {
     }
     setHoursValidFrom(emp.hours_valid_from || null);
     setHoursValidUntil(emp.hours_valid_until || null);
+    setFloorInput(emp.weekly_floor_hours != null ? String(emp.weekly_floor_hours).replace(".", ",") : "");
+    setFloorFrom(toISODate(startOfWeek(new Date(), 1)));
     setSelectedColor(emp.color);
     setSelectedRole(roleItems.find((r) => r.id === emp.role));
     setEditPhone(emp.phone || "");
@@ -209,6 +215,10 @@ export default function TeamManagementScreen() {
       );
     }
   };
+
+  const parsedFloor = floorInput.trim() === "" ? null : Number(floorInput.trim().replace(",", "."));
+  const floorInvalid = parsedFloor !== null && (!Number.isFinite(parsedFloor) || parsedFloor <= 0 || parsedFloor > 80);
+  const floorChanged = !!editingEmp && (parsedFloor ?? null) !== (editingEmp.weekly_floor_hours ?? null);
 
   // Style commun pour les labels afin de garantir l'alignement et la typo
   const labelClass =
@@ -352,6 +362,9 @@ export default function TeamManagementScreen() {
                         <Clock size={12} color="#94A3B8" />
                         <Text className="text-xs text-muted-foreground ml-1">
                           {emp.weekly_hours}h/sem
+                          {emp.weekly_floor_hours != null
+                            ? ` · seuil ${String(emp.weekly_floor_hours).replace(".", ",")}h`
+                            : ""}
                         </Text>
                       </View>
                     </View>
@@ -473,6 +486,42 @@ export default function TeamManagementScreen() {
                 />
               </View>
 
+              {/* Seuil d'heures sup — sans objet pour un sous-traitant (payé au
+                  service) ou un admin */}
+              {selectedRole?.id === "employee" && (
+                <View style={{ marginBottom: 16, gap: 8 }}>
+                  <Input
+                    label="Seuil heures sup (h/semaine)"
+                    keyboardType="decimal-pad"
+                    value={floorInput}
+                    onChangeText={setFloorInput}
+                    placeholder="37 (par défaut)"
+                  />
+                  {floorInvalid ? (
+                    <Text style={{ fontSize: 12, color: "#EF4444", marginTop: -4 }}>
+                      Seuil invalide : entre 0 et 80 h (ex. 29,36).
+                    </Text>
+                  ) : (
+                    <Text className="text-xs text-muted-foreground -mt-1">
+                      Au-delà : heures sup. En dessous : heures en moins. Vide = 37 h.
+                    </Text>
+                  )}
+                  {floorChanged && !floorInvalid && (
+                    <View style={{ gap: 6 }}>
+                      <DateTimePicker
+                        label="À partir de la semaine du"
+                        value={floorFrom + "T00:00"}
+                        onChange={(v) => setFloorFrom(v.split("T")[0])}
+                        dateOnly
+                      />
+                      <Text className="text-xs text-muted-foreground">
+                        Appliqué à partir du lundi de cette semaine. Les semaines d'avant gardent l'ancien seuil.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
               {selectedRole?.id === "subcontractor" && (
                 <View style={{ marginBottom: 16, gap: 8 }}>
                   <Text className={labelClass}>Période d'activité</Text>
@@ -500,6 +549,9 @@ export default function TeamManagementScreen() {
                   if (!editEmail.trim()) {
                     return toast.error("Oups", "L'email ne peut pas être vide.");
                   }
+                  if (selectedRole.id === "employee" && floorInvalid) {
+                    return toast.error("Oups", "Seuil invalide : entre 0 et 80 h (ex. 29,36).");
+                  }
                   updateMutation.mutate({
                     hours_per_weekday: hoursPerWeekday,
                     color: selectedColor,
@@ -508,6 +560,14 @@ export default function TeamManagementScreen() {
                     email: editEmail.trim(),
                     hours_valid_from: selectedRole.id === "subcontractor" ? hoursValidFrom : null,
                     hours_valid_until: selectedRole.id === "subcontractor" ? hoursValidUntil : null,
+                    // Seuil envoyé seulement s'il a changé : le serveur garde
+                    // l'ancien pour les semaines d'avant la date d'effet.
+                    ...(selectedRole.id === "employee" && floorChanged
+                      ? {
+                          weekly_floor_hours: parsedFloor,
+                          weekly_floor_from: toISODate(startOfWeek(new Date(floorFrom + "T12:00:00"), 1)),
+                        }
+                      : {}),
                   });
                 }}
                 loading={updateMutation.isPending}

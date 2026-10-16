@@ -57,6 +57,9 @@ class EmployeeBase(BaseModel):
     hours_per_weekday: Optional[Dict[str, float]] = None
     hours_valid_from: Optional[date] = None
     hours_valid_until: Optional[date] = None
+    # Seuil hebdo d'heures sup propre (NULL = 37h) et sa date d'effet.
+    weekly_floor_hours: Optional[float] = None
+    weekly_floor_from: Optional[date] = None
     # URL signée (calculée à la volée, jamais persistée) — pas une colonne DB.
     avatar_url: Optional[str] = None
 
@@ -82,11 +85,20 @@ class EmployeeUpdate(BaseModel):
     hours_per_weekday: Optional[Dict[str, float]] = None
     hours_valid_from: Optional[date] = None
     hours_valid_until: Optional[date] = None
+    weekly_floor_hours: Optional[float] = None
+    weekly_floor_from: Optional[date] = None
 
     @field_validator("hours_per_weekday")
     @classmethod
     def _check_hours_per_weekday(cls, v):
         return validate_hours_per_weekday(v)
+
+    @field_validator("weekly_floor_hours")
+    @classmethod
+    def _check_weekly_floor(cls, v):
+        if v is not None and not (0 < v <= 80):
+            raise ValueError("Le seuil doit être compris entre 0 et 80 h.")
+        return v
 
 # --- ABSENCE ---
 AbsenceType = Literal["Certificat", "VA", "RJF", "CSS"]

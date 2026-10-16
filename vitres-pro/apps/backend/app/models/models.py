@@ -125,6 +125,8 @@ class Employee(Base):
     # Date d'effet de weekly_floor_hours (semaines a partir de ce lundi).
     # NULL = s'applique a toutes les semaines.
     weekly_floor_from = Column(Date, nullable=True)
+    # Seuil des semaines d'avant weekly_floor_from. NULL = 37h standard.
+    weekly_floor_previous_hours = Column(Float, nullable=True)
 
     # Relations
     interventions = relationship("Intervention", secondary=intervention_employees, back_populates="employees")

@@ -57,9 +57,10 @@ def _weekly_floor(emp: Employee, week_start: date) -> float:
     """Plancher hebdo de l'employé pour la semaine : 37h par défaut, ou son
     seuil propre (temps partiel, ex. Jessy : 29,36h) à partir de sa date
     d'effet — les semaines d'avant gardent le seuil standard."""
-    if emp.weekly_floor_hours is None:
-        return WEEKLY_FLOOR_HOURS
     if emp.weekly_floor_from is not None and week_start < emp.weekly_floor_from:
+        previous = emp.weekly_floor_previous_hours
+        return previous if previous is not None else WEEKLY_FLOOR_HOURS
+    if emp.weekly_floor_hours is None:
         return WEEKLY_FLOOR_HOURS
     return emp.weekly_floor_hours
 
