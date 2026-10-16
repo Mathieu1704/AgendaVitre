@@ -122,6 +122,9 @@ class Employee(Base):
     # Seuil hebdo d'heures sup propre a l'employe (temps partiel, ex. 29,36h
     # pour Jessy). NULL = seuil standard WEEKLY_FLOOR_HOURS (37h).
     weekly_floor_hours = Column(Float, nullable=True)
+    # Date d'effet de weekly_floor_hours (semaines a partir de ce lundi).
+    # NULL = s'applique a toutes les semaines.
+    weekly_floor_from = Column(Date, nullable=True)
 
     # Relations
     interventions = relationship("Intervention", secondary=intervention_employees, back_populates="employees")
