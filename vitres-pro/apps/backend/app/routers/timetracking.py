@@ -36,6 +36,12 @@ router = APIRouter()
 
 WEEKLY_FLOOR_HOURS = 37.0
 
+# Mi-temps dont la fiche garde les heures d'un temps plein (8h/7h) : un jour
+# de congé retire seuil / jours travaillés (Xavier : 20h / 5 = 4h) au lieu des
+# heures du jour, à partir de la date d'effet de son seuil — demandé par
+# Mathieu le 19/10/2026.
+FLOOR_SHARE_CONGE_EMPLOYEE_IDS = {UUID("6e573907-5d92-4393-889b-747fdadcac31")}
+
 
 def _require_admin(current_user: Employee):
     if current_user.role != "admin":
@@ -121,6 +127,22 @@ def _employee_actual_hours_for_day(
     return 0.0
 
 
+def _neutral_day_floor_reduction(
+    emp: Employee, d: date, week_start: date, progressive: list
+) -> float:
+    """Heures retirées du plancher hebdo pour un jour de congé/fermeture."""
+    day_hours = _get_employee_hours_for_day(emp, d, progressive)
+    if (
+        emp.id in FLOOR_SHARE_CONGE_EMPLOYEE_IDS
+        and day_hours > 0
+        and emp.weekly_floor_from is not None
+        and week_start >= emp.weekly_floor_from
+    ):
+        worked_days = sum(1 for v in (emp.hours_per_weekday or {}).values() if v > 0) or 5
+        return _weekly_floor(emp, week_start) / worked_days
+    return day_hours
+
+
 def _weekly_actual_hours(
     db: Session, emp: Employee, week_start: date, week_end: date
 ) -> tuple[float, float]:
@@ -161,7 +183,7 @@ def _weekly_actual_hours(
     while d <= week_end:
         total += _employee_actual_hours_for_day(emp, d, entries_by_day, absences, progressive, closures)
         if _is_neutral_day(emp.id, d, absences, closures):
-            floor_reduction += _get_employee_hours_for_day(emp, d, progressive)
+            floor_reduction += _neutral_day_floor_reduction(emp, d, week_start, progressive)
         d += timedelta(days=1)
     return total, floor_reduction
 
