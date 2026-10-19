@@ -101,7 +101,7 @@ class EmployeeUpdate(BaseModel):
         return v
 
 # --- ABSENCE ---
-AbsenceType = Literal["Certificat", "VA", "RJF", "CSS"]
+AbsenceType = Literal["Certificat", "VA", "RJF", "CSS", "Ancienneté"]
 
 class AbsenceCreate(BaseModel):
     employee_id: UUID

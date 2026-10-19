@@ -20,6 +20,8 @@ import {
   UserPlus,
   Thermometer,
   Trash2,
+  Check,
+  ChevronDown,
   Phone,
   KeyRound,
 } from "lucide-react-native";
@@ -92,7 +94,15 @@ export default function TeamManagementScreen() {
     { id: "VA", label: "VA" },
     { id: "RJF", label: "RJF" },
     { id: "CSS", label: "CSS" },
+    { id: "Ancienneté", label: "Ancienneté" },
   ];
+  const ABS_TYPE_ROW_HEIGHT = 44;
+  const [absTypeOpen, setAbsTypeOpen] = useState(false);
+  const absTypeAnim = useRef(new Animated.Value(0)).current;
+  const toggleAbsTypeList = (open: boolean) => {
+    setAbsTypeOpen(open);
+    Animated.timing(absTypeAnim, { toValue: open ? 1 : 0, duration: 220, useNativeDriver: false }).start();
+  };
 
   const { data: employees, isLoading } = useQuery({
     queryKey: ["employees"],
@@ -655,7 +665,7 @@ export default function TeamManagementScreen() {
                       marginTop: 16,
                       gap: 16,
                       overflow: "hidden",
-                      maxHeight: absenceAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 800] }),
+                      maxHeight: absenceAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1100] }),
                       opacity: absenceAnim,
                       borderRadius: 32,
                       backgroundColor: "rgba(0,0,0,0.03)",
@@ -680,17 +690,83 @@ export default function TeamManagementScreen() {
                       <Text style={{ fontSize: 13, fontWeight: "600", marginBottom: 8, color: isDark ? "#F8FAFC" : "#09090B" }}>
                         Type d'absence
                       </Text>
-                      <SlidingPillSelector
-                        options={ABSENCE_TYPES}
-                        selected={absType}
-                        onSelect={setAbsType}
-                        pillColor="#EF4444"
-                        bgColor={isDark ? "#1E293B" : "#F1F5F9"}
-                        activeTextColor="#fff"
-                        inactiveTextColor={isDark ? "#94A3B8" : "#64748B"}
-                        fontSize={12}
-                        itemPy={9}
-                      />
+                      <View
+                        style={{
+                          borderRadius: 16,
+                          borderWidth: 1,
+                          borderColor: absTypeOpen ? "#EF4444" : isDark ? "#334155" : "#E2E8F0",
+                          backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <Pressable
+                          onPress={() => toggleAbsTypeList(!absTypeOpen)}
+                          style={{
+                            height: 48,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            paddingHorizontal: 14,
+                          }}
+                        >
+                          <Text style={{ fontSize: 15, fontWeight: "600", color: isDark ? "#F8FAFC" : "#09090B" }}>
+                            {ABSENCE_TYPES.find((t) => t.id === absType)?.label ?? absType}
+                          </Text>
+                          <Animated.View
+                            style={{
+                              transform: [{
+                                rotate: absTypeAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] }),
+                              }],
+                            }}
+                          >
+                            <ChevronDown size={18} color={absTypeOpen ? "#EF4444" : "#94A3B8"} />
+                          </Animated.View>
+                        </Pressable>
+                        <Animated.View
+                          style={{
+                            height: absTypeAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, ABSENCE_TYPES.length * ABS_TYPE_ROW_HEIGHT + 1],
+                            }),
+                            opacity: absTypeAnim,
+                          }}
+                        >
+                          <View style={{ height: 1, backgroundColor: isDark ? "#334155" : "#F1F5F9" }} />
+                          {ABSENCE_TYPES.map((t) => {
+                            const active = absType === t.id;
+                            return (
+                              <Pressable
+                                key={t.id}
+                                onPress={() => {
+                                  setAbsType(t.id);
+                                  toggleAbsTypeList(false);
+                                }}
+                                style={{
+                                  height: ABS_TYPE_ROW_HEIGHT,
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  paddingHorizontal: 14,
+                                  backgroundColor: active
+                                    ? isDark ? "rgba(239,68,68,0.15)" : "#FEF2F2"
+                                    : "transparent",
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 14,
+                                    fontWeight: active ? "700" : "500",
+                                    color: active ? "#EF4444" : isDark ? "#E2E8F0" : "#334155",
+                                  }}
+                                >
+                                  {t.label}
+                                </Text>
+                                {active && <Check size={16} color="#EF4444" />}
+                              </Pressable>
+                            );
+                          })}
+                        </Animated.View>
+                      </View>
                     </View>
 
                     <Button
