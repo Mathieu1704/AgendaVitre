@@ -132,6 +132,21 @@ class Employee(Base):
     interventions = relationship("Intervention", secondary=intervention_employees, back_populates="employees")
     absences = relationship("Absence", back_populates="employee")
     progressive_hours = relationship("ProgressiveHours", back_populates="employee", cascade="all, delete-orphan")
+    day_overrides = relationship("EmployeeDayOverride", back_populates="employee", cascade="all, delete-orphan")
+
+class EmployeeDayOverride(Base):
+    """Jour ponctuel d'un sous-traitant : heures prévues pour une date précise,
+    prioritaires sur hours_per_weekday (0 = pas là ce jour-là)."""
+    __tablename__ = "employee_day_overrides"
+    __table_args__ = (UniqueConstraint("employee_id", "date"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    date = Column(Date, nullable=False)
+    hours = Column(Float, nullable=False)
+
+    employee = relationship("Employee", back_populates="day_overrides")
+
 
 class ProgressiveHours(Base):
     """Montée en charge progressive d'un employé sur une plage de dates."""

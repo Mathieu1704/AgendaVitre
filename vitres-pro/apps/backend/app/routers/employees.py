@@ -11,7 +11,7 @@ from PIL import Image, ImageOps
 
 from pydantic import field_validator
 
-from app.models.models import get_db, Employee
+from app.models.models import get_db, Employee, EmployeeDayOverride
 from app.schemas.schemas import EmployeeBase, EmployeeOut, EmployeeUpdate, validate_hours_per_weekday
 from app.core.deps import get_current_user
 from app.routers.planning import BRUSSELS_TZ
@@ -287,6 +287,97 @@ def update_employee(
     db.commit()
     db.refresh(db_obj)
     return db_obj
+
+class DayOverrideIn(BaseModel):
+    date: date
+    hours: float
+
+    @field_validator("hours")
+    @classmethod
+    def _check_hours(cls, v):
+        if v < 0 or v > 24:
+            raise ValueError("Heures entre 0 et 24")
+        return v
+
+
+class DayOverrideOut(BaseModel):
+    id: UUID
+    date: date
+    hours: float
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/{employee_id}/day-overrides", response_model=List[DayOverrideOut])
+def read_day_overrides(
+    employee_id: UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Jours ponctuels à venir (et d'aujourd'hui) d'un sous-traitant."""
+    if current_user.role != "admin" and current_user.id != employee_id:
+        raise HTTPException(status_code=403, detail="Accès non autorisé")
+    today = datetime.now(BRUSSELS_TZ).date()
+    return (
+        db.query(EmployeeDayOverride)
+        .filter(EmployeeDayOverride.employee_id == employee_id, EmployeeDayOverride.date >= today)
+        .order_by(EmployeeDayOverride.date)
+        .all()
+    )
+
+
+@router.post("/{employee_id}/day-overrides", response_model=DayOverrideOut)
+def upsert_day_override(
+    employee_id: UUID,
+    payload: DayOverrideIn,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Fixe les heures d'un sous-traitant pour une date précise (remplace
+    celles de son jour de semaine habituel, sans se répéter)."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employé non trouvé")
+    if emp.role != "subcontractor":
+        raise HTTPException(status_code=400, detail="Réservé aux sous-traitants")
+    ov = (
+        db.query(EmployeeDayOverride)
+        .filter(EmployeeDayOverride.employee_id == employee_id, EmployeeDayOverride.date == payload.date)
+        .first()
+    )
+    if ov:
+        ov.hours = payload.hours
+    else:
+        ov = EmployeeDayOverride(employee_id=employee_id, date=payload.date, hours=payload.hours)
+        db.add(ov)
+    db.commit()
+    db.refresh(ov)
+    return ov
+
+
+@router.delete("/{employee_id}/day-overrides/{override_id}")
+def delete_day_override(
+    employee_id: UUID,
+    override_id: UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux admins")
+    ov = (
+        db.query(EmployeeDayOverride)
+        .filter(EmployeeDayOverride.id == override_id, EmployeeDayOverride.employee_id == employee_id)
+        .first()
+    )
+    if not ov:
+        raise HTTPException(status_code=404, detail="Jour ponctuel non trouvé")
+    db.delete(ov)
+    db.commit()
+    return {"status": "deleted"}
+
 
 @router.post("/{employee_id}/reset-password")
 def reset_employee_password(

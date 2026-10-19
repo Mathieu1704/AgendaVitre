@@ -24,6 +24,7 @@ import {
   ChevronDown,
   Phone,
   KeyRound,
+  Plus,
 } from "lucide-react-native";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -40,6 +41,8 @@ import { WeekdayHoursPicker } from "../../../src/ui/components/WeekdayHoursPicke
 import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
 import { DateRangePicker } from "../../../src/ui/components/DateRangePicker";
 import { SlidingPillSelector } from "../../../src/ui/components/SlidingPillSelector";
+import { Collapsible, COLLAPSE_EASING } from "../../../src/ui/components/Collapsible";
+import Reanimated, { FadeInDown, FadeOutLeft, LinearTransition } from "react-native-reanimated";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { toast } from "../../../src/ui/toast";
 import { toISODate, startOfWeek } from "../../../src/lib/date";
@@ -77,7 +80,7 @@ export default function TeamManagementScreen() {
       Animated.timing(absenceAnim, { toValue: 0, duration: 280, useNativeDriver: false }).start();
     } else {
       setShowAbsenceForm(true);
-      Animated.timing(absenceAnim, { toValue: 1, duration: 280, useNativeDriver: false }).start(() => {
+      Animated.timing(absenceAnim, { toValue: 1, duration: 340, useNativeDriver: false }).start(() => {
         setTimeout(() => modalScrollRef.current?.scrollToEnd({ animated: true }), 50);
       });
     }
@@ -101,7 +104,7 @@ export default function TeamManagementScreen() {
   const absTypeAnim = useRef(new Animated.Value(0)).current;
   const toggleAbsTypeList = (open: boolean) => {
     setAbsTypeOpen(open);
-    Animated.timing(absTypeAnim, { toValue: open ? 1 : 0, duration: 220, useNativeDriver: false }).start();
+    Animated.timing(absTypeAnim, { toValue: open ? 1 : 0, duration: 260, easing: COLLAPSE_EASING, useNativeDriver: false }).start();
   };
 
   const { data: employees, isLoading } = useQuery({
@@ -146,6 +149,57 @@ export default function TeamManagementScreen() {
       toast.success("Enregistré", "Absence prise en compte");
       setAbsType("VA");
       toggleAbsenceForm();
+    },
+  });
+
+  // Jours ponctuels (sous-traitant) : heures pour une date précise, sans
+  // répétition hebdo — ex. absent le lundi (0h), vient le mardi (8h).
+  const [ovDate, setOvDate] = useState(toISODate(new Date()));
+  const [ovHours, setOvHours] = useState("");
+  const [ovSectionOpen, setOvSectionOpen] = useState(false);
+  const [ovFormOpen, setOvFormOpen] = useState(false);
+  const ovSectionAnim = useRef(new Animated.Value(0)).current;
+  const toggleOvSection = (open: boolean) => {
+    setOvSectionOpen(open);
+    Animated.timing(ovSectionAnim, { toValue: open ? 1 : 0, duration: 300, easing: COLLAPSE_EASING, useNativeDriver: false }).start();
+  };
+  const toggleOvForm = (open: boolean) => setOvFormOpen(open);
+  const parsedOvHours = ovHours.trim() === "" ? NaN : Number(ovHours.replace(",", "."));
+  const ovHoursInvalid = !Number.isFinite(parsedOvHours) || parsedOvHours < 0 || parsedOvHours > 24;
+
+  const { data: dayOverrides } = useQuery({
+    queryKey: ["day-overrides", editingEmp?.id],
+    queryFn: async () => (await api.get(`/api/employees/${editingEmp.id}/day-overrides`)).data as { id: string; date: string; hours: number }[],
+    enabled: !!editingEmp?.id && editingEmp?.role === "subcontractor",
+  });
+
+  const invalidatePlanning = () => {
+    queryClient.invalidateQueries({ queryKey: ["day-overrides", editingEmp?.id] });
+    queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["planning-range"] });
+    queryClient.invalidateQueries({ queryKey: ["horizon-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["planning", "zero-hours-on-date"] });
+  };
+
+  const dayOverrideMutation = useMutation({
+    mutationFn: (p: { date: string; hours: number }) =>
+      api.post(`/api/employees/${editingEmp.id}/day-overrides`, p),
+    onSuccess: () => {
+      invalidatePlanning();
+      setOvHours("");
+      toggleOvForm(false);
+      toast.success("Enregistré", "Jour ponctuel ajouté");
+    },
+    onError: (err: any) => {
+      toast.error("Erreur", err.response?.data?.detail || "Impossible d'ajouter ce jour");
+    },
+  });
+
+  const deleteDayOverrideMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/employees/${editingEmp.id}/day-overrides/${id}`),
+    onSuccess: () => {
+      invalidatePlanning();
+      toast.success("Supprimé", "Jour ponctuel supprimé");
     },
   });
 
@@ -206,6 +260,11 @@ export default function TeamManagementScreen() {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     setAbsEnd(toISODate(tomorrow));
+    setOvSectionOpen(false);
+    setOvFormOpen(false);
+    ovSectionAnim.setValue(0);
+    setOvDate(toISODate(new Date()));
+    setOvHours("");
   };
 
   const handleDeletePress = () => {
@@ -566,6 +625,193 @@ export default function TeamManagementScreen() {
                 </View>
               )}
 
+              {/* Jours ponctuels : section dépliante, enregistrés tout de suite
+                  (pas besoin de Sauvegarder), seulement si le rôle sous-traitant
+                  est déjà enregistré côté serveur. */}
+              {editingEmp?.role === "subcontractor" && selectedRole?.id === "subcontractor" && (
+                <View
+                  style={{
+                    marginBottom: 16,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: isDark ? "#334155" : "#E2E8F0",
+                    backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
+                    overflow: "hidden",
+                  }}
+                >
+                  <Pressable
+                    onPress={() => toggleOvSection(!ovSectionOpen)}
+                    style={{
+                      height: 50,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingHorizontal: 14,
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: isDark ? "#F8FAFC" : "#0F172A" }}>
+                        Jours ponctuels
+                      </Text>
+                      {(dayOverrides?.length ?? 0) > 0 && (
+                        <View style={{ paddingHorizontal: 7, paddingVertical: 1, borderRadius: 10, backgroundColor: "#3B82F6" }}>
+                          <Text style={{ fontSize: 11, fontWeight: "700", color: "#FFFFFF" }}>{dayOverrides!.length}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Animated.View
+                      style={{
+                        transform: [{
+                          rotate: ovSectionAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] }),
+                        }],
+                      }}
+                    >
+                      <ChevronDown size={18} color="#94A3B8" />
+                    </Animated.View>
+                  </Pressable>
+
+                  <Collapsible open={ovSectionOpen}>
+                    <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+                      <Text className="text-xs text-muted-foreground" style={{ marginBottom: 8 }}>
+                        Heures pour une date précise, sans répétition. 0 h = pas là ce jour-là.
+                      </Text>
+
+                      {(dayOverrides ?? []).map((ov) => (
+                        <Reanimated.View
+                          key={ov.id}
+                          entering={FadeInDown.duration(260)}
+                          exiting={FadeOutLeft.duration(200)}
+                          layout={LinearTransition.duration(240)}
+                          style={{
+                            marginBottom: 8,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            paddingHorizontal: 14,
+                            paddingVertical: 10,
+                            borderRadius: 14,
+                            borderWidth: 1,
+                            borderColor: isDark ? "#334155" : "#E2E8F0",
+                            backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
+                          }}
+                        >
+                          <Text style={{ fontSize: 14, fontWeight: "600", color: isDark ? "#F8FAFC" : "#0F172A" }}>
+                            {new Date(ov.date + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })}
+                          </Text>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+                            <Text style={{ fontSize: 14, fontWeight: "700", color: ov.hours === 0 ? "#EF4444" : "#3B82F6" }}>
+                              {ov.hours === 0 ? "0 h (absent)" : `${String(ov.hours).replace(".", ",")} h`}
+                            </Text>
+                            <Pressable onPress={() => deleteDayOverrideMutation.mutate(ov.id)} hitSlop={8}>
+                              <Trash2 size={16} color="#EF4444" />
+                            </Pressable>
+                          </View>
+                        </Reanimated.View>
+                      ))}
+
+                      {/* Bouton "Ajouter" et formulaire se relaient en fondu */}
+                      <Collapsible open={!ovFormOpen} duration={260}>
+                        <Pressable
+                          onPress={() => toggleOvForm(true)}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 6,
+                            paddingVertical: 11,
+                            borderRadius: 14,
+                            borderWidth: 1,
+                            borderStyle: "dashed",
+                            borderColor: "#3B82F6",
+                          }}
+                        >
+                          <Plus size={16} color="#3B82F6" />
+                          <Text style={{ fontSize: 14, fontWeight: "700", color: "#3B82F6" }}>Ajouter</Text>
+                        </Pressable>
+                      </Collapsible>
+
+                      <Collapsible open={ovFormOpen}>
+                        <View style={{ gap: 10, paddingTop: 2 }}>
+                          <DateTimePicker
+                            label="Date"
+                            value={ovDate + "T00:00"}
+                            onChange={(v) => setOvDate(v.split("T")[0])}
+                            dateOnly
+                          />
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                            <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#94A3B8" : "#334155" }}>
+                              Nombre d'heures
+                            </Text>
+                            <TextInput
+                              value={ovHours}
+                              onChangeText={setOvHours}
+                              keyboardType="decimal-pad"
+                              placeholder="8"
+                              placeholderTextColor={isDark ? "#64748B" : "#94A3B8"}
+                              textContentType="none"
+                              autoComplete="off"
+                              autoCorrect={false}
+                              style={{
+                                borderWidth: 1,
+                                borderColor: ovHours.trim() !== "" && ovHoursInvalid ? "#EF4444" : isDark ? "#334155" : "#CBD5E1",
+                                borderRadius: 10,
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                width: 80,
+                                textAlign: "center",
+                                fontSize: 15,
+                                fontWeight: "600",
+                                color: isDark ? "#FFFFFF" : "#0F172A",
+                                backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
+                              }}
+                            />
+                            <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#94A3B8" : "#334155" }}>
+                              h
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: "row", gap: 8 }}>
+                            <Pressable
+                              onPress={() => {
+                                setOvHours("");
+                                toggleOvForm(false);
+                              }}
+                              style={{
+                                flex: 1,
+                                alignItems: "center",
+                                paddingVertical: 11,
+                                borderRadius: 12,
+                                backgroundColor: isDark ? "#1E293B" : "#E2E8F0",
+                              }}
+                            >
+                              <Text style={{ fontSize: 14, fontWeight: "600", color: isDark ? "#CBD5E1" : "#334155" }}>Annuler</Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => {
+                                if (ovHoursInvalid) {
+                                  return toast.error("Oups", "Heures invalides : entre 0 et 24 h.");
+                                }
+                                dayOverrideMutation.mutate({ date: ovDate, hours: parsedOvHours });
+                              }}
+                              disabled={dayOverrideMutation.isPending}
+                              style={{
+                                flex: 1,
+                                alignItems: "center",
+                                paddingVertical: 11,
+                                borderRadius: 12,
+                                backgroundColor: "#3B82F6",
+                                opacity: dayOverrideMutation.isPending ? 0.6 : 1,
+                              }}
+                            >
+                              <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFFFFF" }}>Valider</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      </Collapsible>
+                    </View>
+                  </Collapsible>
+                </View>
+              )}
+
               {/* Espace avant bouton */}
               <View className="h-2" />
 
@@ -660,16 +906,14 @@ export default function TeamManagementScreen() {
                   </View>
                 )}
 
-                <Animated.View
+                <Collapsible open={showAbsenceForm} duration={340}>
+                  <View
                     style={{
                       marginTop: 16,
                       gap: 16,
-                      overflow: "hidden",
-                      maxHeight: absenceAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1100] }),
-                      opacity: absenceAnim,
                       borderRadius: 32,
                       backgroundColor: "rgba(0,0,0,0.03)",
-                      padding: absenceAnim.interpolate({ inputRange: [0, 0.1], outputRange: [0, 16], extrapolate: "clamp" }),
+                      padding: 16,
                     }}
                   >
                     <DateTimePicker
@@ -787,7 +1031,8 @@ export default function TeamManagementScreen() {
                     >
                       Confirmer l'absence
                     </Button>
-                  </Animated.View>
+                  </View>
+                </Collapsible>
               </View>
 
               {/* BOUTON SUPPRIMER  */}

@@ -25,6 +25,12 @@ def _get_employee_hours_for_day(emp: Employee, target_date: date, progressive: l
     """Retourne les heures disponibles d'un employé pour un jour donné."""
     weekday_key = str(target_date.isoweekday())  # "1"=lun ... "5"=ven, "6"=sam, "7"=dim
 
+    # 0. Jour ponctuel (sous-traitant) : prioritaire sur tout le reste, ne
+    #    vaut que pour cette date.
+    for ov in getattr(emp, "day_overrides", None) or ():
+        if ov.date == target_date:
+            return float(ov.hours)
+
     # 1. Montée en charge progressive
     for ph in progressive:
         if ph.employee_id == emp.id and ph.start_date <= target_date <= ph.end_date:
@@ -115,7 +121,7 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
             "status": "closed"
         }
 
-    emp_query = db.query(Employee)
+    emp_query = db.query(Employee).options(selectinload(Employee.day_overrides))
     if zone:
         emp_query = emp_query.filter(Employee.zone == zone)
     all_employees = emp_query.all()
@@ -194,7 +200,7 @@ def read_zero_hours_employee_ids(
     (ex: jour non travaillé dans hours_per_weekday, ou hors plage hours_valid_from/until).
     Sert à masquer ces employés des listes d'assignation/filtre planning."""
     target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-    all_employees = db.query(Employee).all()
+    all_employees = db.query(Employee).options(selectinload(Employee.day_overrides)).all()
     progressive = db.query(ProgressiveHours).filter(
         ProgressiveHours.start_date <= target_date,
         ProgressiveHours.end_date >= target_date
@@ -244,7 +250,7 @@ def get_range_stats_endpoint(
                 closed_dates.add(d)
             d += timedelta(days=1)
 
-    emp_query = db.query(Employee)
+    emp_query = db.query(Employee).options(selectinload(Employee.day_overrides))
     if zone:
         emp_query = emp_query.filter(Employee.zone == zone)
     employees = emp_query.all()
