@@ -811,11 +811,18 @@ def create_intervention(
             # Deja rattache automatiquement au report (prochain RDV du client,
             # ex. une occurrence de serie) : la reprise creee explicitement
             # pour l'encaisser prend le relais, tant que l'autre RDV n'a pas
-            # ete cloture.
+            # ete cloture et tombe plus tard (reprise multi-dates envoyee par
+            # une ancienne version de l'app : le solde reste sur la 1ere date).
             previous_target = db.query(Intervention).filter(
                 Intervention.id == deferred_source.deferred_settled_by_intervention_id,
             ).first()
-            if previous_target and previous_target.status != "done":
+            if (
+                previous_target
+                and previous_target.status != "done"
+                and new_intervention.start_time
+                and previous_target.start_time
+                and new_intervention.start_time < previous_target.start_time
+            ):
                 _detach_deferred(deferred_source, previous_target)
             elif previous_target:
                 deferred_source = None

@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Switch,
   InteractionManager,
+  Animated,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect, Redirect } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -69,6 +70,7 @@ import { MultiSelect } from "../../../src/ui/components/MultiSelect";
 import { toast } from "../../../src/ui/toast";
 import { DateTimePicker } from "../../../src/ui/components/DateTimePicker";
 import { MultiDatePicker } from "../../../src/ui/components/MultiDatePicker";
+import { Collapsible, COLLAPSE_EASING } from "../../../src/ui/components/Collapsible";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Dialog } from "../../../src/ui/components/Dialog";
 
@@ -117,6 +119,47 @@ type Item = {
 function signedPrice(item: { price: string; negative?: boolean }): number {
   const base = Math.abs(parseFloat(item.price.replace(",", ".")) || 0);
   return item.negative ? -base : base;
+}
+
+function itemsTotal(items: Item[]): number {
+  return items.reduce((acc, item) => {
+    if (item.negative) return acc + signedPrice(item);
+    const base = parseFloat(item.price.replace(",", ".")) || 0;
+    return acc + (item.on_demand ? onDemandPrice(base) : base);
+  }, 0);
+}
+
+function toPayloadItems(items: Item[]) {
+  return items
+    .filter((i) => i.label.trim() !== "")
+    .map((i) => ({
+      label: i.label,
+      price: i.negative ? signedPrice(i) : parseFloat(String(i.price).replace(",", ".")) || 0,
+      client_service_id: i.client_service_id ?? null,
+      intervention_service_id: i.intervention_service_id ?? null,
+      on_demand: i.on_demand ?? false,
+    }));
+}
+
+// Chevron qui pivote d'un quart de tour à l'ouverture, au même rythme que
+// le Collapsible de la ligne.
+function RotatingChevron({ open, color }: { open: boolean; color: string }) {
+  const progress = useRef(new Animated.Value(open ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(progress, { toValue: open ? 1 : 0, duration: 300, easing: COLLAPSE_EASING, useNativeDriver: true }).start();
+  }, [open]);
+  const rotate = progress.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "90deg"] });
+  return (
+    <Animated.View style={{ transform: [{ rotate }] }}>
+      <ChevronRight size={16} color={color} />
+    </Animated.View>
+  );
+}
+
+function formatShortDate(dateStr: string): string {
+  return new Date(`${dateStr}T12:00:00`).toLocaleDateString("fr-BE", {
+    weekday: "short", day: "2-digit", month: "2-digit",
+  });
 }
 type ClientService = {
   id: string;
@@ -671,6 +714,10 @@ export default function AddInterventionScreen() {
   // Mode reprise uniquement : dates ad hoc sélectionnées dans le calendrier
   // (une intervention créée par date, pas une récurrence).
   const [repriseDates, setRepriseDates] = useState<string[]>([]);
+  // Plusieurs dates : prestations cochées propres à une date. Absente = la
+  // date reprend les prestations cochées plus haut (communes à toutes).
+  const [perDateServiceIds, setPerDateServiceIds] = useState<Record<string, Set<string>>>({});
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [selectedRateId, setSelectedRateId] = useState<string | null>(null);
 
   // Sync date part of endDateStr when startDateStr changes, and ensure end > start
@@ -1217,10 +1264,10 @@ export default function AddInterventionScreen() {
   );
 
   // Items finaux = services cochés + items ad-hoc
-  const allItems = useMemo(() => {
+  const buildItems = useCallback((serviceIds: Set<string>): Item[] => {
     const usingChain = !selectedClient?.id;
     const serviceItems = availableServices
-      .filter((s) => checkedServiceIds.has(s.id))
+      .filter((s) => serviceIds.has(s.id))
       .map((s) => {
         const pending = usingChain && isPendingChainId(s.id);
         return {
@@ -1235,17 +1282,28 @@ export default function AddInterventionScreen() {
         };
       });
     return [...serviceItems, ...adHocItems];
-  }, [availableServices, selectedClient?.id, checkedServiceIds, servicePriceOverrides, onDemandServiceIds, serviceLabelDrafts, adHocItems]);
+  }, [availableServices, selectedClient?.id, servicePriceOverrides, onDemandServiceIds, serviceLabelDrafts, adHocItems]);
+  const allItems = useMemo(() => buildItems(checkedServiceIds), [buildItems, checkedServiceIds]);
 
-  const totalPrice = useMemo(
-    () =>
-      allItems.reduce((acc, item) => {
-        if ((item as Item).negative) return acc + signedPrice(item as Item);
-        const base = parseFloat((item.price as string).replace(",", ".")) || 0;
-        return acc + (item.on_demand ? onDemandPrice(base) : base);
-      }, 0),
-    [allItems],
-  );
+  const totalPrice = useMemo(() => itemsTotal(allItems), [allItems]);
+
+  const sortedRepriseDates = useMemo(() => [...repriseDates].sort(), [repriseDates]);
+  const isMultiDateReprise = isRepriseMode && sortedRepriseDates.length > 1;
+  const itemsForDate = (dateStr: string): Item[] =>
+    perDateServiceIds[dateStr] ? buildItems(perDateServiceIds[dateStr]) : allItems;
+  const togglePerDateService = (dateStr: string, serviceId: string) => {
+    setPerDateServiceIds((prev) => {
+      const next = new Set(prev[dateStr] ?? checkedServiceIds);
+      next.has(serviceId) ? next.delete(serviceId) : next.add(serviceId);
+      return { ...prev, [dateStr]: next };
+    });
+  };
+  const resetPerDateServices = (dateStr: string) => {
+    setPerDateServiceIds((prev) => {
+      const { [dateStr]: _removed, ...rest } = prev;
+      return rest;
+    });
+  };
 
   // Solde cash reporté (client absent au RDV précédent) que cette reprise
   // absorbe : lu directement sur la source (pas besoin de chaîne, marche
@@ -1488,7 +1546,7 @@ export default function AddInterventionScreen() {
 
       // Calcul des occurrences (reprise multi-dates, reprise/employé simple,
       // ou création admin avec récurrence)
-      let occurrences: { start: Date; end: Date }[];
+      let occurrences: { start: Date; end: Date; dateStr?: string }[];
       // La source existe déjà à sa propre date : elle ne doit être rattachée
       // rétroactivement à la série (et sa 1ère date générée sautée) que si
       // l'utilisateur a laissé le champ sur cette même date (valeur par
@@ -1508,16 +1566,16 @@ export default function AddInterventionScreen() {
         // Dates ad hoc sélectionnées dans le calendrier, pas une récurrence :
         // une occurrence indépendante par date, même heure/durée pour toutes.
         const timePart = startDateStr.split("T")[1] || "09:00";
-        occurrences = repriseDates
+        occurrences = sortedRepriseDates
           .map((dateStr) => {
             if (!isAdmin) {
               const startUtc = new Date(`${dateStr}T00:00:00Z`);
-              return { start: startUtc, end: new Date(startUtc.getTime() + dur * 3600000) };
+              return { start: startUtc, end: new Date(startUtc.getTime() + dur * 3600000), dateStr };
             }
             const base = parseBrusselsDateTimeString(`${dateStr}T${timePart}`);
-            return base ? { start: base, end: new Date(base.getTime() + dur * 3600000) } : null;
+            return base ? { start: base, end: new Date(base.getTime() + dur * 3600000), dateStr } : null;
           })
-          .filter((o): o is { start: Date; end: Date } => o !== null);
+          .filter((o): o is { start: Date; end: Date; dateStr: string } => o !== null);
       } else if (!isAdmin) {
         // Non-admin : date-only, pas de récurrence, time_tbd = true
         const datePart = startDateStr.split("T")[0];
@@ -1641,9 +1699,28 @@ export default function AddInterventionScreen() {
 
       // Chaque occurrence part comme une entrée distincte, avec sa propre clé
       // d'idempotence : un rejeu ne peut pas dupliquer une occurrence isolée.
-      for (const occ of occurrences) {
+      for (const [occIndex, occ] of occurrences.entries()) {
+        // Plusieurs dates de reprise : chaque RDV a ses propres prestations
+        // (cochées par date), et le solde reporté n'est encaissé qu'au
+        // premier — sinon chaque création le déplacerait sur la suivante.
+        let perDatePayload = {};
+        if (isMultiDateReprise && occ.dateStr) {
+          const dateItems = itemsForDate(occ.dateStr);
+          const dateTotal = itemsTotal(dateItems);
+          const dateDue = dateTotal + (occIndex === 0 ? pendingDeferredAmount : 0);
+          const invoicePart = Math.min(parseFloat(amountInvoice.replace(",", ".")) || 0, dateDue);
+          perDatePayload = {
+            items: toPayloadItems(dateItems),
+            price_estimated: dateTotal,
+            ...(paymentMode === "invoice_cash"
+              ? { amount_invoice: invoicePart, amount_cash: dateDue - invoicePart }
+              : {}),
+            ...(occIndex > 0 ? { settle_deferred_intervention_id: undefined } : {}),
+          };
+        }
         const payload = {
           ...basePayload,
+          ...perDatePayload,
           start_time: occ.start.toISOString(),
           end_time: occ.end.toISOString(),
           time_tbd: isAdmin ? timeTbd : true,
@@ -3076,6 +3153,97 @@ export default function AddInterventionScreen() {
                       {totalPrice.toFixed(2)} €
                     </Text>
                   </View>
+
+                  <Collapsible open={isMultiDateReprise}>
+                    <View style={{ marginTop: 16, gap: 8 }}>
+                      <Text className="text-sm font-semibold text-foreground dark:text-white">
+                        Prestations par date
+                      </Text>
+                      <Text style={{ fontSize: 12, color: isDark ? "#94A3B8" : "#64748B" }}>
+                        Chaque RDV reprend les prestations cochées ci-dessus. Touchez une date pour l'adapter.
+                      </Text>
+                      {sortedRepriseDates.map((dateStr) => {
+                        const dateItems = itemsForDate(dateStr);
+                        const dateServiceIds = perDateServiceIds[dateStr] ?? checkedServiceIds;
+                        const isCustom = !!perDateServiceIds[dateStr];
+                        const isOpen = expandedDate === dateStr;
+                        const count = dateItems.filter((i) => i.label.trim() !== "").length;
+                        return (
+                          <View
+                            key={dateStr}
+                            style={{
+                              borderWidth: 1,
+                              borderColor: isCustom ? "#3B82F6" : isDark ? "#334155" : "#E2E8F0",
+                              borderRadius: 12,
+                              overflow: "hidden",
+                            }}
+                          >
+                            <Pressable
+                              onPress={() => setExpandedDate(isOpen ? null : dateStr)}
+                              style={{
+                                flexDirection: "row", alignItems: "center", gap: 8,
+                                paddingHorizontal: 12, paddingVertical: 10,
+                              }}
+                            >
+                              <RotatingChevron open={isOpen} color={isDark ? "#94A3B8" : "#64748B"} />
+                              <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: isDark ? "#F1F5F9" : "#1E293B" }}>
+                                {formatShortDate(dateStr)}
+                                {isCustom && (
+                                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#3B82F6" }}>  modifié</Text>
+                                )}
+                              </Text>
+                              <Text style={{ fontSize: 13, color: isDark ? "#94A3B8" : "#64748B" }}>
+                                {count} prestation{count > 1 ? "s" : ""} · {itemsTotal(dateItems).toFixed(2)} €
+                              </Text>
+                            </Pressable>
+                            <Collapsible open={isOpen}>
+                              <View style={{ paddingHorizontal: 12, paddingBottom: 12, gap: 10 }}>
+                                {availableServices.map((svc) => {
+                                  const checked = dateServiceIds.has(svc.id);
+                                  return (
+                                    <Pressable
+                                      key={svc.id}
+                                      onPress={() => togglePerDateService(dateStr, svc.id)}
+                                      style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+                                    >
+                                      <View
+                                        style={{
+                                          width: 22, height: 22, borderRadius: 6, borderWidth: 2,
+                                          borderColor: checked ? "#3B82F6" : "#CBD5E1",
+                                          backgroundColor: checked ? "#3B82F6" : "transparent",
+                                          alignItems: "center", justifyContent: "center",
+                                        }}
+                                      >
+                                        {checked && <Check size={13} color="#fff" />}
+                                      </View>
+                                      <Text style={{ flex: 1, fontSize: 14, color: checked ? (isDark ? "#F1F5F9" : "#1E293B") : "#94A3B8" }}>
+                                        {serviceLabelDrafts[svc.id] ?? svc.label}
+                                      </Text>
+                                      <Text style={{ fontSize: 14, color: checked ? (isDark ? "#F1F5F9" : "#1E293B") : "#94A3B8" }}>
+                                        {servicePriceOverrides[svc.id] ?? svc.price} €
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
+                                {adHocItems.some((i) => i.label.trim() !== "") && (
+                                  <Text style={{ fontSize: 12, color: isDark ? "#94A3B8" : "#64748B" }}>
+                                    Les prestations ajoutées à la main sont comprises dans chaque date.
+                                  </Text>
+                                )}
+                                {isCustom && (
+                                  <Pressable onPress={() => resetPerDateServices(dateStr)}>
+                                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#3B82F6", textDecorationLine: "underline" }}>
+                                      Reprendre les prestations communes
+                                    </Text>
+                                  </Pressable>
+                                )}
+                              </View>
+                            </Collapsible>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </Collapsible>
                 </View>
               )}
 
