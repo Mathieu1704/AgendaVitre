@@ -105,20 +105,143 @@ def _load_intervention(intervention_id: UUID, db: Session) -> Intervention:
     ).filter(Intervention.id == intervention_id).first()
 
 
-def _pending_deferred_amount(db: Session, intervention: Intervention):
-    """Le RDV precedent direct (reprise_of_id) porte-t-il un montant cash
-    reporte (client absent) pas encore encaisse ? Utilise pour afficher un
-    bandeau "Solde precedent du" sur le RDV suivant.
+CASH_PAYMENT_MODES = ("cash", "invoice_cash", "tvac")
 
-    Base sur reprise_of_id (toujours persiste, avec ou sans client) plutot
-    que reprise_chain_id : ce dernier n'existe que pour les interventions
-    sans client, il ne doit pas servir a detecter un solde reporte."""
-    if not intervention.reprise_of_id:
+
+def _pending_deferred_sources(db: Session, intervention: Intervention) -> list:
+    """Soldes cash reportes (client absent) pas encore rattaches a un RDV, que
+    cette intervention doit encaisser : ceux du meme client sur un RDV
+    anterieur (quelle que soit la facon dont ce RDV a ete cree : reprise,
+    serie recurrente, RDV normal), sinon celui du RDV precedent direct
+    (reprise_of_id) pour une chaine sans client."""
+    pending = (
+        Intervention.deferred_cash_amount.isnot(None),
+        Intervention.deferred_settled_by_intervention_id.is_(None),
+        Intervention.id != intervention.id,
+    )
+    sources = []
+    if intervention.client_id and intervention.start_time:
+        sources = (
+            db.query(Intervention)
+            .filter(
+                *pending,
+                Intervention.client_id == intervention.client_id,
+                Intervention.start_time < intervention.start_time,
+            )
+            .order_by(Intervention.start_time)
+            .all()
+        )
+    if not sources and intervention.reprise_of_id:
+        source = db.query(Intervention).filter(
+            *pending, Intervention.id == intervention.reprise_of_id,
+        ).first()
+        if source:
+            sources = [source]
+    return [s for s in sources if s.id != intervention.id]
+
+
+def _pending_deferred_amount(db: Session, intervention: Intervention):
+    """Montant reporte en attente que ce RDV doit encaisser en plus de ses
+    prestations (bandeau "Solde precedent du"). Rattache automatiquement a
+    la cloture, voir _absorb_pending_deferred."""
+    if intervention.status in ("done", "cancelled"):
         return None
-    source = db.query(Intervention).filter(Intervention.id == intervention.reprise_of_id).first()
-    if source and source.deferred_cash_amount is not None and source.deferred_settled_by_intervention_id is None:
-        return float(source.deferred_cash_amount)
-    return None
+    total = sum(float(s.deferred_cash_amount) for s in _pending_deferred_sources(db, intervention))
+    return total or None
+
+
+def _attach_deferred(source: Intervention, target: Intervention) -> None:
+    """Le RDV `target` encaisse le solde reporte de `source` : ajoute au prix
+    (et a la part cash en FAC+ESP) pour que le cash a remettre le compte, et
+    memorise la part reportee pour l'exclure du taux horaire."""
+    amount = float(source.deferred_cash_amount)
+    target.price_estimated = float(target.price_estimated or 0) + amount
+    target.carried_over_deferred_amount = float(target.carried_over_deferred_amount or 0) + amount
+    if target.payment_mode == "invoice_cash" and target.amount_cash is not None:
+        target.amount_cash = float(target.amount_cash) + amount
+    source.deferred_settled_by_intervention_id = target.id
+
+
+def _detach_deferred(source: Intervention, target: Intervention) -> None:
+    """Inverse de _attach_deferred : le solde redevient en attente."""
+    amount = float(source.deferred_cash_amount)
+    target.price_estimated = max(float(target.price_estimated or 0) - amount, 0)
+    remaining = float(target.carried_over_deferred_amount or 0) - amount
+    target.carried_over_deferred_amount = remaining if remaining > 0 else None
+    if target.payment_mode == "invoice_cash" and target.amount_cash is not None:
+        target.amount_cash = max(float(target.amount_cash) - amount, 0)
+    source.deferred_settled_by_intervention_id = None
+
+
+def _attach_to_next_planned(db: Session, source: Intervention) -> Optional[Intervention]:
+    """Rattache un solde reporte au prochain RDV planifie qui encaisse du cash
+    (meme client, sinon la reprise directe pour une chaine sans client), pour
+    que le montant apparaisse partout (planning, ecran de cloture) avant meme
+    le passage. Rien de trouve : il reste en attente et sera rattache a la
+    cloture du prochain RDV."""
+    filters = [
+        Intervention.id != source.id,
+        Intervention.type == "intervention",
+        Intervention.status.notin_(["done", "cancelled"]),
+        Intervention.payment_mode.in_(CASH_PAYMENT_MODES),
+        ~Intervention.tour_run.has(),
+    ]
+    if source.client_id:
+        filters += [Intervention.client_id == source.client_id, Intervention.start_time > source.start_time]
+    else:
+        filters.append(Intervention.reprise_of_id == source.id)
+    target = db.query(Intervention).filter(*filters).order_by(Intervention.start_time).first()
+    if target:
+        _attach_deferred(source, target)
+    return target
+
+
+def _absorb_pending_deferred(db: Session, intervention: Intervention) -> None:
+    """A la cloture : tout solde reporte encore en attente pour ce client est
+    encaisse par ce RDV (filet de securite si rien n'avait pu etre rattache
+    avant, ex. occurrence de serie creee apres le report)."""
+    if (
+        intervention.type != "intervention"
+        or intervention.payment_mode not in CASH_PAYMENT_MODES
+        or intervention.tour_run
+        # Client encore absent a ce RDV : il est lui-meme exclu du cash a
+        # remettre, l'ancien solde y serait perdu. Il reste en attente pour
+        # le RDV suivant.
+        or intervention.deferred_cash_amount is not None
+    ):
+        return
+    for source in _pending_deferred_sources(db, intervention):
+        _attach_deferred(source, intervention)
+
+
+def _release_deferred(db: Session, intervention: Intervention) -> None:
+    """RDV annule : les soldes reportes qu'il devait encaisser sont rendus en
+    attente puis rattaches au RDV suivant du client, pour ne pas les perdre."""
+    sources = db.query(Intervention).filter(
+        Intervention.deferred_settled_by_intervention_id == intervention.id,
+        Intervention.id != intervention.id,
+    ).all()
+    for source in sources:
+        _detach_deferred(source, intervention)
+        _attach_to_next_planned(db, source)
+
+
+def _reapply_carried_over(intervention: Intervention) -> None:
+    """Apres une ecriture de price_estimated par un client (formulaire
+    d'edition, propagation en serie) qui ne connait que la somme des
+    prestations : on y rajoute le solde reporte deja absorbe, sinon il est
+    efface (bug du 28/10 : 70€ encaisses, 35€ comptes). En FAC+ESP, une
+    ancienne version de l'app saisit le split sur les prestations seules :
+    on complete alors la part cash."""
+    carried = float(intervention.carried_over_deferred_amount or 0)
+    if not carried:
+        return
+    sent_total = float(intervention.price_estimated or 0)
+    intervention.price_estimated = sent_total + carried
+    if intervention.payment_mode == "invoice_cash" and intervention.amount_cash is not None:
+        split = round(float(intervention.amount_cash or 0) + float(intervention.amount_invoice or 0), 2)
+        if split == round(sent_total, 2):
+            intervention.amount_cash = float(intervention.amount_cash) + carried
 
 
 def _unplanned_services(db: Session, intervention: Intervention, hide_prices: bool) -> list:
@@ -683,8 +806,19 @@ def create_intervention(
         deferred_source = db.query(Intervention).filter(
             Intervention.id == intervention.settle_deferred_intervention_id,
             Intervention.deferred_cash_amount.isnot(None),
-            Intervention.deferred_settled_by_intervention_id.is_(None),
         ).first()
+        if deferred_source and deferred_source.deferred_settled_by_intervention_id:
+            # Deja rattache automatiquement au report (prochain RDV du client,
+            # ex. une occurrence de serie) : la reprise creee explicitement
+            # pour l'encaisser prend le relais, tant que l'autre RDV n'a pas
+            # ete cloture.
+            previous_target = db.query(Intervention).filter(
+                Intervention.id == deferred_source.deferred_settled_by_intervention_id,
+            ).first()
+            if previous_target and previous_target.status != "done":
+                _detach_deferred(deferred_source, previous_target)
+            elif previous_target:
+                deferred_source = None
         if deferred_source:
             new_intervention.price_estimated = float(new_intervention.price_estimated or 0) + float(deferred_source.deferred_cash_amount)
             # Persiste pour pouvoir l'exclure du calcul des heures planifiees
@@ -701,6 +835,17 @@ def create_intervention(
 
     if deferred_source:
         deferred_source.deferred_settled_by_intervention_id = new_intervention.id
+    elif (
+        new_intervention.client_id
+        and new_intervention.type == "intervention"
+        and new_intervention.status not in ("done", "cancelled")
+        and new_intervention.payment_mode in CASH_PAYMENT_MODES
+    ):
+        # RDV cree hors reprise (ou reprise dont la source n'a rien reporte)
+        # pour un client qui a encore un solde reporte en attente. Apres le
+        # flush : la source pointe vers ce RDV, il doit deja exister en base.
+        for source in _pending_deferred_sources(db, new_intervention):
+            _attach_deferred(source, new_intervention)
 
     _add_audit(
         db, "created", current_user.id, new_intervention.id,
@@ -954,10 +1099,19 @@ def update_intervention(
         elif hasattr(db_intervention, key):
             setattr(db_intervention, key, value)
 
+    # Le formulaire envoie la somme des prestations : le solde reporte deja
+    # absorbe par ce RDV ne doit pas disparaitre a chaque modification.
+    if "price_estimated" in intervention_update:
+        _reapply_carried_over(db_intervention)
+
     # Cloture : on retient qui a reellement termine (et donc encaisse), pas
     # seulement les employes assignes — voir _cash_interventions.
     if db_intervention.status == "done" and old_status != "done":
         db_intervention.closed_by_employee_id = _resolve_closer_id(db_intervention, current_user, requested_closer_id)
+        _absorb_pending_deferred(db, db_intervention)
+
+    if db_intervention.status == "cancelled" and old_status != "cancelled":
+        _release_deferred(db, db_intervention)
 
     # Reouverture d'un RDV deja cloture (correction admin) : si Melissa
     # l'avait deja coche "facture", on reinitialise — le montant/les
@@ -1073,6 +1227,8 @@ def update_intervention_recurrence_scope(
                     ))
             elif hasattr(target, key):
                 setattr(target, key, value)
+        if "price_estimated" in fields:
+            _reapply_carried_over(target)
         updated += 1
 
     _add_audit(
@@ -1146,7 +1302,7 @@ def update_items_done(
 
     db_intervention.price_estimated = sum(
         _item_effective_price(item) for item in db_intervention.items if item.done
-    ) + sum(float(row.price) for row in new_rows)
+    ) + sum(float(row.price) for row in new_rows) + float(db_intervention.carried_over_deferred_amount or 0)
 
     # Le recalcul ci-dessus peut invalider un split cash/facture deja saisi
     # (la somme ne correspond plus au nouveau total) : on le reinitialise
@@ -1299,6 +1455,7 @@ def no_reprise(
     intervention.reprise_taken = False
     intervention.reprise_note = note if note else None
     intervention.closed_by_employee_id = _resolve_closer_id(intervention, current_user, payload.get("closed_by_employee_id"))
+    _absorb_pending_deferred(db, intervention)
 
     emp_name = current_user.full_name or current_user.email or "Un employé"
     is_subcontractor = current_user.role == "subcontractor"
@@ -1378,9 +1535,28 @@ def defer_cash(
 
     note = (payload.get("note") or "").strip()
 
+    # Report corrige alors qu'il etait deja rattache a un RDV pas encore
+    # cloture : on le detache pour le rattacher avec le nouveau montant.
+    previous_target = None
+    if intervention.deferred_settled_by_intervention_id and intervention.deferred_cash_amount is not None:
+        previous_target = db.query(Intervention).filter(
+            Intervention.id == intervention.deferred_settled_by_intervention_id,
+        ).first()
+        if previous_target and previous_target.status == "done":
+            raise HTTPException(status_code=409, detail="Ce paiement reporté a déjà été encaissé au RDV suivant.")
+        if previous_target:
+            _detach_deferred(intervention, previous_target)
+
     intervention.deferred_cash_amount = amount
+    intervention.deferred_settled_by_intervention_id = None
     if intervention.payment_mode == "invoice_cash":
         intervention.amount_cash = 0
+
+    # Rattache tout de suite au prochain RDV du client (y compris une
+    # occurrence de serie recurrente) : le montant a encaisser y apparait
+    # avant le passage. Sinon il sera repris a la creation ou a la cloture
+    # du prochain RDV.
+    _attach_to_next_planned(db, intervention)
 
     emp_name = current_user.full_name or current_user.email or "Un employé"
     client_label = intervention.client.name if intervention.client else intervention.title

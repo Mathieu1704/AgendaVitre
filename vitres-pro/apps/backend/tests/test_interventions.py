@@ -178,3 +178,63 @@ class CloserTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeferredCashCarryTests(unittest.TestCase):
+    """Solde cash reporte (client absent) : rattache au RDV suivant, conserve
+    quand le prix est reecrit depuis le formulaire, rendu si annule."""
+
+    def _pair(self, amount=35, payment_mode="cash"):
+        source = SimpleNamespace(id=uuid4(), deferred_cash_amount=amount, deferred_settled_by_intervention_id=None)
+        target = SimpleNamespace(
+            id=uuid4(), price_estimated=35, carried_over_deferred_amount=None,
+            payment_mode=payment_mode, amount_cash=None, amount_invoice=None,
+        )
+        return source, target
+
+    def test_attach_adds_to_price_and_marks_settled(self):
+        from app.routers.interventions import _attach_deferred
+        source, target = self._pair()
+        _attach_deferred(source, target)
+        self.assertEqual(target.price_estimated, 70)
+        self.assertEqual(target.carried_over_deferred_amount, 35)
+        self.assertEqual(source.deferred_settled_by_intervention_id, target.id)
+
+    def test_attach_then_detach_restores_target(self):
+        from app.routers.interventions import _attach_deferred, _detach_deferred
+        source, target = self._pair(payment_mode="invoice_cash")
+        target.amount_cash, target.amount_invoice = 10, 25
+        _attach_deferred(source, target)
+        self.assertEqual(target.amount_cash, 45)
+        _detach_deferred(source, target)
+        self.assertEqual(target.price_estimated, 35)
+        self.assertIsNone(target.carried_over_deferred_amount)
+        self.assertEqual(target.amount_cash, 10)
+        self.assertIsNone(source.deferred_settled_by_intervention_id)
+
+    def test_form_price_keeps_carried_over(self):
+        # Bug du 28/10 : l'edition admin renvoyait 35 (prestations) et
+        # effacait les 35 reportes deja absorbes.
+        from app.routers.interventions import _reapply_carried_over
+        _, target = self._pair()
+        target.carried_over_deferred_amount = 35
+        target.price_estimated = 35  # valeur envoyee par le formulaire
+        _reapply_carried_over(target)
+        self.assertEqual(target.price_estimated, 70)
+
+    def test_form_split_on_items_only_gets_cash_completed(self):
+        from app.routers.interventions import _reapply_carried_over, _validate_payment_split
+        _, target = self._pair(payment_mode="invoice_cash")
+        target.carried_over_deferred_amount = 35
+        target.price_estimated, target.amount_cash, target.amount_invoice = 35, 10, 25
+        _reapply_carried_over(target)
+        self.assertEqual(target.amount_cash, 45)
+        _validate_payment_split(target.payment_mode, target.price_estimated, target.amount_cash, target.amount_invoice)
+
+    def test_form_split_already_on_full_total_is_untouched(self):
+        from app.routers.interventions import _reapply_carried_over
+        _, target = self._pair(payment_mode="invoice_cash")
+        target.carried_over_deferred_amount = 35
+        target.price_estimated, target.amount_cash, target.amount_invoice = 35, 45, 25
+        _reapply_carried_over(target)
+        self.assertEqual((target.price_estimated, target.amount_cash), (70, 45))

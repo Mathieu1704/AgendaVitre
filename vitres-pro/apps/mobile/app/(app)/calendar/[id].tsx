@@ -1078,12 +1078,21 @@ export default function InterventionDetailScreen() {
                 sous-traitant : il ne doit voir aucun prix/montant. */}
             {!isSubcontractor && intervType === "intervention" && (() => {
               const mode = intervention.payment_mode || (intervention.is_invoice ? "invoice" : "cash");
+              // Solde reporté encore en attente (sera rattaché à la clôture) :
+              // l'employé doit le demander dès maintenant, en plus du prix.
+              const pendingDeferred = !["done", "cancelled"].includes(intervention.status)
+                ? Number(intervention.pending_deferred_amount) || 0
+                : 0;
+              const deferredIncluded = (Number(intervention.carried_over_deferred_amount) || 0) + pendingDeferred;
+              const dueTotal = (Number(intervention.price_estimated) || 0) + pendingDeferred;
+              const dueCash = (Number(intervention.amount_cash) || 0) + pendingDeferred;
+              const deferredNote = deferredIncluded > 0 ? ` (dont ${formatPrice(deferredIncluded)} reporté)` : "";
               const cfg = {
-                cash:         { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FCA5A5" : "#DC2626" },
-                invoice_cash: { bg: isDark ? "rgba(154,52,18,0.2)" : "#FFEDD5", border: isDark ? "rgba(154,52,18,0.5)" : "#FED7AA", iconBg: "#F97316", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#FB923C" : "#C2410C", sub: intervention.amount_cash != null ? `Le client doit payer ${formatPrice(intervention.amount_cash)} en espèces (+ facture ${formatPrice(intervention.amount_invoice ?? 0)}).` : `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FDBA74" : "#EA580C" },
-                tvac:         { bg: isDark ? "rgba(91,33,182,0.2)" : "#EDE9FE", border: isDark ? "rgba(91,33,182,0.5)" : "#DDD6FE", iconBg: "#8B5CF6", title: "À ENCAISSER SUR PLACE (TVAC)", titleColor: isDark ? "#A78BFA" : "#6D28D9", sub: `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant (facture acquittée).`, subColor: isDark ? "#C4B5FD" : "#7C3AED" },
+                cash:         { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${formatPrice(dueTotal)} maintenant${deferredNote}.`, subColor: isDark ? "#FCA5A5" : "#DC2626" },
+                invoice_cash: { bg: isDark ? "rgba(154,52,18,0.2)" : "#FFEDD5", border: isDark ? "rgba(154,52,18,0.5)" : "#FED7AA", iconBg: "#F97316", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#FB923C" : "#C2410C", sub: intervention.amount_cash != null ? `Le client doit payer ${formatPrice(dueCash)} en espèces${deferredNote} (+ facture ${formatPrice(intervention.amount_invoice ?? 0)}).` : `Le client doit payer ${formatPrice(dueTotal)} maintenant${deferredNote}.`, subColor: isDark ? "#FDBA74" : "#EA580C" },
+                tvac:         { bg: isDark ? "rgba(91,33,182,0.2)" : "#EDE9FE", border: isDark ? "rgba(91,33,182,0.5)" : "#DDD6FE", iconBg: "#8B5CF6", title: "À ENCAISSER SUR PLACE (TVAC)", titleColor: isDark ? "#A78BFA" : "#6D28D9", sub: `Le client doit payer ${formatPrice(dueTotal)} maintenant${deferredNote} (facture acquittée).`, subColor: isDark ? "#C4B5FD" : "#7C3AED" },
                 invoice:      { bg: isDark ? "rgba(21,128,61,0.15)" : "#F0FDF4", border: isDark ? "rgba(21,128,61,0.4)" : "#BBF7D0", iconBg: "#22C55E", title: "PAIEMENT PAR FACTURE", titleColor: isDark ? "#4ADE80" : "#15803D", sub: "Le client sera facturé.", subColor: isDark ? "#86EFAC" : "#16A34A" },
-              }[mode as string] ?? { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${formatPrice(intervention.price_estimated)} maintenant.`, subColor: isDark ? "#FCA5A5" : "#DC2626" };
+              }[mode as string] ?? { bg: isDark ? "rgba(153,27,27,0.2)" : "#FEE2E2", border: isDark ? "rgba(153,27,27,0.5)" : "#FECACA", iconBg: "#EF4444", title: "À ENCAISSER SUR PLACE", titleColor: isDark ? "#F87171" : "#B91C1C", sub: `Le client doit payer ${formatPrice(dueTotal)} maintenant${deferredNote}.`, subColor: isDark ? "#FCA5A5" : "#DC2626" };
 
               return (
                 <View style={{ marginBottom: 12 }}>
@@ -1229,7 +1238,7 @@ export default function InterventionDetailScreen() {
                   >
                     <Banknote size={18} color="#F97316" />
                     <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: isDark ? "#FDBA74" : "#C2410C" }}>
-                      Solde précédent dû : {formatPrice(intervention.pending_deferred_amount)} (client absent au RDV précédent).
+                      Solde précédent dû : {formatPrice(intervention.pending_deferred_amount)} (client absent au RDV précédent) — à encaisser en plus, il sera ajouté au total à la clôture.
                     </Text>
                   </View>
                 )}

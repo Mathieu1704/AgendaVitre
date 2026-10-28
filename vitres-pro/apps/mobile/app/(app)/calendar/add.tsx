@@ -1255,7 +1255,11 @@ export default function AddInterventionScreen() {
     isRepriseMode && !isDuplicateMode && repriseSource?.deferred_cash_amount != null && !repriseSource?.deferred_settled_by_intervention_id
       ? Number(repriseSource.deferred_cash_amount) || 0
       : 0;
-  const paymentTotal = totalPrice + pendingDeferredAmount;
+  // En édition, le solde reporté déjà absorbé par ce RDV reste dû : le
+  // backend le rajoute au prix envoyé (somme des prestations), le split
+  // FAC+ESP doit donc se faire sur le total réel.
+  const carriedOverInEdit = isEditMode ? Number(interventionData?.carried_over_deferred_amount) || 0 : 0;
+  const paymentTotal = totalPrice + pendingDeferredAmount + carriedOverInEdit;
 
   const selectedRate =
     (hourlyRates as any[])?.find((r: any) => r.id === selectedRateId) ?? null;
@@ -1980,6 +1984,23 @@ export default function AddInterventionScreen() {
           contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         >
           <Card className="max-w-2xl w-full self-center rounded-[40px] overflow-hidden">
+            {carriedOverInEdit > 0 && (
+              <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+                <View
+                  style={{
+                    flexDirection: "row", alignItems: "center", gap: 10,
+                    padding: 12, borderRadius: 14,
+                    backgroundColor: isDark ? "rgba(249,115,22,0.1)" : "#FFF7ED",
+                    borderWidth: 1, borderColor: isDark ? "rgba(249,115,22,0.3)" : "#FED7AA",
+                  }}
+                >
+                  <Banknote size={18} color="#F97316" />
+                  <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: isDark ? "#FDBA74" : "#C2410C" }}>
+                    Ce RDV encaisse aussi un solde reporté de {carriedOverInEdit.toFixed(2)} € (client absent au RDV précédent) — il reste ajouté au total.
+                  </Text>
+                </View>
+              </View>
+            )}
             {isRepriseMode && pendingDeferredAmount > 0 && (
               <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
                 <View
