@@ -155,7 +155,8 @@ export const MonthView = React.memo(function MonthView({
       const end = new Date(`${c.end_date}T12:00:00`);
       while (d <= end) {
         const key = toISODate(d);
-        if (key !== selectedDate) marks[key] = { marked: true, dotColor: "#EF4444", textColor: "#EF4444" };
+        if (key !== selectedDate)
+          marks[key] = { marked: true, dotColor: "#EF4444", customStyles: { text: { color: "#EF4444", fontWeight: "700" } } };
         d.setDate(d.getDate() + 1);
       }
     });
@@ -193,6 +194,9 @@ export const MonthView = React.memo(function MonthView({
           }}
           onDayLongPress={isAdmin ? (day: DateData) => openHolidayDialog(day.dateString) : undefined}
           markedDates={markedDates}
+          // "custom" : seul mode où le chiffre du jour peut être coloré (fériés
+          // en rouge) ; les points restent affichés comme en mode "dot".
+          markingType="custom"
           firstDay={1}
           hideArrows={true}
           enableSwipeMonths={true}
@@ -222,7 +226,7 @@ export const MonthView = React.memo(function MonthView({
             >
               <CalendarOff size={16} color="#EF4444" />
               <Text style={{ color: "#EF4444", fontWeight: "700", fontSize: 13, flex: 1 }}>
-                {selectedClosure.reason || "Jour férié"}
+                {selectedClosure.reason || "Jour férié"} — fermé, pas de pointage
                 {selectedClosure.start_date !== selectedClosure.end_date
                   ? ` (du ${formatDayFr(selectedClosure.start_date)} au ${formatDayFr(selectedClosure.end_date)})`
                   : ""}
@@ -230,6 +234,7 @@ export const MonthView = React.memo(function MonthView({
             </View>
           )}
           <PlanningHeader
+            hideWhenClosed={!!selectedClosure}
             dateStr={selectedDate}
             zone={effectiveZone}
             onRateSession={isAdmin ? () => router.push(`/(app)/calendar/rate-session?date=${selectedDate}&zone=${effectiveZone}` as any) : undefined}

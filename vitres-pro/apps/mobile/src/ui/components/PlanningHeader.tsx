@@ -14,7 +14,7 @@ function fmtH(h: number): string {
   return `${hours}h${mins.toString().padStart(2, "0")}`;
 }
 
-export function PlanningHeader({ dateStr, zone, onRateSession }: { dateStr: string; zone?: string; onRateSession?: () => void }) {
+export function PlanningHeader({ dateStr, zone, onRateSession, hideWhenClosed }: { dateStr: string; zone?: string; onRateSession?: () => void; hideWhenClosed?: boolean }) {
   const { stats, isLoading } = usePlanningStats(dateStr, zone);
 
   if (isLoading) {
@@ -29,13 +29,15 @@ export function PlanningHeader({ dateStr, zone, onRateSession }: { dateStr: stri
 
   // Jour férié / fermeture entreprise : capacité 0, rien à jauger.
   if (stats.status === "closed") {
+    // La vue Mois affiche déjà son propre bandeau (avec le nom du férié).
+    if (hideWhenClosed) return null;
     return (
       <View className="mb-4 px-1">
         <View
           style={{ borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: "#EF444418" }}
         >
           <Text className="text-sm font-bold text-red-600 dark:text-red-400">
-            Fermé — jour férié, pas de capacité ce jour-là
+            Fermé — jour férié
           </Text>
         </View>
       </View>
