@@ -7,6 +7,8 @@ export interface TodayTimeEntry {
   clock_out_at: string | null;
   status: "not_started" | "in_progress" | "done";
   worked_hours?: number | null;
+  is_holiday?: boolean;
+  holiday_reason?: string | null;
 }
 
 export const useTodayTimeEntry = () =>

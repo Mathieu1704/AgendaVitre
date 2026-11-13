@@ -480,6 +480,8 @@ class TimeEntryOut(BaseModel):
     clock_out_at: Optional[datetime] = None
     status: Literal["not_started", "in_progress", "done"]
     worked_hours: Optional[float] = None
+    is_holiday: bool = False
+    holiday_reason: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -721,3 +723,19 @@ class TourStopResolveInput(BaseModel):
     status: Literal["done", "not_visited"]
     reason: Optional[str] = None
     client_operation_id: Optional[UUID] = None
+
+
+class ClosureIn(BaseModel):
+    start_date: date
+    end_date: date
+    reason: Optional[str] = None
+
+
+class ClosureOut(BaseModel):
+    id: UUID
+    start_date: date
+    end_date: date
+    reason: Optional[str] = None
+
+    class Config:
+        from_attributes = True

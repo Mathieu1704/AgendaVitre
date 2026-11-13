@@ -19,6 +19,7 @@ from app.models.models import (
 )
 from app.core.deps import get_current_user
 from app.routers.planning import BRUSSELS_TZ, _utc_bounds, _get_employee_hours_for_day
+from app.routers.closures import ensure_holidays_seeded
 from app.schemas.schemas import (
     TimeEntryOut,
     DailyEntryOut,
@@ -40,7 +41,12 @@ WEEKLY_FLOOR_HOURS = 37.0
 # de congé retire seuil / jours travaillés (Xavier : 20h / 5 = 4h) au lieu des
 # heures du jour, à partir de la date d'effet de son seuil — demandé par
 # Mathieu le 19/10/2026.
-FLOOR_SHARE_CONGE_EMPLOYEE_IDS = {UUID("6e573907-5d92-4393-889b-747fdadcac31")}
+# Jessy (fiche 4 x 10h, seuil 29,36h) : même règle, 29,36 / 4 = 7,34h par
+# congé ou jour férié au lieu de 10h — demandé par Mathieu le 13/11/2026.
+FLOOR_SHARE_CONGE_EMPLOYEE_IDS = {
+    UUID("6e573907-5d92-4393-889b-747fdadcac31"),  # Xavier
+    UUID("95ff46c2-cda8-42c4-b0ca-ad35b75ba311"),  # Jessy
+}
 
 
 def _require_admin(current_user: Employee):
@@ -50,6 +56,19 @@ def _require_admin(current_user: Employee):
 
 def _today_brussels() -> date:
     return datetime.now(BRUSSELS_TZ).date()
+
+
+def _closure_on(db: Session, d: date) -> Optional[CompanyClosure]:
+    """Fermeture / jour férié couvrant la date, ou None. Pré-remplit au
+    passage les fériés de l'année si ce n'est pas encore fait, pour que le
+    blocage du pointage ne dépende pas d'un passage préalable sur le
+    calendrier."""
+    ensure_holidays_seeded(db, d, d)
+    return (
+        db.query(CompanyClosure)
+        .filter(CompanyClosure.start_date <= d, CompanyClosure.end_date >= d)
+        .first()
+    )
 
 
 def _week_bounds(d: date) -> tuple[date, date]:
@@ -391,12 +410,15 @@ def get_today_entry(
         .filter(EmployeeTimeEntry.employee_id == current_user.id, EmployeeTimeEntry.work_date == today)
         .first()
     )
+    closure = _closure_on(db, today)
     return TimeEntryOut(
         work_date=today,
         clock_in_at=entry.clock_in_at if entry else None,
         clock_out_at=entry.clock_out_at if entry else None,
         status=_entry_status(entry),
         worked_hours=_worked_hours(entry) if entry else None,
+        is_holiday=closure is not None,
+        holiday_reason=closure.reason if closure else None,
     )
 
 
@@ -416,12 +438,15 @@ def get_day_entry(
         .filter(EmployeeTimeEntry.employee_id == current_user.id, EmployeeTimeEntry.work_date == work_date)
         .first()
     )
+    closure = _closure_on(db, work_date)
     return TimeEntryOut(
         work_date=work_date,
         clock_in_at=entry.clock_in_at if entry else None,
         clock_out_at=entry.clock_out_at if entry else None,
         status=_entry_status(entry),
         worked_hours=_worked_hours(entry) if entry else None,
+        is_holiday=closure is not None,
+        holiday_reason=closure.reason if closure else None,
     )
 
 
@@ -441,6 +466,8 @@ def clock_in(
     )
     if entry and entry.clock_in_at:
         raise HTTPException(status_code=409, detail="Journée déjà commencée")
+    if _closure_on(db, today):
+        raise HTTPException(status_code=409, detail="Jour férié — pas de pointage aujourd'hui")
 
     now = datetime.now(timezone.utc)
     if not entry:
@@ -513,6 +540,7 @@ def get_my_overtime_balance(
     """Solde heures sup/en moins de l'employé connecté, pour affichage dans
     son propre onglet Réglages. On inclut la semaine en cours (à date) pour
     donner un chiffre à jour plutôt que d'attendre dimanche."""
+    _closure_on(db, _today_brussels())
     balance, period_start, period_end = _overtime_balance(
         db, current_user, include_current_week=True
     )
@@ -577,6 +605,7 @@ def weekly_summary(
     current_user: Employee = Depends(get_current_user),
 ):
     _require_admin(current_user)
+    _closure_on(db, _today_brussels())
 
     if week_start:
         ref_date = datetime.strptime(week_start, "%Y-%m-%d").date()

@@ -27,6 +27,21 @@ export function PlanningHeader({ dateStr, zone, onRateSession }: { dateStr: stri
 
   if (!stats) return null;
 
+  // Jour férié / fermeture entreprise : capacité 0, rien à jauger.
+  if (stats.status === "closed") {
+    return (
+      <View className="mb-4 px-1">
+        <View
+          style={{ borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: "#EF444418" }}
+        >
+          <Text className="text-sm font-bold text-red-600 dark:text-red-400">
+            Fermé — jour férié, pas de capacité ce jour-là
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   // Calcul du pourcentage de remplissage
   const percentage = Math.min(
     100,

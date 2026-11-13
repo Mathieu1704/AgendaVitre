@@ -172,6 +172,15 @@ class CompanyClosure(Base):
     reason = Column(String, nullable=True)
 
 
+class HolidaySeededYear(Base):
+    """Années dont les fériés légaux belges ont déjà été pré-remplis dans
+    company_closures (un férié retiré par un admin n'est jamais recréé)."""
+    __tablename__ = "holiday_seeded_years"
+
+    year = Column(Integer, primary_key=True)
+    seeded_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class Absence(Base):
     __tablename__ = "absences"
     

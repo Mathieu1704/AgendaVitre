@@ -1,5 +1,6 @@
-import React, { useMemo } from "react";
-import { View, Text, Pressable } from "react-native";
+import React, { useMemo, useState } from "react";
+import { View, Text, Pressable, TextInput, ActivityIndicator } from "react-native";
+import { CalendarOff } from "lucide-react-native";
 import { Calendar as RNCalendar, DateData } from "react-native-calendars";
 import { useRouter } from "expo-router";
 import { toISODate, startOfMonth, endOfMonth } from "../../../lib/date";
@@ -9,6 +10,13 @@ import { RawEventCard } from "./RawEventCard";
 import { FilterChipsBar, renderInterventionGroups, AssignModalState, CityPlanningInfo, InterventionGroupsCtx } from "./InterventionGroups";
 import { PlanningHeader } from "../PlanningHeader";
 import { DayStartRow, DayEndRow } from "./DayTrackerBar";
+import { useClosuresByRange, closureOn, useCreateClosure, useDeleteClosure } from "../../../hooks/useClosures";
+import { Dialog } from "../Dialog";
+import { toast } from "../../toast";
+
+function formatDayFr(dateStr: string) {
+  return new Date(`${dateStr}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+}
 
 interface MonthViewProps {
   cursorDate: Date;
@@ -96,6 +104,39 @@ export const MonthView = React.memo(function MonthView({
   const monthEnd = toISODate(endOfMonth(cursorDate));
   const calendarMonthKey = `${cursorDate.getFullYear()}-${String(cursorDate.getMonth() + 1).padStart(2, "0")}`;
   const { rawEvents: monthRawEvents } = useRawEventsByRange(monthStart, monthEnd);
+  const closures = useClosuresByRange(monthStart, monthEnd);
+  const createClosure = useCreateClosure();
+  const deleteClosure = useDeleteClosure();
+  // Appui long admin sur un jour : marquer / retirer un jour férié.
+  const [holidayDate, setHolidayDate] = useState<string | null>(null);
+  const [holidayLabel, setHolidayLabel] = useState("Férié");
+  const holidayDialogClosure = holidayDate ? closureOn(closures, holidayDate) : null;
+  const selectedClosure = closureOn(closures, selectedDate);
+
+  const openHolidayDialog = (dateStr: string) => {
+    setHolidayLabel("Férié");
+    setHolidayDate(dateStr);
+  };
+
+  const confirmHoliday = async () => {
+    if (!holidayDate) return;
+    try {
+      if (holidayDialogClosure) {
+        await deleteClosure.mutateAsync(holidayDialogClosure.id);
+        toast.success("Férié retiré", "Le pointage est à nouveau possible ce jour-là.");
+      } else {
+        await createClosure.mutateAsync({
+          start_date: holidayDate,
+          end_date: holidayDate,
+          reason: holidayLabel.trim() || "Férié",
+        });
+        toast.success("Jour férié", "Ce jour ne compte plus dans les heures.");
+      }
+      setHolidayDate(null);
+    } catch (e: any) {
+      toast.error("Erreur", e?.response?.data?.detail || "Action impossible.");
+    }
+  };
 
   const markedDates = useMemo(() => {
     const marks: any = {};
@@ -108,10 +149,20 @@ export const MonthView = React.memo(function MonthView({
       if (itemsByDate[dateKey].length > 0 && dateKey !== selectedDate)
         marks[dateKey] = { marked: true, dotColor: "#3B82F6" };
     });
+    // Jours fériés / fermetures : chiffre et point en rouge.
+    closures.forEach((c) => {
+      const d = new Date(`${c.start_date}T12:00:00`);
+      const end = new Date(`${c.end_date}T12:00:00`);
+      while (d <= end) {
+        const key = toISODate(d);
+        if (key !== selectedDate) marks[key] = { marked: true, dotColor: "#EF4444", textColor: "#EF4444" };
+        d.setDate(d.getDate() + 1);
+      }
+    });
     marks[selectedDate] = { selected: true, selectedColor: "#3B82F6", selectedTextColor: "#ffffff" };
     if (today !== selectedDate) marks[today] = { ...(marks[today] || {}), textColor: "#3B82F6" };
     return marks;
-  }, [itemsByDate, monthRawEvents, selectedDate]);
+  }, [itemsByDate, monthRawEvents, selectedDate, closures]);
 
   const dayList = (itemsByDate[selectedDate] || []).filter(filterItem);
   const dayRawEvents = monthRawEvents.filter((e) => e.start_time.split("T")[0] === selectedDate);
@@ -140,6 +191,7 @@ export const MonthView = React.memo(function MonthView({
               setCursorDate(new Date(`${day.dateString}T12:00:00`));
             }
           }}
+          onDayLongPress={isAdmin ? (day: DateData) => openHolidayDialog(day.dateString) : undefined}
           markedDates={markedDates}
           firstDay={1}
           hideArrows={true}
@@ -155,6 +207,28 @@ export const MonthView = React.memo(function MonthView({
           <Text className="text-xl font-bold text-foreground dark:text-white capitalize mb-3">
             {new Date(selectedDate).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
           </Text>
+          {selectedClosure && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                borderRadius: 12,
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                marginBottom: 10,
+                backgroundColor: "#EF444418",
+              }}
+            >
+              <CalendarOff size={16} color="#EF4444" />
+              <Text style={{ color: "#EF4444", fontWeight: "700", fontSize: 13, flex: 1 }}>
+                {selectedClosure.reason || "Jour férié"}
+                {selectedClosure.start_date !== selectedClosure.end_date
+                  ? ` (du ${formatDayFr(selectedClosure.start_date)} au ${formatDayFr(selectedClosure.end_date)})`
+                  : ""}
+              </Text>
+            </View>
+          )}
           <PlanningHeader
             dateStr={selectedDate}
             zone={effectiveZone}
@@ -198,6 +272,85 @@ export const MonthView = React.memo(function MonthView({
           <DayEndRow date={selectedDate} />
         </View>
       </View>
+
+      {holidayDate && (
+        <Dialog open onClose={() => setHolidayDate(null)} maxWidth={340}>
+          <View style={{ padding: 20 }}>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: isDark ? "#F1F5F9" : "#0F172A", marginBottom: 4 }}>
+              {holidayDialogClosure ? "Retirer le jour férié ?" : "Marquer comme jour férié ?"}
+            </Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: isDark ? "#CBD5E1" : "#334155", marginBottom: 10, textTransform: "capitalize" }}>
+              {formatDayFr(holidayDate)}
+            </Text>
+            {holidayDialogClosure ? (
+              <Text style={{ fontSize: 13, color: isDark ? "#94A3B8" : "#64748B", marginBottom: 20, lineHeight: 18 }}>
+                « {holidayDialogClosure.reason || "Férié"} »
+                {holidayDialogClosure.start_date !== holidayDialogClosure.end_date
+                  ? ` — attention, c'est toute la fermeture du ${formatDayFr(holidayDialogClosure.start_date)} au ${formatDayFr(holidayDialogClosure.end_date)} qui sera retirée.`
+                  : ""}
+                {"\n"}Le jour redeviendra normal : les employés pourront pointer et il comptera à nouveau dans les heures.
+              </Text>
+            ) : (
+              <>
+                <Text style={{ fontSize: 13, color: isDark ? "#94A3B8" : "#64748B", marginBottom: 12, lineHeight: 18 }}>
+                  Personne ne pourra pointer ce jour-là (employés et sous-traitants) et il ne comptera pas dans les heures sup.
+                </Text>
+                <TextInput
+                  value={holidayLabel}
+                  onChangeText={setHolidayLabel}
+                  placeholder="Libellé (ex. Armistice)"
+                  placeholderTextColor={isDark ? "#64748B" : "#94A3B8"}
+                  style={{
+                    height: 44,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: isDark ? "#334155" : "#E2E8F0",
+                    paddingHorizontal: 12,
+                    color: isDark ? "#F1F5F9" : "#0F172A",
+                    marginBottom: 20,
+                  }}
+                />
+              </>
+            )}
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable
+                onPress={() => setHolidayDate(null)}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  borderRadius: 22,
+                  borderWidth: 1,
+                  borderColor: isDark ? "#334155" : "#E2E8F0",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ fontWeight: "700", color: isDark ? "#F1F5F9" : "#0F172A" }}>Annuler</Text>
+              </Pressable>
+              <Pressable
+                onPress={confirmHoliday}
+                disabled={createClosure.isPending || deleteClosure.isPending}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: holidayDialogClosure ? "#64748B" : "#EF4444",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {createClosure.isPending || deleteClosure.isPending ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={{ fontWeight: "700", color: "white" }}>
+                    {holidayDialogClosure ? "Retirer" : "Marquer férié"}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </Dialog>
+      )}
     </View>
   );
 });

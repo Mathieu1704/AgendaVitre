@@ -93,6 +93,45 @@ class AbsenceAndClosureNeutralityTests(unittest.TestCase):
         hours = _employee_actual_hours_for_day(self.emp, self.monday, {}, absences, [], [])
         self.assertEqual(hours, 0.0)
 
+    def test_single_holiday_midweek(self):
+        # Mercredi férié (11/11 style), les 4 autres jours pointés normalement
+        # (8+8+8+7 = 31h) : plancher 37 - 8 = 29h -> +2h, comme une semaine
+        # normale de 39h. Sans le férié, l'employé serait à -6h.
+        wednesday = self.monday + timedelta(days=2)
+        entries_by_day = {}
+        for i in (0, 1, 3, 4):
+            d = self.monday + timedelta(days=i)
+            hours = 8 if i < 4 else 7
+            clock_in = datetime(d.year, d.month, d.day, 8, tzinfo=timezone.utc)
+            entries_by_day[d] = SimpleNamespace(
+                clock_in_at=clock_in, clock_out_at=clock_in + timedelta(hours=hours)
+            )
+        with_holiday = _week_delta(
+            self.emp, absences=[], closures=[_make_closure(wednesday, wednesday)],
+            entries_by_day=entries_by_day,
+        )
+        without_holiday = _week_delta(self.emp, absences=[], closures=[], entries_by_day=entries_by_day)
+        self.assertEqual(with_holiday, 39.0 - WEEKLY_FLOOR_HOURS)
+        self.assertEqual(without_holiday, 31.0 - WEEKLY_FLOOR_HOURS)
+
+
+class BelgianHolidaysTests(unittest.TestCase):
+    def test_2026(self):
+        from app.routers.closures import belgian_holidays
+        days = {d: n for d, n in belgian_holidays(2026)}
+        self.assertEqual(len(days), 10)
+        self.assertEqual(days[date(2026, 4, 6)], "Lundi de Pâques")
+        self.assertEqual(days[date(2026, 5, 14)], "Ascension")
+        self.assertEqual(days[date(2026, 5, 25)], "Lundi de Pentecôte")
+        self.assertEqual(days[date(2026, 11, 11)], "Armistice")
+
+    def test_2027(self):
+        from app.routers.closures import belgian_holidays
+        days = {d: n for d, n in belgian_holidays(2027)}
+        self.assertEqual(days[date(2027, 3, 29)], "Lundi de Pâques")
+        self.assertEqual(days[date(2027, 5, 6)], "Ascension")
+        self.assertEqual(days[date(2027, 5, 17)], "Lundi de Pentecôte")
+
 
 if __name__ == "__main__":
     unittest.main()

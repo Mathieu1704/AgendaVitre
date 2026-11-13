@@ -111,5 +111,5 @@ export interface DailyStats {
   planned_hours: number;
   tolerance: number;
   present_employees: number;
-  status: "ok" | "warning" | "overload";
+  status: "ok" | "warning" | "overload" | "closed";
 }

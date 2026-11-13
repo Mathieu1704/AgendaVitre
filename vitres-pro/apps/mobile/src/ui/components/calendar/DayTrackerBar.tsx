@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
-import { Play, Square, CheckCircle2 } from "lucide-react-native";
+import { Play, Square, CheckCircle2, CalendarOff } from "lucide-react-native";
 import { useAuth } from "../../../hooks/useAuth";
 import {
   useTodayTimeEntry,
@@ -56,6 +56,30 @@ export function DayStartRow({ date }: { date: string }) {
   const clockIn = useClockIn();
 
   if (isAdmin || isLoading || !data) return null;
+  // Jour férié : personne ne pointe (employés et sous-traitants). Si l'équipe
+  // travaille quand même, un admin retire le férié depuis le calendrier.
+  if (data.is_holiday && data.status === "not_started") {
+    return (
+      <View style={{ paddingHorizontal: 4, marginBottom: 10 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            paddingVertical: 12,
+            borderRadius: 26,
+            backgroundColor: isDark ? "#7F1D1D33" : "#FEF2F2",
+          }}
+        >
+          <CalendarOff size={16} color="#EF4444" />
+          <Text style={{ color: isDark ? "#FCA5A5" : "#B91C1C", fontWeight: "700", fontSize: 13 }}>
+            {data.holiday_reason || "Jour férié"} — pas de pointage
+          </Text>
+        </View>
+      </View>
+    );
+  }
   if (!isToday && data.status === "not_started") return null;
 
   const handleClockIn = async () => {
