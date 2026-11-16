@@ -42,6 +42,14 @@ class LeaveDaysTests(unittest.TestCase):
         days = leave_days(emp, date(2027, 1, 4), date(2027, 1, 8), set(), [])
         self.assertEqual(len(days), 4)
 
+    def test_sans_horaire_on_compte_du_lundi_au_vendredi(self):
+        # Admins et bureau : 0 h partout dans l'app, mais ils prennent des congés.
+        for hours in (None, {"1": 0.0, "2": 0.0, "3": 0.0, "4": 0.0, "5": 0.0}):
+            emp = employee(hours)
+            emp.daily_capacity = 0.0
+            days = leave_days(emp, date(2027, 1, 4), date(2027, 1, 10), set(), [])
+            self.assertEqual(len(days), 5)
+
     def test_un_seul_jour(self):
         self.assertEqual(len(leave_days(employee(), date(2027, 1, 5), date(2027, 1, 5), set(), [])), 1)
         self.assertEqual(len(leave_days(employee(), date(2027, 1, 9), date(2027, 1, 9), set(), [])), 0)

@@ -84,15 +84,34 @@ def closed_dates_between(db: Session, start: date, end: date) -> set:
     return closed
 
 
+def _has_schedule(emp) -> bool:
+    """L'employé a-t-il un horaire encodé ? Les admins et le personnel de
+    bureau n'en ont pas (0 h partout, ils ne sont pas planifiés sur les
+    chantiers) mais prennent quand même des congés."""
+    hours = getattr(emp, "hours_per_weekday", None) or {}
+    if any(float(h or 0) > 0 for h in hours.values()):
+        return True
+    return float(getattr(emp, "daily_capacity", 0) or 0) > 0
+
+
 def leave_days(emp, start: date, end: date, closed: set, progressive: list) -> List[date]:
     """Jours réellement décomptés entre deux dates incluses : ceux où
     l'employé devait travailler (heures prévues > 0), hors fermetures et
-    fériés. Un week-end ou un jour non presté ne coûte donc rien."""
+    fériés. Un week-end ou un jour non presté ne coûte donc rien.
+
+    Sans horaire encodé, on compte du lundi au vendredi : sinon aucun jour ne
+    serait décompté et la demande serait refusée."""
+    scheduled = _has_schedule(emp)
     days = []
     d = start
     while d <= end:
-        if d not in closed and _get_employee_hours_for_day(emp, d, progressive) > 0:
-            days.append(d)
+        if d not in closed:
+            works = (
+                _get_employee_hours_for_day(emp, d, progressive) > 0
+                if scheduled else d.isoweekday() <= 5
+            )
+            if works:
+                days.append(d)
         d += timedelta(days=1)
     return days
 
