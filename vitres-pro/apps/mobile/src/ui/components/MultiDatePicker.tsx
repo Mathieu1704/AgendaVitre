@@ -15,6 +15,12 @@ interface MultiDatePickerProps {
   dayColors?: Record<string, "green" | "orange" | "red">;
   onMonthChange?: (dateString: string) => void;
   minDate?: string;
+  /**
+   * Que faire d'un jour rouge (surcharge ou fermé) :
+   *  - "block" : impossible de le sélectionner (employés) ;
+   *  - "warn"  : sélection permise, avec un avertissement (admins).
+   */
+  redDayPolicy?: "block" | "warn";
 }
 
 const DAY_COLOR_MAP = {
@@ -39,9 +45,14 @@ export function MultiDatePicker({
   dayColors,
   onMonthChange,
   minDate,
+  redDayPolicy,
 }: MultiDatePickerProps) {
   const [open, setOpen] = useState(false);
   const [draftDates, setDraftDates] = useState<string[]>(values);
+  // Dernier jour rouge refusé : affiché dans la fenêtre, là où l'employé
+  // regarde (un toast passerait derrière le dialogue).
+  const [blockedDate, setBlockedDate] = useState<string | null>(null);
+  const isRed = (iso: string) => dayColors?.[iso] === "red";
   const { isDark } = useTheme();
   const isWeb = Platform.OS === "web";
   const { width: screenWidth } = useWindowDimensions();
@@ -49,10 +60,17 @@ export function MultiDatePicker({
 
   const openPicker = () => {
     setDraftDates(values);
+    setBlockedDate(null);
     setOpen(true);
   };
 
   const toggleDate = (iso: string) => {
+    // Retirer une date reste toujours possible ; seul l'ajout est filtré.
+    if (redDayPolicy === "block" && isRed(iso) && !draftDates.includes(iso)) {
+      setBlockedDate(iso);
+      return;
+    }
+    setBlockedDate(null);
     setDraftDates((prev) =>
       prev.includes(iso) ? prev.filter((d) => d !== iso) : [...prev, iso].sort(),
     );
@@ -152,6 +170,12 @@ export function MultiDatePicker({
         </View>
       )}
 
+      {redDayPolicy === "warn" && values.some(isRed) && (
+        <Text style={{ fontSize: 12, fontWeight: "600", color: "#EF4444" }}>
+          {`Attention, jour en surcharge ou fermé : ${values.filter(isRed).map(formatFr).join(", ")}.`}
+        </Text>
+      )}
+
       <Dialog open={open} onClose={() => setOpen(false)} position={dialogPosition}>
         <View className="p-2">
           <Text className="text-lg font-bold mb-1 text-foreground dark:text-white text-center">
@@ -171,6 +195,16 @@ export function MultiDatePicker({
               onMonthChange={(month: any) => onMonthChange?.(month.dateString)}
             />
           </View>
+          {blockedDate && (
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#EF4444", textAlign: "center", marginTop: 12 }}>
+              {`Le ${formatFr(blockedDate)} est en surcharge ou fermé : choisissez un autre jour.`}
+            </Text>
+          )}
+          {redDayPolicy === "warn" && draftDates.some(isRed) && (
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#EF4444", textAlign: "center", marginTop: 12 }}>
+              {`Attention, jour en surcharge ou fermé : ${draftDates.filter(isRed).map(formatFr).join(", ")}.`}
+            </Text>
+          )}
           <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
             <Button variant="outline" onPress={() => setOpen(false)} className="flex-1">
               Annuler

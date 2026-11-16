@@ -19,7 +19,7 @@ import {
   LayoutChangeEvent,
 } from "react-native";
 import { LocaleConfig } from "react-native-calendars";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDayView } from "../../../src/ui/components/calendar/CalendarDayView";
 import { CalendarWeekView } from "../../../src/ui/components/calendar/CalendarWeekView";
@@ -65,6 +65,7 @@ import {
 } from "../../../src/hooks/useInterventions";
 import { useEmployees } from "../../../src/hooks/useEmployees";
 import { usePlanningRangeStats } from "../../../src/hooks/usePlanning";
+import { useAgendaAutoRefresh } from "../../../src/hooks/useAgendaAutoRefresh";
 import { MonthView } from "../../../src/ui/components/calendar/MonthView";
 import { WeekView } from "../../../src/ui/components/calendar/WeekView";
 import { DayView } from "../../../src/ui/components/calendar/DayView";
@@ -415,6 +416,16 @@ export default function CalendarScreen() {
     ]);
     setIsRefreshing(false);
   }, [refetch, queryClient]);
+
+  // Rechargement silencieux (sans indicateur) : retour sur l'écran, retour au
+  // premier plan, puis toutes les 2 minutes. La vue Année charge une plage
+  // bien plus lourde et ne sert pas au suivi du jour : elle en est exclue.
+  const silentRefresh = useCallback(() => {
+    void refetch();
+    queryClient.invalidateQueries({ queryKey: ["planning-range"] });
+    queryClient.invalidateQueries({ queryKey: ["planning-stats"] });
+  }, [refetch, queryClient]);
+  useAgendaAutoRefresh(silentRefresh, viewMode !== "year");
 
   // --- HELPERS ---
   const dayKeyFromDateTime = useCallback((isoDateTime: string) => {

@@ -622,6 +622,9 @@ export default function AddInterventionScreen() {
     },
     enabled: isRepriseMode || isDuplicateMode,
     staleTime: 5 * 60 * 1000,
+    // Les couleurs décident si un employé peut reprendre un RDV ce jour-là :
+    // on les relit à chaque ouverture de l'écran plutôt que de se fier au cache.
+    refetchOnMount: "always",
   });
 
   // Charge les 5 premiers mois une seule fois au montage
@@ -636,19 +639,26 @@ export default function AddInterventionScreen() {
     },
     enabled: isRepriseMode || isDuplicateMode,
     staleTime: 10 * 60 * 1000,
+    refetchOnMount: "always",
   });
 
   useEffect(() => { if (initialStats) setAllStats(prev => ({ ...prev, ...initialStats })); }, [initialStats]);
   useEffect(() => { if (horizonStats) setAllStats(prev => ({ ...prev, ...horizonStats })); }, [horizonStats]);
 
+  const NEARLY_FULL_RATIO = 0.85;
   const dayColors = useMemo(() => {
     if (Object.keys(allStats).length === 0) return undefined;
     const colors: Record<string, "green" | "orange" | "red"> = {};
     for (const [date, s] of Object.entries(allStats)) {
       const planned = (s as any).planned_hours ?? 0;
       const capacity = (s as any).capacity_hours ?? 0;
-      if (capacity === 0) colors[date] = "red";
-      else if (planned >= capacity) colors[date] = "orange";
+      const status = (s as any).status;
+      // Rouge : surcharge (au-delà de la capacité + tolérance d'heures sup.),
+      // ou aucune capacité ce jour-là (fermeture, férié, personne de présent).
+      // Orange : presque saturé (85 % de la capacité atteints) ou plein mais
+      // encore dans la tolérance. Vert : le reste.
+      if (status === "overload" || status === "closed" || capacity === 0) colors[date] = "red";
+      else if (planned >= capacity * NEARLY_FULL_RATIO) colors[date] = "orange";
       else colors[date] = "green";
     }
     return colors;
@@ -1436,6 +1446,17 @@ export default function AddInterventionScreen() {
     if (!title) return toast.error("Titre", "Titre requis.");
     const splitError = validatePaymentSplit(paymentMode, paymentTotal, amountCash, amountInvoice);
     if (splitError) return toast.error("Paiement", splitError);
+    // Filet de sécurité : un jour a pu passer au rouge après sa sélection
+    // (couleurs relues entre-temps). Les admins, eux, sont seulement avertis.
+    if (isRepriseMode && !isAdmin && dayColors) {
+      const redDates = repriseDates.filter((d) => dayColors[d] === "red");
+      if (redDates.length > 0) {
+        return toast.error(
+          "Jour en surcharge",
+          `Impossible de reprendre un RDV le ${redDates.join(", ")} : choisissez un autre jour.`,
+        );
+      }
+    }
     const datePart = startDateStr.split("T")[0];
     let startParsed: Date, endParsed: Date, dur: number;
     if (timeTbd) {
@@ -2416,6 +2437,7 @@ export default function AddInterventionScreen() {
                       onChange={setRepriseDates}
                       label="Date(s) de la reprise"
                       dayColors={dayColors}
+                      redDayPolicy={isAdmin ? "warn" : "block"}
                       onMonthChange={setCalendarMonth}
                       minDate={new Date().toISOString().split("T")[0]}
                     />
