@@ -480,3 +480,40 @@ def pending_count(
     if current_user.role != "admin":
         return {"count": 0}
     return {"count": db.query(LeaveRequest).filter(LeaveRequest.status == "pending").count()}
+
+
+@router.get("/encoded")
+def encoded_by_admin(
+    year: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Congés VA de l'employé connecté encodés directement par un admin
+    (fiche employé), sans demande. Ils comptent dans le solde : on les montre
+    dans « Mes demandes » pour que l'employé sache d'où viennent ces jours."""
+    year = year or _today().year
+    year_start, year_end = date(year, 1, 1), date(year, 12, 31)
+    _, _, closed, progressive, by_emp = _year_context(db, year)
+    linked = {
+        a for (a,) in db.query(LeaveRequest.absence_id).filter(LeaveRequest.absence_id.isnot(None)).all()
+    }
+    emp = _employees_query(db).filter(Employee.id == current_user.id).first()
+    out = []
+    for a in by_emp.get(current_user.id, []):
+        if a.id in linked:
+            continue
+        a_start, a_end = _absence_dates(a)
+        days = leave_days(emp, max(a_start, year_start), min(a_end, year_end), closed, progressive)
+        if not days:
+            continue
+        out.append({
+            "id": str(a.id),
+            "employee_id": str(current_user.id),
+            "start_date": a_start.isoformat(),
+            "end_date": a_end.isoformat(),
+            "days": float(len(days)),
+            "status": "approved",
+            "source": "admin",
+        })
+    out.sort(key=lambda r: r["start_date"], reverse=True)
+    return out
