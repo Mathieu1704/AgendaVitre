@@ -10,6 +10,7 @@ export default function ParametresLayout() {
       <Stack.Screen name="team" />
       <Stack.Screen name="zones" />
       <Stack.Screen name="tarifs" />
+      <Stack.Screen name="conges" />
       <Stack.Screen name="logs" />
       <Stack.Screen name="create-employee" />
     </Stack>

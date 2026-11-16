@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { usePendingLeaveCount } from "../../../src/hooks/useLeaves";
+import { CountBadge } from "../../../src/ui/components/CountBadge";
 import {
   View,
   ScrollView,
@@ -24,6 +26,7 @@ import {
   Clock,
   EyeOff,
   Wallet,
+  Palmtree,
   Camera,
   Image as ImageIcon,
   Trash2,
@@ -329,6 +332,8 @@ export default function ParametresScreen() {
   );
 
   const isAdmin = profile?.role === "admin";
+  const isSubcontractor = profile?.role === "subcontractor";
+  const pendingLeaves = usePendingLeaveCount();
 
   const { data: overtimeBalance } = useMyOvertimeBalance();
 
@@ -486,6 +491,47 @@ export default function ParametresScreen() {
               </Card>
             )}
 
+            {/* === Congés (employés ; pour les admins, l'entrée est dans Administration) === */}
+            {!isAdmin && !isSubcontractor && (
+              <Pressable
+                onPress={() => router.push("/(app)/parametres/conges" as any)}
+                style={{ marginBottom: 14 }}
+              >
+                <View
+                  style={{
+                    borderRadius: 28,
+                    borderWidth: 1,
+                    borderColor: isDark ? "#831843" : "#FBCFE8",
+                    backgroundColor: "rgba(236,72,153,0.05)",
+                    padding: 16,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 16, flex: 1 }}>
+                    <View
+                      style={{
+                        width: 48, height: 48, borderRadius: 24, backgroundColor: "#EC4899",
+                        alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <Palmtree size={24} color="white" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                        Congés
+                      </Text>
+                      <Text className="text-sm text-muted-foreground leading-tight">
+                        Mon solde, demander un congé
+                      </Text>
+                    </View>
+                  </View>
+                  <ChevronRight size={20} color={isDark ? "white" : "black"} />
+                </View>
+              </Pressable>
+            )}
+
             {/* === SECTION ADMIN (Visible seulement si Admin) === */}
             {isAdmin && (
               <View className="mb-8">
@@ -557,6 +603,48 @@ export default function ParametresScreen() {
                     </CardContent>
                   </Card>
                 </Pressable>
+                {/* Congés */}
+                  <Pressable
+                    onPress={() => router.push("/(app)/parametres/conges" as any)}
+                    style={{ marginBottom: 12 }}
+                  >
+                    <View
+                      style={{
+                        borderRadius: 28,
+                        borderWidth: 1,
+                        borderColor: isDark ? "#831843" : "#FBCFE8",
+                        backgroundColor: "rgba(236,72,153,0.05)",
+                        padding: 16,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 16, flex: 1 }}>
+                        <View
+                          style={{
+                            width: 48, height: 48, borderRadius: 24, backgroundColor: "#EC4899",
+                            alignItems: "center", justifyContent: "center",
+                          }}
+                        >
+                          <Palmtree size={24} color="white" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                              Congés
+                            </Text>
+                            <CountBadge count={pendingLeaves} style={{ minWidth: 20, height: 20, borderRadius: 10 }} />
+                          </View>
+                          <Text className="text-sm text-muted-foreground leading-tight">
+                            Soldes, demandes à valider
+                          </Text>
+                        </View>
+                      </View>
+                      <ChevronRight size={20} color={isDark ? "white" : "black"} />
+                    </View>
+                  </Pressable>
+
                 {/* Tournées récurrentes */}
                 <Pressable
                   onPress={() => router.push("/(app)/parametres/tournees" as any)}

@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
+import { usePendingLeaveCount } from "../../src/hooks/useLeaves";
+import { CountBadge } from "../../src/ui/components/CountBadge";
 import { View, Text, useWindowDimensions, ActivityIndicator, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Tabs, Redirect, usePathname, useGlobalSearchParams } from "expo-router";
@@ -47,6 +49,7 @@ function AppLayoutContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
   const { unreadCount } = useNotifications();
+  const pendingLeaves = usePendingLeaveCount();
   const { isAdmin, isSubcontractor, loading: authLoading } = useAuth();
   const { isDark } = useTheme();
   const queryClient = useQueryClient();
@@ -303,7 +306,11 @@ function AppLayoutContent() {
           options={{
             title: "Réglages",
             tabBarIcon: ({ color, size }) => (
-              <Settings size={size} color={color} />
+              <View>
+                <Settings size={size} color={color} />
+                {/* Demandes de congé en attente (admins uniquement). */}
+                <CountBadge count={pendingLeaves} style={{ position: "absolute", top: -4, right: -6 }} />
+              </View>
             ),
           }}
           // L'onglet garde sa pile (Facturation, Comptes...) pour que le retour
