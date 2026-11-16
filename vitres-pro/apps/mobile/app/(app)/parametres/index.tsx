@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { usePendingLeaveCount } from "../../../src/hooks/useLeaves";
+import { useLeaveBadgeCount } from "../../../src/hooks/useLeaves";
 import { CountBadge } from "../../../src/ui/components/CountBadge";
 import {
   View,
@@ -333,7 +333,7 @@ export default function ParametresScreen() {
 
   const isAdmin = profile?.role === "admin";
   const isSubcontractor = profile?.role === "subcontractor";
-  const pendingLeaves = usePendingLeaveCount();
+  const pendingLeaves = useLeaveBadgeCount();
 
   const { data: overtimeBalance } = useMyOvertimeBalance();
 
@@ -519,9 +519,12 @@ export default function ParametresScreen() {
                       <Palmtree size={24} color="white" />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
-                        Congés
-                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Text className="text-lg font-bold text-foreground dark:text-white leading-tight">
+                          Congés
+                        </Text>
+                        <CountBadge count={pendingLeaves} style={{ minWidth: 20, height: 20, borderRadius: 10 }} />
+                      </View>
                       <Text className="text-sm text-muted-foreground leading-tight">
                         Mon solde, demander un congé
                       </Text>

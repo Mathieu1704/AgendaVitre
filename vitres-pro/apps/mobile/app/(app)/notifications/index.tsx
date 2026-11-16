@@ -3,7 +3,7 @@ import { View, ScrollView, Text, Pressable, ActivityIndicator, Platform } from "
 import { useRouter } from "expo-router";
 import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BellOff, CheckCheck, AlertTriangle, Info, Trash2, LogIn, LogOut, XCircle, Banknote } from "lucide-react-native";
+import { BellOff, CheckCheck, AlertTriangle, Info, Trash2, LogIn, LogOut, XCircle, Banknote, Palmtree } from "lucide-react-native";
 import { Dialog } from "../../../src/ui/components/Dialog";
 import { toast } from "../../../src/ui/toast";
 import {
@@ -34,6 +34,7 @@ function NotifIcon({ type }: { type: string }) {
   if (type === "deferred_cash") return <Banknote size={20} color="#F97316" />;
   if (type === "clock_in") return <LogIn size={20} color="#10B981" />;
   if (type === "clock_out") return <LogOut size={20} color="#F97316" />;
+  if (type === "leave_request" || type === "leave_decision") return <Palmtree size={20} color="#EC4899" />;
   return <Info size={20} color="#3B82F6" />;
 }
 
@@ -43,6 +44,7 @@ function notifBgColor(type: string): string {
   if (type === "deferred_cash") return "#FFF7ED";
   if (type === "clock_in") return "#ECFDF5";
   if (type === "clock_out") return "#FFF7ED";
+  if (type === "leave_request" || type === "leave_decision") return "#FDF2F8";
   return "#EFF6FF";
 }
 
@@ -120,6 +122,11 @@ export default function NotificationsScreen() {
 
   const handlePress = (notif: InAppNotification) => {
     if (!notif.is_read) markRead.mutate(notif.id);
+    // Demande de congé (admins) ou décision (employé) : écran Congés.
+    if (notif.type === "leave_request" || notif.type === "leave_decision") {
+      router.push("/(app)/parametres/conges" as any);
+      return;
+    }
     if (notif.metadata?.intervention_id) {
       router.push(`/(app)/calendar/${notif.metadata.intervention_id}` as any);
     }

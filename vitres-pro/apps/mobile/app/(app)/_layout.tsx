@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { usePendingLeaveCount } from "../../src/hooks/useLeaves";
+import { useLeaveBadgeCount } from "../../src/hooks/useLeaves";
 import { CountBadge } from "../../src/ui/components/CountBadge";
 import { View, Text, useWindowDimensions, ActivityIndicator, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -49,7 +49,7 @@ function AppLayoutContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
   const { unreadCount } = useNotifications();
-  const pendingLeaves = usePendingLeaveCount();
+  const pendingLeaves = useLeaveBadgeCount();
   const { isAdmin, isSubcontractor, loading: authLoading } = useAuth();
   const { isDark } = useTheme();
   const queryClient = useQueryClient();

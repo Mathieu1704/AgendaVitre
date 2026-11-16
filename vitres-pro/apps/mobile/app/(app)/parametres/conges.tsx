@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ import { useTheme } from "../../../src/ui/components/ThemeToggle";
 import { useAuth } from "../../../src/hooks/useAuth";
 import { api } from "../../../src/lib/api";
 import { useClosuresByRange } from "../../../src/hooks/useClosures";
+import { useMarkNotificationRead, useNotifications } from "../../../src/hooks/useNotifications";
 
 type Balance = {
   employee_id: string;
@@ -145,6 +146,17 @@ export default function CongesScreen() {
     }
     return colors;
   }, [closures]);
+
+  // L'employé voit ici le résultat de ses demandes : les notifications de
+  // décision deviennent lues, ce qui éteint son badge « Congés ».
+  const { notifications } = useNotifications();
+  const markRead = useMarkNotificationRead();
+  useEffect(() => {
+    for (const n of notifications) {
+      if (n.type === "leave_decision" && !n.is_read) markRead.mutate(n.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notifications]);
 
   const border = isDark ? "#334155" : "#E2E8F0";
   const surface = isDark ? "#0F172A" : "#F8FAFC";
