@@ -7,7 +7,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from app.routers import interventions, clients, planning, employees, absences, raw_events, notifications, logs, settings, timetracking, tours, closures
+from app.routers import interventions, clients, planning, employees, absences, raw_events, notifications, logs, settings, timetracking, tours, closures, leaves
 
 sentry_dsn = os.getenv("SENTRY_DSN")
 if sentry_dsn:
@@ -53,6 +53,7 @@ app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 app.include_router(timetracking.router, prefix="/api/timetracking", tags=["timetracking"])
 app.include_router(tours.router, prefix="/api/tours", tags=["tours"])
 app.include_router(closures.router, prefix="/api/closures", tags=["closures"])
+app.include_router(leaves.router, prefix="/api/leaves", tags=["leaves"])
 
 tour_scheduler = BackgroundScheduler(timezone="Europe/Brussels")
 

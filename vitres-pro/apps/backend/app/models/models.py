@@ -720,3 +720,39 @@ class TourRunService(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     run_stop = relationship("TourRunStop", back_populates="services", foreign_keys=[run_stop_id])
+
+
+class LeaveEntitlement(Base):
+    """Droit annuel aux congés d'un employé (la « valeur initiale » d'Appipay).
+    Encodé par un admin, une ligne par employé et par année."""
+    __tablename__ = "leave_entitlements"
+    __table_args__ = (
+        UniqueConstraint("employee_id", "year", name="uq_leave_entitlements_employee_year"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    year = Column(Integer, nullable=False)
+    days = Column(Float, nullable=False, default=0)
+
+
+class LeaveRequest(Base):
+    """Demande de congé d'un employé, soumise à validation d'un admin.
+    Une fois acceptée, elle crée une `Absence` de type VA : c'est cette
+    absence qui compte pour le planning et pour le solde."""
+    __tablename__ = "leave_requests"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    days = Column(Float, nullable=False, default=0)  # jours ouvrés décomptés à la demande
+    status = Column(String(20), nullable=False, default="pending")  # pending | approved | refused | cancelled
+    comment = Column(Text, nullable=True)
+    decision_note = Column(Text, nullable=True)
+    decided_by = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    decided_at = Column(DateTime(timezone=True), nullable=True)
+    absence_id = Column(UUID(as_uuid=True), ForeignKey("absences.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    employee = relationship("Employee", foreign_keys=[employee_id])
