@@ -469,3 +469,14 @@ def cancel_request(
     db.commit()
     db.refresh(req)
     return _out(req)
+
+
+@router.get("/pending-count")
+def pending_count(
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user),
+):
+    """Nombre de demandes en attente, pour le badge des admins (0 sinon)."""
+    if current_user.role != "admin":
+        return {"count": 0}
+    return {"count": db.query(LeaveRequest).filter(LeaveRequest.status == "pending").count()}
