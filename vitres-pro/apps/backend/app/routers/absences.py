@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
 from datetime import date as date_type
-from app.models.models import get_db, Absence, Employee
+from app.models.models import get_db, Absence, Employee, LeaveRequest, InAppNotification
 from app.schemas.schemas import AbsenceCreate, AbsenceOut
 from app.core.deps import get_current_user
 from app.routers.planning import _utc_bounds
@@ -66,6 +66,22 @@ def delete_absence(
     db_abs = db.query(Absence).filter(Absence.id == absence_id).first()
     if not db_abs:
         raise HTTPException(status_code=404, detail="Absence non trouvée")
+    # Absence créée par l'acceptation d'une demande de congé : la demande
+    # passe en « Annulé », sinon elle resterait « Accepté » alors que les
+    # jours sont rendus au solde.
+    for req in db.query(LeaveRequest).filter(LeaveRequest.absence_id == absence_id).all():
+        req.status = "cancelled"
+        req.absence_id = None
+        if req.employee_id != current_user.id:
+            period = (
+                req.start_date.strftime("%d/%m/%Y") if req.start_date == req.end_date
+                else f"du {req.start_date.strftime('%d/%m/%Y')} au {req.end_date.strftime('%d/%m/%Y')}"
+            )
+            db.add(InAppNotification(
+                recipient_id=req.employee_id, type="leave_decision", title="Congé annulé",
+                message=f"Votre congé {period} a été annulé.",
+                metadata_={"leave_request_id": str(req.id)},
+            ))
     db.delete(db_abs)
     db.commit()
     return {"status": "deleted"}
