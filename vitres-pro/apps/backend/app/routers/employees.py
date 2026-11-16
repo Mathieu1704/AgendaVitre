@@ -11,7 +11,7 @@ from PIL import Image, ImageOps
 
 from pydantic import field_validator
 
-from app.models.models import get_db, Employee, EmployeeDayOverride
+from app.models.models import get_db, Employee, EmployeeDayOverride, InterventionNote, RawCalendarEvent
 from app.schemas.schemas import EmployeeBase, EmployeeOut, EmployeeUpdate, validate_hours_per_weekday
 from app.core.deps import get_current_user
 from app.routers.planning import BRUSSELS_TZ
@@ -421,19 +421,31 @@ def delete_employee(
         raise HTTPException(status_code=404, detail="Employé introuvable")
 
     try:
-        # ✅ CRUCIAL : On vide ses interventions avant de supprimer
-        # Cela supprime les liens dans la table 'intervention_employees'
-        # Les interventions redeviennent "Non assignées" (ou assignées aux autres collègues s'il y en a)
+        # Tout se fait dans UNE seule transaction : si la suppression échoue,
+        # la désassignation est annulée aussi. Avant, la désassignation était
+        # validée à part, donc un refus de la base laissait l'employé en place
+        # mais retiré de toutes ses interventions.
         employee_to_delete.interventions = []
-        db.commit() # On valide la désassignation
 
-        # 3. Supprimer l'employé de la base de données
+        # Ces deux tables référencent l'employé sans règle de suppression : la
+        # base refusait donc de supprimer quiconque avait écrit une note. On
+        # garde les notes et les évènements, simplement sans auteur.
+        db.query(InterventionNote).filter(
+            InterventionNote.author_id == employee_id
+        ).update({InterventionNote.author_id: None}, synchronize_session=False)
+        db.query(RawCalendarEvent).filter(
+            RawCalendarEvent.employee_id == employee_id
+        ).update({RawCalendarEvent.employee_id: None}, synchronize_session=False)
+
         db.delete(employee_to_delete)
         db.commit()
     except Exception as e:
         db.rollback()
         print(f"Erreur DB: {e}")
-        raise HTTPException(status_code=400, detail=f"Impossible de supprimer : {str(e)}")
+        raise HTTPException(
+            status_code=400,
+            detail="Suppression impossible : rien n'a été modifié, l'employé garde ses interventions.",
+        )
 
     # 4. Supprimer le compte Auth Supabase (Optionnel mais recommandé pour nettoyer)
     try:

@@ -1607,8 +1607,9 @@ def _note_out(n: InterventionNote) -> InterventionNoteOut:
     return InterventionNoteOut(
         id=n.id, text=n.text, created_at=n.created_at,
         author_id=n.author_id,
-        author_name=n.author.full_name or n.author.email,
-        author_color=n.author.color,
+        # L'auteur peut avoir été supprimé depuis : la note reste lisible.
+        author_name=(n.author.full_name or n.author.email) if n.author else "Ancien employé",
+        author_color=n.author.color if n.author else None,
     )
 
 def _assert_note_access(intervention: Intervention, current_user: Employee):

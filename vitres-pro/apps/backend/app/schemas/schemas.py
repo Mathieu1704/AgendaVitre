@@ -433,7 +433,7 @@ class InterventionNoteOut(BaseModel):
     id: UUID
     text: str
     created_at: datetime
-    author_id: UUID
+    author_id: Optional[UUID] = None
     author_name: Optional[str] = None
     author_color: Optional[str] = None
     class Config:
