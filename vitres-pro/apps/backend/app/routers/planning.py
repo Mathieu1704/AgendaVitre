@@ -150,6 +150,9 @@ def calculate_day_stats(target_date: date, db: Session, zone: Optional[str] = No
     int_query = db.query(Intervention).options(
         selectinload(Intervention.employees),
         selectinload(Intervention.hourly_rate),
+        # Prestations chargées en une requête : sinon une requête par RDV
+        # (N+1 signalé par Sentry, ~60 % du temps de daily-stats).
+        selectinload(Intervention.items),
     ).filter(
         Intervention.start_time >= day_start,
         Intervention.start_time < day_end,
@@ -271,6 +274,9 @@ def get_range_stats_endpoint(
     int_query = db.query(Intervention).options(
         selectinload(Intervention.employees),
         selectinload(Intervention.hourly_rate),
+        # Prestations chargées en une requête : sinon une requête par RDV
+        # (N+1 signalé par Sentry, ~60 % du temps de daily-stats).
+        selectinload(Intervention.items),
     ).filter(
         Intervention.start_time >= range_start_utc,
         Intervention.start_time < range_end_utc,
