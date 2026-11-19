@@ -45,6 +45,28 @@ def _find_city(db: Session, value: Optional[str]):
 # Arrondi au multiple de 5€ supérieur pour limiter la monnaie sur le terrain.
 ON_DEMAND_MULTIPLIER = 1.33
 
+def _existing_service_ids(db: Session, items) -> set:
+    """Ids de prestations (client ou intervention) cités par les items qui
+    existent encore. Une app au cache périmé peut envoyer une prestation
+    supprimée entre-temps : la clé étrangère ferait échouer tout le RDV
+    (erreur 500 rejouée par la file hors-ligne). On garde alors l'item avec
+    son libellé et son prix, sans lien vers la prestation disparue."""
+    def get(it, key):
+        return it.get(key) if isinstance(it, dict) else getattr(it, key, None)
+    cs = {str(get(i, "client_service_id")) for i in items if get(i, "client_service_id")}
+    iv = {str(get(i, "intervention_service_id")) for i in items if get(i, "intervention_service_id")}
+    found = set()
+    if cs:
+        found |= {str(r[0]) for r in db.query(ClientService.id).filter(ClientService.id.in_(cs))}
+    if iv:
+        found |= {str(r[0]) for r in db.query(InterventionService.id).filter(InterventionService.id.in_(iv))}
+    return found
+
+
+def _keep_id(value, existing: set):
+    return value if value and str(value) in existing else None
+
+
 def _item_effective_price(item) -> float:
     price = float(item.price)
     if not item.on_demand or price <= 0:
@@ -601,6 +623,7 @@ def create_recurring_bulk(
     city_row = _find_city(db, requested_city)
     canonical_city = city_row.city if city_row else normalize_city(requested_city)
     canonical_zone = city_row.zone if city_row else payload.zone
+    existing_services = _existing_service_ids(db, payload.items)
 
     employees = (
         db.query(Employee).filter(Employee.id.in_(payload.employee_ids)).all()
@@ -642,8 +665,8 @@ def create_recurring_bulk(
             new_intervention.items.append(InterventionItem(
                 label=item_data.label,
                 price=item_data.price,
-                client_service_id=item_data.client_service_id,
-                intervention_service_id=item_data.intervention_service_id,
+                client_service_id=_keep_id(item_data.client_service_id, existing_services),
+                intervention_service_id=_keep_id(item_data.intervention_service_id, existing_services),
                 on_demand=item_data.on_demand,
             ))
         db.add(new_intervention)
@@ -772,10 +795,12 @@ def create_intervention(
 
     total_price = 0
     if intervention.items:
+        existing_services = _existing_service_ids(db, intervention.items)
         for item_data in intervention.items:
-            intervention_service_id = item_data.intervention_service_id
+            client_service_id = _keep_id(item_data.client_service_id, existing_services)
+            intervention_service_id = _keep_id(item_data.intervention_service_id, existing_services)
             if (
-                not item_data.client_service_id
+                not client_service_id
                 and not intervention_service_id
                 and item_data.label in chain_label_map
             ):
@@ -786,7 +811,7 @@ def create_intervention(
             new_item = InterventionItem(
                 label=item_data.label,
                 price=item_data.price,
-                client_service_id=item_data.client_service_id,
+                client_service_id=client_service_id,
                 intervention_service_id=intervention_service_id,
                 on_demand=item_data.on_demand,
             )
@@ -1087,10 +1112,12 @@ def update_intervention(
             db_intervention.employees = employees
         elif key == "items":
             db.query(InterventionItem).filter(InterventionItem.intervention_id == intervention_id).delete()
+            existing_services = _existing_service_ids(db, value)
             for item_data in value:
-                intervention_service_id = item_data.get("intervention_service_id")
+                client_service_id = _keep_id(item_data.get("client_service_id"), existing_services)
+                intervention_service_id = _keep_id(item_data.get("intervention_service_id"), existing_services)
                 if (
-                    not item_data.get("client_service_id")
+                    not client_service_id
                     and not intervention_service_id
                     and item_data["label"] in update_label_map
                 ):
@@ -1099,7 +1126,7 @@ def update_intervention(
                     intervention_id=intervention_id,
                     label=item_data["label"],
                     price=item_data["price"],
-                    client_service_id=item_data.get("client_service_id"),
+                    client_service_id=client_service_id,
                     intervention_service_id=intervention_service_id,
                     on_demand=item_data.get("on_demand", False),
                 ))
@@ -1216,6 +1243,7 @@ def update_intervention_recurrence_scope(
         query = query.filter(Intervention.start_time >= anchor.start_time)
     targets = query.all()
 
+    existing_services = _existing_service_ids(db, fields.get("items") or [])
     updated = 0
     for target in targets:
         for key, value in fields.items():
@@ -1228,8 +1256,8 @@ def update_intervention_recurrence_scope(
                         intervention_id=target.id,
                         label=item_data["label"],
                         price=item_data["price"],
-                        client_service_id=item_data.get("client_service_id"),
-                        intervention_service_id=item_data.get("intervention_service_id"),
+                        client_service_id=_keep_id(item_data.get("client_service_id"), existing_services),
+                        intervention_service_id=_keep_id(item_data.get("intervention_service_id"), existing_services),
                         on_demand=item_data.get("on_demand", False),
                     ))
             elif hasattr(target, key):
